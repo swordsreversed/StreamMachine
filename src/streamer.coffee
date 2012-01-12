@@ -1,1 +1,10 @@
-module.exports = class Streamer extends Event
+module.exports = class Streamer 
+    constructor: (options) ->
+        
+        
+    listen: (port) ->
+        
+            
+        
+        
+    
