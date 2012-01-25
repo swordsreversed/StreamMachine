@@ -221,6 +221,8 @@ module.exports = class Caster extends EventEmitter
             
             @max = @caster.options.max_buffer
             
+            console.log "max buffer length is ", @max
+            
             # each element should be [obj,offset]
             @listeners = []
             
@@ -247,7 +249,7 @@ module.exports = class Caster extends EventEmitter
                 
             @parser.on "frame", (frame) =>                
                 while @buffer.length > @max
-                    @buffer.shift
+                    @buffer.shift()
 
                 # make sure we don't get a frame before header
                 if @lastHeader
@@ -274,23 +276,19 @@ module.exports = class Caster extends EventEmitter
             
             console.log "frames per sec is ", @framesPerSec
             console.log "adding a listener with offset of ", offset
-            
-            tmpf = fs.createWriteStream "/tmp/rewind.buffer", flags:"w"
-            
+                        
             if @buffer.length > offset
                 console.log "Granted. current buffer length is ", @buffer.length
-                @listeners.push [ callback, offset, tmpf ]
+                @listeners.push [ callback, offset ]
                 return offset
             else
                 console.log "Not available. Instead giving max buffer of ", @buffer.length
-                @listeners.push [ callback, @buffer.length, tmpf ]
+                @listeners.push [ callback, @buffer.length ]
                 return @buffer.length
         
         #----------
         
         removeListener: (callback) ->
-            console.log "remove pre-length is ", @listeners.length
             @listeners = _u(@listeners).reject (v) -> v[0] == callback
-            console.log "remove post-length is ", @listeners.length
             return true
             
