@@ -76,7 +76,12 @@ module.exports = class Caster extends EventEmitter
                 new Caster.LiveMP3(req,res,@)
                 
         else if requrl.pathname == "/rewind.mp3"
-            new Caster.RewindMP3(req,res,@,requrl.query.off || "1")
+            offset = Number(requrl.query.off) || 1
+            
+            if offset < 1
+                offset = 1
+                
+            new Caster.RewindMP3(req,res,@,offset)
         
         else if requrl.pathname == "/listen.pls"
             # -- return shoutcast playlist -- #
