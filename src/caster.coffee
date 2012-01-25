@@ -188,12 +188,14 @@ module.exports = class Caster extends EventEmitter
                 "Transfer-Encoding":    "identity"
                 
             # register ourself as a listener
-            @caster.registerListener(@)
+            #@caster.registerListener(@)
             
             # write out our headers
             res.writeHead 200, headers
             
-            @dataFunc = (chunk) => @res.write(chunk)
+            @dataFunc = (chunk) => 
+                #console.log "chunk: ", chunk
+                @res.write(chunk)
 
             # and register to sending data...
             @caster.rewind.addListener @dataFunc, offset
@@ -203,7 +205,7 @@ module.exports = class Caster extends EventEmitter
                 @caster.rewind.removeListener @dataFunc
                 
                 # tell the caster we're done
-                @caster.closeListener(@)
+                #@caster.closeListener(@)
             
     #----------
     
@@ -236,7 +238,8 @@ module.exports = class Caster extends EventEmitter
                 if !@header
                     @header = header
                     @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                    console.log "header is ", header
+                    
+                #console.log "header is ", header
                     
                 @lastHeader = data
                         
@@ -245,21 +248,21 @@ module.exports = class Caster extends EventEmitter
             @parser.on "frame", (frame) =>                
                 while @buffer.length > @max
                     @buffer.shift
-                
-                @buffer.push [@lastHeader,frame]
+
+                # make sure we don't get a frame before header
+                if @lastHeader
+                    buf = new Buffer( @lastHeader.length + frame.length )
+                    @lastHeader.copy(buf,0)
+                    frame.copy(buf,@lastHeader.length)
+                    @buffer.push buf
 
                 bl = @buffer.length
                 
                 for l in @listeners
                     # we'll give them whatever is at length - offset
                     # l[0] is our callback, l[1] is our offset
-                    b = @buffer[ bl - l[1] ]
-                    l[0](b[0])
-                    l[0](b[1])
-                    
-                    #l[2].write(b[0])
-                    #l[2].write(b[1])
-                        
+                    l[0] @buffer[ bl - l[1] ]
+                                                                
             @source.on "data", (chunk) => 
                 @parser.write chunk
                             
@@ -272,20 +275,22 @@ module.exports = class Caster extends EventEmitter
             console.log "frames per sec is ", @framesPerSec
             console.log "adding a listener with offset of ", offset
             
-            #tmpf = fs.createWriteStream "/tmp/rewind.buffer", flags:"w"
+            tmpf = fs.createWriteStream "/tmp/rewind.buffer", flags:"w"
             
             if @buffer.length > offset
                 console.log "Granted. current buffer length is ", @buffer.length
-                @listeners.push [ callback, offset ]#, tmpf ]
+                @listeners.push [ callback, offset, tmpf ]
                 return offset
             else
                 console.log "Not available. Instead giving max buffer of ", @buffer.length
-                @listeners.push [ callback, @buffer.length ]#, tmpf ]
+                @listeners.push [ callback, @buffer.length, tmpf ]
                 return @buffer.length
         
         #----------
         
         removeListener: (callback) ->
-            #@listeners = _u(@listeners).without(obj)
+            console.log "remove pre-length is ", @listeners.length
+            @listeners = _u(@listeners).reject (v) -> v[0] == callback
+            console.log "remove post-length is ", @listeners.length
             return true
             
