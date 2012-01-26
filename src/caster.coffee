@@ -6,6 +6,7 @@ lame = require("lame")
 url = require('url')
 
 fs = require('fs')
+RewindBuffer = require('./rewind_buffer')
 
 module.exports = class Caster extends EventEmitter
     DefaultOptions:
@@ -28,7 +29,7 @@ module.exports = class Caster extends EventEmitter
         @source = @options.source
         
         # create the rewind buffer
-        @rewind = new Caster.RewindBuffer(@)
+        @rewind = new RewindBuffer(@)
         
         # listener count
         @listeners = 0
@@ -78,10 +79,7 @@ module.exports = class Caster extends EventEmitter
         else if requrl.pathname == "/rewind.mp3"
             offset = Number(requrl.query.off) || 1
             
-            if offset < 1
-                offset = 1
-                
-            new Caster.RewindMP3(req,res,@,offset)
+            new RewindBuffer.Listener(req,res,@rewind,offset)
         
         else if requrl.pathname == "/listen.pls"
             # -- return shoutcast playlist -- #
@@ -180,120 +178,4 @@ module.exports = class Caster extends EventEmitter
                 @caster.closeListener(@)
                 
     #----------
-    
-    class @RewindMP3
-        constructor: (req,res,caster,offset) ->
-            @req = req
-            @res = res
-            @caster = caster                
-            
-            headers = 
-                "Content-Type":         "audio/mpeg"
-                "Connection":           "close"
-                "Transfer-Encoding":    "identity"
-                
-            # register ourself as a listener
-            #@caster.registerListener(@)
-            
-            # write out our headers
-            res.writeHead 200, headers
-            
-            @dataFunc = (chunk) => 
-                #console.log "chunk: ", chunk
-                @res.write(chunk)
-
-            # and register to sending data...
-            @caster.rewind.addListener @dataFunc, offset
-                                
-            @req.connection.on "close", =>
-                # stop listening to stream
-                @caster.rewind.removeListener @dataFunc
-                
-                # tell the caster we're done
-                #@caster.closeListener(@)
-            
-    #----------
-    
-    # RewindBuffer supports play from an arbitrary position in the last X hours 
-    # of our stream. We pass the incoming stream to the node-lame package to 
-    # split the audio into frames, then create a buffer of frames that listeners 
-    # can connect to.
-    
-    class @RewindBuffer
-        constructor: (caster) ->
-            @caster = caster
-            @source = @caster.source
-            
-            @max = @caster.options.max_buffer
-            
-            console.log "max buffer length is ", @max
-            
-            # each element should be [obj,offset]
-            @listeners = []
-            
-            # create buffer as an array
-            @buffer = []
-            
-            @parser = lame.createParser()
-            
-            # grab header from our first frame for computations. our stream is 
-            # assumed to be a fixed bit rate.
-            
-            @lastHeader = null
-            
-            @parser.on "header", (data,header) =>
-                if !@header
-                    @header = header
-                    @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                    
-                #console.log "header is ", header
-                    
-                @lastHeader = data
-                        
-            # frame listener will be used to fill our buffer with cleanly split mp3 frames
-                
-            @parser.on "frame", (frame) =>                
-                while @buffer.length > @max
-                    @buffer.shift()
-
-                # make sure we don't get a frame before header
-                if @lastHeader
-                    buf = new Buffer( @lastHeader.length + frame.length )
-                    @lastHeader.copy(buf,0)
-                    frame.copy(buf,@lastHeader.length)
-                    @buffer.push buf
-
-                bl = @buffer.length
-                
-                for l in @listeners
-                    # we'll give them whatever is at length - offset
-                    # l[0] is our callback, l[1] is our offset
-                    l[0] @buffer[ bl - l[1] ]
-                                                                
-            @source.on "data", (chunk) => 
-                @parser.write chunk
-                            
-        #----------
-                
-        addListener: (callback,offset) ->
-            # we're passed offset in seconds. we'll convert it to frames
-            offset = Math.round(offset * @framesPerSec)
-            
-            console.log "frames per sec is ", @framesPerSec
-            console.log "adding a listener with offset of ", offset
-                        
-            if @buffer.length > offset
-                console.log "Granted. current buffer length is ", @buffer.length
-                @listeners.push [ callback, offset ]
-                return offset
-            else
-                console.log "Not available. Instead giving max buffer of ", @buffer.length
-                @listeners.push [ callback, @buffer.length ]
-                return @buffer.length
         
-        #----------
-        
-        removeListener: (callback) ->
-            @listeners = _u(@listeners).reject (v) -> v[0] == callback
-            return true
-            
