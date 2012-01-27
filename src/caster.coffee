@@ -7,6 +7,7 @@ url = require('url')
 
 fs = require('fs')
 RewindBuffer = require('./rewind_buffer')
+SocketManager = require('./socket_manager')
 
 module.exports = class Caster extends EventEmitter
     DefaultOptions:
@@ -36,13 +37,15 @@ module.exports = class Caster extends EventEmitter
                     
         # set up shoutcast listener
         @server = http.createServer (req,res) => @_handle(req,res)
+        
+        # Attach non-socket listening
         @server.listen(@options.port)
         console.log "caster is listening on port #{@options.port}"
         
-        # for debugging information
-        #@source.on "data", (chunk) =>
-        #    console.log "Listeners: #{@listeners}"
+        @sockets = new SocketManager server:@server
         
+        # attach our function for             
+                
     #----------
     
     registerListener: (obj) ->
