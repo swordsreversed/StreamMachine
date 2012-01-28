@@ -16,7 +16,7 @@ module.exports = class Caster extends EventEmitter
         meta_interval:  10000
         name:           "Caster"
         title:          "Welcome to Caster"
-        max_buffer:     (39 * 60 * 5)
+        max_buffer:     (39 * 60 * 60)
     
     #----------
     
@@ -59,7 +59,7 @@ module.exports = class Caster extends EventEmitter
     #----------
             
     _handle: (req,res) ->
-        console.log "in _handle for caster request"
+        console.log "in _handle for caster request: #{req.url}"
         
         # -- parse request to see what we're giving back -- #
                 
@@ -79,7 +79,10 @@ module.exports = class Caster extends EventEmitter
                 console.log "no icy-metadata requested...  straight mp3"
                 new Caster.LiveMP3(req,res,@)
                 
-        else if requrl.pathname == "/rewind.mp3"
+        else if requrl.pathname == '/rewind.mp3' && requrl.query.socket?
+            @sockets.addListener req,res,@rewind
+            
+        else if requrl.pathname == "/rewind.mp3" && requrl.query.off?
             offset = Number(requrl.query.off) || 1
             
             new RewindBuffer.Listener(req,res,@rewind,offset)

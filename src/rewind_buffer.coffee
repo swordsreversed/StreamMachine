@@ -82,12 +82,13 @@ module.exports = class RewindBuffer
             console.log "Granted. current buffer length is ", @buffer.length
             return offset
         else
-            console.log "Not available. Instead giving max buffer of ", @buffer.length
-            return @buffer.length
+            console.log "Not available. Instead giving max buffer of ", @buffer.length - 1
+            return @buffer.length - 1
     
     #----------
             
     addListener: (obj) ->
+        console.log "addListener request"
         if obj._offset && obj._offset > 0 && obj.writeFrame
             @listeners.push obj
             return true
@@ -122,10 +123,6 @@ module.exports = class RewindBuffer
             # write out our headers
             res.writeHead 200, headers
             
-            @dataFunc = (chunk) => 
-                #console.log "chunk: ", chunk
-                @res.write(chunk)
-
             # and register to sending data...
             @rewind.addListener @
                                 
