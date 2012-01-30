@@ -68,6 +68,10 @@ module.exports = class RewindBuffer
                         
     #----------
     
+    bufferedSecs: ->
+        # convert buffer length to seconds
+        Math.round( @buffer.length / @framesPerSec )
+    
     checkOffset: (offset) ->
         # we're passed offset in seconds. we'll convert it to frames
         offset = Math.round(Number(offset) * @framesPerSec)

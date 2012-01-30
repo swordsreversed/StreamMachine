@@ -42,7 +42,7 @@ module.exports = class Caster extends EventEmitter
         @server.listen(@options.port)
         console.log "caster is listening on port #{@options.port}"
         
-        @sockets = new SocketManager server:@server
+        @sockets = new SocketManager server:@server, rewind:@rewind
         
         # attach our function for             
                 

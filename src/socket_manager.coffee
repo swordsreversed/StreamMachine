@@ -11,6 +11,8 @@ module.exports = class SocketManager
             
         @io = require("socket.io").listen(@options.server)
         
+        @rewind = @options.rewind
+        
         @sessions = {}
         
         @io.configure =>
@@ -33,7 +35,15 @@ module.exports = class SocketManager
                 socket:     sock
                 listener:   null
                 
-            sock.emit "ready"
+            sock.emit "ready",
+                time:       new Date
+                buffered:   @rewind.bufferedSecs()
+        
+        setInterval( =>
+            @io.sockets.emit "timecheck"
+                time:       new Date
+                buffered:   @rewind.bufferedSecs()
+        , 2000)
     
     #----------
             
@@ -55,18 +65,18 @@ module.exports = class SocketManager
 
             # set our internal offset to be live by default
             @_offset = 1
-
+            
+            console.log "req is ", req.headers
+            
             headers = 
                 "Content-Type":         "audio/mpeg"
-                "Connection":           "close"
+                "Connection":           "keep-alive"
                 "Transfer-Encoding":    "identity"
+                "Content-Range":        "bytes 0-*/*"
+                "Accept-Ranges":        "none"
 
             # write out our headers
             res.writeHead 200, headers
-
-            @dataFunc = (chunk) => 
-                #console.log "chunk: ", chunk
-                @res.write(chunk)
 
             # and register to sending data...
             @rewind.addListener @
