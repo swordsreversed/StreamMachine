@@ -30,10 +30,11 @@ module.exports = class SocketManager
         @io.sockets.on "connection", (sock) =>
             console.log "connection is ", sock.id
             
-            @sessions[sock.id] ||= 
+            @sessions[sock.id] ||= {
                 id:         sock.id
                 socket:     sock
                 listener:   null
+            }
                 
             sock.emit "ready",
                 time:       new Date
@@ -65,6 +66,7 @@ module.exports = class SocketManager
 
             # set our internal offset to be live by default
             @_offset = 1
+            @_playHead = 1
             
             console.log "req is ", req.headers
             
@@ -78,6 +80,10 @@ module.exports = class SocketManager
             # write out our headers
             res.writeHead 200, headers
 
+            # burst them the first two minutes if we have extra offset
+            #@rewind.burst 120, (b) =>
+            #    @res.write b
+            
             # and register to sending data...
             @rewind.addListener @
 
@@ -86,8 +92,12 @@ module.exports = class SocketManager
                 @rewind.removeListener @  
                 
             # write up listener for offset event on socket
-            session.socket?.on "offset", (i) =>
+            session.socket?.on "offset", (i,fn) =>
                 @setOffset i
+                
+                # send back the computed offset, in case we changed it
+                if fn
+                    fn(@_playHead / @rewind.framesPerSec)
 
         #----------
 
@@ -97,4 +107,5 @@ module.exports = class SocketManager
         #----------
 
         setOffset: (offset) ->
-            @_offset = @rewind.checkOffset offset
+            @_playHead = @rewind.checkOffset offset
+            @_offset = @rewind.burstFrom @_playHead, @

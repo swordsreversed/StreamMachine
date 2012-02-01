@@ -17,6 +17,7 @@ module.exports = class Caster extends EventEmitter
         name:           "Caster"
         title:          "Welcome to Caster"
         max_buffer:     (39 * 60 * 60)
+        burst_length:   (39 * 30)
     
     #----------
     

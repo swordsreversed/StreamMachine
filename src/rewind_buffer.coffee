@@ -18,6 +18,7 @@ module.exports = class RewindBuffer
         @source = @caster.source
         
         @max = @caster.options.max_buffer
+        @burst = @caster.options.burst_length
         
         console.log "max buffer length is ", @max
         
@@ -88,6 +89,21 @@ module.exports = class RewindBuffer
         else
             console.log "Not available. Instead giving max buffer of ", @buffer.length - 1
             return @buffer.length - 1
+            
+    #----------
+    
+    burstFrom: (offset,obj) ->
+        # we want to send them @burst frames (if available), starting at offset.
+        # return them the new offset position
+        
+        bl = @buffer.length
+        _u(if offset > @burst then @burst else offset).times (i) =>
+            obj.writeFrame @buffer[ bl - 1 - (offset - i) ]
+            
+        if offset > @burst
+            return offset - @burst
+        else
+            return 1
     
     #----------
             
