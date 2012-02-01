@@ -2,7 +2,6 @@ _u = require '../lib/underscore'
 {EventEmitter}  = require "events"
 http = require "http"
 icecast = require("icecast-stack")
-lame = require("lame")
 url = require('url')
 
 fs = require('fs')
