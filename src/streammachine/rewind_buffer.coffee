@@ -1,10 +1,9 @@
-_u = require '../lib/underscore'
+_u = require 'underscore'
+
 {EventEmitter}  = require "events"
 http = require "http"
 icecast = require("icecast-stack")
-lame = require("lame/lib/parser")
 url = require('url')
-
 fs = require('fs')
 
 # RewindBuffer supports play from an arbitrary position in the last X hours 
@@ -13,69 +12,68 @@ fs = require('fs')
 # can connect to.
 
 module.exports = class RewindBuffer
-    constructor: (caster) ->
-        @caster = caster
-        @source = @caster.source
+    DefaultOptions:
+        seconds:    (60*60*2)   # 2 hours
+        burst:      30          # 30 seconds burst
+    
+    constructor: (source,options = {}) ->
+        @options = _u(_u({}).extend(@DefaultOptions)).extend options
         
-        @max = @caster.options.max_buffer
-        @burst = @caster.options.burst_length
+        @source = source
         
-        console.log "max buffer length is ", @max
+        # use the first header to compute some constants
+        @source.once "header", (data,header) =>
+            @framesPerSec   = @source.framesPerSec
+            @max            = Math.round @framesPerSec * @options.seconds
+            @burst          = Math.round @framesPerSec * @options.burst
         
-        # each element should be [obj,offset]
+            console.log "max buffer length is ", @max
+        
+        # each listener should be an object that defines obj._offset and 
+        # obj.writeFrame. We implement RewindBuffer.Listener, but other 
+        # classes can work with those pieces
         @listeners = []
         
         # create buffer as an array
         @buffer = []
-        
-        @parser = lame.createParser()
-        
-        # grab header from our first frame for computations. our stream is 
-        # assumed to be a fixed bit rate.
-        
+                
+        # headers and data get sent separately. we need to grab the header so 
+        # we can lump it back together with the frame data later
         @lastHeader = null
-        
-        @parser.on "header", (data,header) =>
-            if !@header
-                @header = header
-                @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                
-            #console.log "header is ", header
-                
-            @lastHeader = data
+        @source.on "header", (data,header) => @lastHeader = data
                     
-        # frame listener will be used to fill our buffer with cleanly split mp3 frames
-            
-        @parser.on "frame", (frame) =>                
-            while @buffer.length > @max
-                @buffer.shift()
-
+        # frame listener will be used to fill our buffer with mp3 frames
+        @source.on "frame", (frame) =>                
             # make sure we don't get a frame before header
             if @lastHeader
+                # if we're at max length, shift off a frame (or more, if needed)
+                while @buffer.length > @max
+                    @buffer.shift()
+
+                # take the new frame, add the header back in, and push it to the buffer
                 buf = new Buffer( @lastHeader.length + frame.length )
                 @lastHeader.copy(buf,0)
                 frame.copy(buf,@lastHeader.length)
                 @buffer.push buf
 
-            bl = @buffer.length
-            
-            # loop through all connected listeners
-            for l in @listeners
-                # we'll give them whatever is at length - offset
-                l.writeFrame @buffer[ bl - 1 - l._offset ]
-                                                            
-        @source.on "data", (chunk) => 
-            @parser.write chunk
+                # loop through all connected listeners and pass the frame buffer at 
+                # their offset.
+                bl = @buffer.length
+                for l in @listeners
+                    # we'll give them whatever is at length - offset
+                    l.writeFrame @buffer[ bl - 1 - l._offset ]
                         
     #----------
     
     bufferedSecs: ->
         # convert buffer length to seconds
-        Math.round( @buffer.length / @framesPerSec )
+        Math.round @buffer.length / @framesPerSec 
+        
+    #----------
     
     checkOffset: (offset) ->
         # we're passed offset in seconds. we'll convert it to frames
-        offset = Math.round(Number(offset) * @framesPerSec)
+        offset = Math.round Number(offset) * @framesPerSec
         
         console.log "asked about offset of ", offset
         
