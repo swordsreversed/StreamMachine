@@ -16,6 +16,7 @@ package StreamMachine {
         public var channel:SoundChannel
         
         public var paused:Boolean = false
+        public var sndLoaded:Boolean = false
         public var pausedAt:Number
         
         public function Stream() {
@@ -24,10 +25,7 @@ package StreamMachine {
             this.snd = new Sound();  
             
             this.req = new URLRequest(params.stream);
-            this.ctx = new SoundLoaderContext(1000,false);
-            
-            this.snd.load(req,ctx)
-            
+                        
             ExternalInterface.addCallback("play",this.sndplay)
             ExternalInterface.addCallback("pause",this.sndpause)
             ExternalInterface.addCallback("stop",this.sndstop)
@@ -42,6 +40,12 @@ package StreamMachine {
         //----------
         
         public function sndplay():Boolean {
+            if (!this.sndLoaded) {
+                this.snd = new Sound()
+                this.snd.load(this.req,new SoundLoaderContext(1000,false))
+                this.sndLoaded = true
+            }
+            
             if (this.channel) {
                 // we're already playing
                 return false;                
@@ -87,6 +91,7 @@ package StreamMachine {
             if (this.channel) {
                 this.channel.stop()
                 this.snd.close()
+                this.sndLoaded = false
                 
                 this.channel = null;
                 
