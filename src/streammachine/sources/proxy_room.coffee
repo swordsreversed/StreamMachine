@@ -7,7 +7,7 @@ Parser = require("../parsers/mp3")
 module.exports = class ProxyRoom extends EventEmitter
     DefaultOptions:
         url:     ""
-    
+        
     #----------
     
     constructor: (key,options) ->
@@ -17,8 +17,10 @@ module.exports = class ProxyRoom extends EventEmitter
         @connected      = false
         @framesPerSec   = null
         
-        @metaTitle = null
-        @metaURL = null
+        @setMaxListeners 0
+        
+        @metaTitle = @options.metaTitle || null
+        @metaURL = @options.metaURL || null
     
     #----------
         
@@ -37,9 +39,15 @@ module.exports = class ProxyRoom extends EventEmitter
         @stream.on "metadata", (data) =>
             #console.log "#{@key} got metadata chunk"
             meta = Icecast.parseMetadata(data)
-            @metaTitle = meta.StreamTitle
-            @metaURL = meta.StreamUrl
-            @emit "metadata", meta
+            #console.log "meta is ", meta
+            
+            if meta.StreamTitle
+                @metaTitle = meta.StreamTitle
+            
+            if meta.StreamUrl
+                @metaURL = meta.StreamUrl
+                
+            @emit "metadata", StreamTitle:@metaTitle, StreamUrl:@metaURL
 
         # attach mp3 parser for rewind buffer
         @parser = new Parser()
@@ -51,6 +59,7 @@ module.exports = class ProxyRoom extends EventEmitter
             if !@framesPerSec
                 @framesPerSec = header.samplingRateHz / header.samplesPerFrame
                 console.log "#{@key} setting framesPerSec to ", @framesPerSec
+                console.log "#{@key} first header is ", header
                 
             @emit "header", data, header
 

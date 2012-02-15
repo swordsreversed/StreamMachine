@@ -90,6 +90,36 @@ module.exports = class RewindBuffer
             
     #----------
     
+    pumpFrom: (offset,length) ->
+        # we want to send _length_ frames, starting at _offset_
+        
+        # sanity checks...
+        if offset > @buffer.length
+            offset = @buffer.length
+            
+        length = Math.round(length*@framesPerSec)
+        if length > offset
+            length = offset
+            
+        bl = @buffer.length
+        
+        pumpLen = 0
+        pumpLen += @buffer[ bl - 1 - (offset - i) ].length for i in [1..length]
+        
+        console.log "creating buffer of ", pumpLen, offset, length, bl
+        
+        pumpBuf = new Buffer pumpLen
+
+        index = 0
+        for i in [1..length]
+            buf = @buffer[ bl - 1 - (offset - i) ]
+            buf.copy pumpBuf, index, 0, buf.length
+            index += buf.length
+            
+        return pumpBuf
+        
+    #----------
+    
     burstFrom: (offset,obj) ->
         # we want to send them @burst frames (if available), starting at offset.
         # return them the new offset position
