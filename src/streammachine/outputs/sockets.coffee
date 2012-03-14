@@ -26,7 +26,7 @@ module.exports = class Sockets
                     rewind:     v.rewind
                     socket:     sock
                     listener:   null
-                    offset:     0
+                    offset:     1
                 }
                 
                 # add offset listener
@@ -38,6 +38,7 @@ module.exports = class Sockets
                         s.listener.setOffset(i)
                         s.offset = s.listener._playHead
                     else
+                        # just set it on the socket.  we'll use it when they connect
                         s.offset = s.rewind.checkOffset i
                 
                     fn?(s.offset / s.rewind.framesPerSec)                        
@@ -52,7 +53,7 @@ module.exports = class Sockets
                     sock.emit "timecheck"
                         time:       new Date
                         buffered:   v.rewind.bufferedSecs()
-                , 2000)
+                , 5000)
     
     #----------
             
@@ -60,20 +61,20 @@ module.exports = class Sockets
         requrl = url.parse(req.url,true)
         
         if requrl.query.socket? && sess = @sessions[requrl.query.socket]
-            listen = new Sockets.Listener sess,req,res,sess.rewind
+            listen = new Sockets.Listener sess,req,res,sess.rewind,sess.offset
             sess.listener = listen
             console.log "wired listener to session #{sess.id}"
 
     #----------
         
     class @Listener
-        constructor: (session,req,res,rewind) ->
+        constructor: (session,req,res,rewind,offset=1) ->
             @req = req
             @res = res
             @rewind = rewind
 
             # set our internal offset to be live by default
-            @_offset = 1
+            @_offset = offset
             @_playHead = 1
             
             console.log "req is ", req.headers
