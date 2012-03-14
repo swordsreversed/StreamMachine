@@ -1,7 +1,7 @@
 _u = require("underscore")
 url = require('url')
 http = require "http"
-connect = require("connect")
+express = require "express"
 
 
 module.exports = class Core
@@ -42,10 +42,8 @@ module.exports = class Core
                 rewind: rewind
         
         # init our server
-        @server = connect connect.query(),
-            require("connect-assets")(),
-            connect.router (app) => @_router(app)
-            
+        @server = express.createServer()
+        @_router(@server)
         @server.listen @options.listen
         
         #@server = http.createServer (req,res) => @_handle(req,res)
