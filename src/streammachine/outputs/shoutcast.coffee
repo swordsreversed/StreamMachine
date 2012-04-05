@@ -2,13 +2,11 @@ _u = require 'underscore'
 icecast = require("icecast-stack")
 
 module.exports = class Shoutcast
-    constructor: (req,res,stream) ->
+    constructor: (stream,req,res) ->
         @req = req
         @res = res
         @stream = stream
-        
-        console.log "registered shoutcast client"
-        
+                
         # convert this into an icecast response
         @res = new icecast.IcecastWriteStack @res, @stream.meta_interval
         @res.queueMetadata StreamTitle:@stream.source.metaTitle, StreamUrl:@stream.source.metaURL
@@ -22,7 +20,7 @@ module.exports = class Shoutcast
             "icy-metaint":          @stream.meta_interval
             
         # register ourself as a listener
-        #@stream.registerListener(@)
+        @stream.registerListener(@)
         
         # write out our headers
         res.writeHead 200, headers
@@ -44,4 +42,4 @@ module.exports = class Shoutcast
             @stream.source.removeListener "metadata", @metaFunc
             
             # tell the caster we're done
-            #@stream.closeListener(@)
+            @stream.closeListener(@)

@@ -1,7 +1,7 @@
 _u = require 'underscore'
 
 module.exports = class Pumper
-    constructor: (req,res,stream) ->
+    constructor: (stream,req,res) ->
         @req = req
         @res = res
         @stream = stream                
@@ -13,6 +13,9 @@ module.exports = class Pumper
         # grab our pump buffer
         pumpBuf = @stream.rewind.pumpFrom playHead, req.query.pump
                 
+        secs = playHead / @stream.rewind.framesPerSec
+        @stream.log.debug output:"pump", seconds:secs, bytes:pumpBuf.length, "Pumping"
+        
         headers = 
             "Content-Type":         "audio/mpeg"
             "Connection":           "close"

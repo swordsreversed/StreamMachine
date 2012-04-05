@@ -2,6 +2,7 @@ _u = require("underscore")
 url = require('url')
 http = require "http"
 express = require "express"
+Logger = require "bunyan"
 
 
 module.exports = class Core
@@ -29,26 +30,27 @@ module.exports = class Core
         
         @streams = {}
         
+        # set up our core logger
+        @log = new Logger name:"StreamMachine", streams: [
+            { stream:process.stdout, level:'debug' },
+            { path:options.log, level:"debug" }
+        ], serializers:
+            req: Logger.stdSerializers.req
+        
+        @log.info("Instance initialized")
+        
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers
         for key,opts of @options.streams
-            source = @createSource key, opts.source
-            source.connect()
-            
-            rewind = new Core.Rewind source, opts.rewind
-            
-            @streams[key] = _u(_u(_u({}).extend(@DefaultStreamOptions)).extend( opts )).extend 
-                source: source
-                rewind: rewind
+            @log.info opts:opts, "Starting up source: #{key}"
+            @streams[key] = new Core.Stream key, @log.child(source:key), opts
         
         # init our server
         @server = express.createServer()
         @_router(@server)
         @server.listen @options.listen
         
-        #@server = http.createServer (req,res) => @_handle(req,res)
-        #@server.listen(@options.listen)
-        console.log "caster is listening on port #{@options.listen}"
+        @log.debug "caster is listening on port #{@options.listen}"
         
         # start up the socket manager
         @sockets = new Core.Outputs.sockets server:@server, core:@
@@ -58,39 +60,84 @@ module.exports = class Core
     _router: (app) ->                
         # -- register a route for each of our streams -- #
         _u(@streams).each (stream,key) =>
-            app.get "/#{key}.mp3", (req,res,next) =>
+            app.get "/#{key}(?:\.mp3)?", (req,res,next) =>
                 if req.query.socket?
                     # socket listener
-                    @sockets.addListener req,res,stream
+                    @sockets.addListener stream,req,res
                     
                 else if req.query.off?
                     # rewind to a starting offset
-                    new Core.Rewind.Listener req, res, stream.rewind, Number(req.query.off)
+                    new Core.Rewind.Listener stream, req, res, Number(req.query.off)
                     
                 else if req.query.pump?
                     # pump listener pushes from the buffer as fast as possible
-                    new Core.Outputs.pumper req, res, stream
+                    new Core.Outputs.pumper stream, req, res
                     
                 else
                     # normal live stream (with or without shoutcast)
                     if req.headers['icy-metadata']?
                         # -- shoutcast listener -- #
-                        new Core.Outputs.shoutcast req, res, stream
+                        new Core.Outputs.shoutcast stream, req, res
                     else
                         # -- straight mp3 listener -- #
-                        new Core.Outputs.mp3 req, res, stream
+                        new Core.Outputs.mp3 stream, req, res
                         
         # -- register route for web player -- #
         #app.get "/"
     
     #----------
                 
-    createSource: (key,opts) ->
+    createSource: (key,log,opts) ->
         # what type of source is this?
         if Core.Sources[ opts.type ]
-            source = new Core.Sources[ opts.type ] key, opts
+            source = new Core.Sources[ opts.type ] key, log, opts
             return source
         else
             console.error "Invalid source type: #{opts.type}"
             process.exit(1)
+    
+    #----------
+            
+    class @Stream
+        @DefaultOptions:
+            meta_interval:  10000
+            name:           ""
+            type:           null
+        
+        constructor: (key,log,opts) ->
+            @options = _u.defaults opts||{}, @DefaultOptions
+            
+            @log = log
+            @key = key
+            
+            @listeners = 0
+            
+            # make sure our source is valid
+            if Core.Sources[ opts.source?.type ]
+                @source = new Core.Sources[ opts.source?.type ] @, key, opts.source
+            else
+                @log.error opts:opts, "Invalid source type."
+                return false
+            
+            # connect!
+            @source.connect()
+            
+            # set up a rewind buffer
+            @rewind = new Core.Rewind @, opts.rewind
+        
+        #----------
+            
+        registerListener: (listen) ->
+            # increment our listener count
+            @listeners += 1
+            
+            # log the connection start
+            @log.debug req:listen.req, listeners:@listeners, "Connection start"
+            
+        closeListener: (listen) ->
+            # decrement listener count
+            @listeners -= 1
+            
+            # log the connection end
+            @log.debug req:listen.req, listeners:@listeners, "Connection end"
             

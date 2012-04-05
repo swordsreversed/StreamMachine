@@ -10,12 +10,15 @@ module.exports = class ProxyRoom extends EventEmitter
         
     #----------
     
-    constructor: (key,options) ->
+    constructor: (stream,key,options) ->
         @options = _u(_u({}).extend(@DefaultOptions)).extend( options || {} )
         @key            = key
+        @stream         = stream
         @url            = @options.url
         @connected      = false
         @framesPerSec   = null
+        
+        @log = @stream.log
         
         @setMaxListeners 0
         
@@ -25,11 +28,11 @@ module.exports = class ProxyRoom extends EventEmitter
     #----------
         
     connect: (url) ->
-        console.log "connecting to #{@url}"
+        @log.trace "connecting to #{@url}"
         @stream = IcecastClient.createClient @url
         
         @stream.on "close", =>
-            console.error "Connection closed to #{@url}"
+            @log.trace "Connection closed to #{@url}"
             @connected = false
             
         @stream.on "data", (chunk) =>
@@ -58,8 +61,8 @@ module.exports = class ProxyRoom extends EventEmitter
         @parser.on "header", (data,header) =>
             if !@framesPerSec
                 @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                console.log "#{@key} setting framesPerSec to ", @framesPerSec
-                console.log "#{@key} first header is ", header
+                @log.trace "#{@key} setting framesPerSec to ", @framesPerSec
+                @log.trace "#{@key} first header is ", header
                 
             @emit "header", data, header
 

@@ -1,7 +1,7 @@
 _u = require 'underscore'
 
 module.exports = class LiveMP3
-    constructor: (req,res,stream) ->
+    constructor: (stream,req,res) ->
         @req = req
         @res = res
         @stream = stream                
@@ -12,7 +12,7 @@ module.exports = class LiveMP3
             "Transfer-Encoding":    "identity"
             
         # register ourself as a listener
-        #@stream.registerListener(@)
+        @stream.registerListener(@)
         
         # write out our headers
         res.writeHead 200, headers
@@ -27,4 +27,4 @@ module.exports = class LiveMP3
             @stream.source.removeListener "data", @dataFunc
             
             # tell the caster we're done
-            #@stream.closeListener(@)
+            @stream.closeListener(@)

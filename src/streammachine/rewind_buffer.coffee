@@ -16,10 +16,12 @@ module.exports = class RewindBuffer
         seconds:    (60*60*2)   # 2 hours
         burst:      30          # 30 seconds burst
     
-    constructor: (source,options = {}) ->
+    constructor: (stream,options = {}) ->
         @options = _u(_u({}).extend(@DefaultOptions)).extend options
         
-        @source = source
+        @stream = stream
+        
+        @source = @stream.source
         
         # use the first header to compute some constants
         @source.once "header", (data,header) =>

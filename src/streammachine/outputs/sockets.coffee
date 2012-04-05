@@ -20,34 +20,42 @@ module.exports = class Sockets
             @io.of("/#{k}").on "connection", (sock) =>
                 console.log "connection is ", sock.id
                 console.log "stream is #{k}"
-
+                
                 @sessions[sock.id] ||= {
                     id:         sock.id
+                    stream:     v
+                    log:        v.log.child(output:"sockets", sock:sock.id)
                     rewind:     v.rewind
                     socket:     sock
                     listener:   null
                     offset:     1
                 }
                 
+                sess = @sessions[sock.id]
+                
                 # add offset listener
                 sock.on "offset", (i,fn) =>
                     # this might be called with a stream connection active, 
                     # or it might not.  we have to check
-                    s = @sessions[sock.id]
-                    if s.listener
-                        s.listener.setOffset(i)
-                        s.offset = s.listener._playHead
+                    if sess.listener
+                        sess.listener.setOffset(i)
+                        sess.offset = sess.listener._playHead
                     else
                         # just set it on the socket.  we'll use it when they connect
-                        s.offset = s.rewind.checkOffset i
+                        sess.offset = sess.rewind.checkOffset i
                 
-                    fn?(s.offset / s.rewind.framesPerSec)                        
+                    secs = sess.offset / sess.rewind.framesPerSec
+                    sess.log.debug offset:sess.offset, "Offset by #{secs} seconds"
+                    
+                    fn? secs
 
                 # send ready signal
                 sock.emit "ready",
                     time:       new Date
                     buffered:   v.rewind.bufferedSecs()
-
+                    
+                sess.log.debug "Sent ready signal"
+                    
                 # set stream timecheck
                 setInterval( =>
                     sock.emit "timecheck"
@@ -57,7 +65,7 @@ module.exports = class Sockets
     
     #----------
             
-    addListener: (req,res,stream) ->
+    addListener: (stream,req,res) ->
         requrl = url.parse(req.url,true)
         
         if requrl.query.socket? && sess = @sessions[requrl.query.socket]
@@ -76,8 +84,9 @@ module.exports = class Sockets
             # set our internal offset to be live by default
             @_offset = offset
             @_playHead = 1
-            
-            console.log "req is ", req.headers
+                        
+            # register our listener
+            session.stream.registerListener(@)
             
             headers = 
                 "Content-Type":         "audio/mpeg"
@@ -95,6 +104,9 @@ module.exports = class Sockets
             @req.connection.on "close", =>
                 # stop listening to stream
                 @rewind.removeListener @  
+                
+                # note listener close
+                session.stream.closeListener @
 
         #----------
 
