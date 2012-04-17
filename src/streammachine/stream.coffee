@@ -62,9 +62,10 @@ module.exports = class Stream extends EventEmitter
         
     disconnect: ->
         # disconnect any listeners
-            
+        
             
         # disconnect the stream source
+        @source?.disconnect()
         
     #----------
             

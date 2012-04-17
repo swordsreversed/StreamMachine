@@ -9,10 +9,7 @@ module.exports = class Core
         foo:        null
         streams:    {}
         
-    DefaultStreamOptions:
-        meta_interval:  10000
-        name:           ""
-        
+    Redis:  require "./redis_config"
     Stream: require "./stream"
     Rewind: require "./rewind_buffer"
         
@@ -27,20 +24,9 @@ module.exports = class Core
         
     #----------
         
-    constructor: (options) ->
-        @options = _u.defaults options||{}, @DefaultOptions
-        
+    constructor: ->        
         @streams = {}
                 
-        # set up our core logger
-        @log = new Logger name:"StreamMachine", streams: [
-            { stream:process.stdout, level:'debug' },
-            { path:@options.log, level:"debug" }
-        ], serializers:
-            req: Logger.stdSerializers.req
-        
-        @log.info("Instance initialized")
-        
         # init our server
         @server = express.createServer()
         @server.use (req,res,next) => @streamRouter(req,res,next)
@@ -51,9 +37,6 @@ module.exports = class Core
         # start up the socket manager
         @sockets = new @Outputs.sockets server:@server, core:@
         
-        # should we be listening for slave servers?
-        @slaves = new Core.Master @, @options.slaves if @options.slaves
-
     #----------
         
     # configure can be called on a new core, or it can be called to reconfigure 
@@ -80,9 +63,7 @@ module.exports = class Core
             else
                 @log.info opts:opts, "Starting up source: #{key}"
                 @streams[key] = new @Stream @, key, @log.child(source:key), opts
-                
-        # FIXME: Need to update router to only have current streams
-        
+                        
     #----------
     
     streamRouter: (req,res,next) ->
@@ -115,34 +96,40 @@ module.exports = class Core
                 
         else
             next()
-
-    #----------
-                
-    createSource: (key,log,opts) ->
-        # what type of source is this?
-        if Core.Sources[ opts.type ]
-            source = new Core.Sources[ opts.type ] key, log, opts
-            return source
-        else
-            console.error "Invalid source type: #{opts.type}"
-            process.exit(1)
                             
     #----------
     
-    class @Master
-        @DefaultOptions:
-            port:       null
-            password:   null
-            
-        constructor: (@core,opts) ->
+    class @Master extends Core
+        constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
-            if !@options.port || !@options.password
-                @core.log.error("Invalid options for master server.  Must provide port and password.")
+            # -- set up our core logger -- #
+            
+            @log = new Logger name:"StreamMachine", streams: [
+                { stream:process.stdout, level:'debug' },
+                { path:@options.log, level:"debug" }
+            ], serializers:
+                req: Logger.stdSerializers.req
+        
+            @log.info("Instance initialized")
+            
+            # -- allow Core's constructor to run -- #
+            
+            super()
+            
+            # -- load our streams configuration from redis -- #
+            
+            @redis = new @Redis @options.redis?
+            @redis.on "config", (streams) => @configure streams:streams
+            
+            # -- set up the socket connection for slaves -- #
+            
+            if !@options.slaves?.port || !@options.slaves?.password
+                @log.error("Invalid options for master server.  Must provide port and password.")
                 return false
                 
             # fire up a socket listener on our slave port
-            @io = require("socket.io").listen @options.port
+            @io = require("socket.io").listen @options.slaves?.port
             
             # add our authentication
             @io.configure =>
@@ -152,7 +139,7 @@ module.exports = class Core
                     
                     if @options.password
                         # make sure we got the same password in the query
-                        if @options.password == handshakeData.query?.password
+                        if @options.slaves?.password == handshakeData.query?.password
                             callback null, true
                         else
                             callback "Invalid slave password.", false
@@ -169,10 +156,6 @@ module.exports = class Core
     #----------
     
     class @Slave
-        @DefaultOptions:
-            server:     null
-            password:   null
-            
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             

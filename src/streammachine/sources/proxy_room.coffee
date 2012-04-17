@@ -71,4 +71,5 @@ module.exports = class ProxyRoom extends EventEmitter
         
     #----------
         
-        
+    disconnect: ->
+        console.log "FIXME: Need to handle disconnect in source"
