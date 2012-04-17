@@ -31,15 +31,15 @@ module.exports = class Shoutcast
 
         @dataFunc = (chunk) => @res.write(chunk)
         
-        @stream.source.on "metadata",   @metaFunc
-        @stream.source.on "data",       @dataFunc
+        @stream.on "metadata",   @metaFunc
+        @stream.on "data",       @dataFunc
                             
         @req.connection.on "close", =>
             # stop listening to stream
-            @stream.source.removeListener "data", @dataFunc
+            @stream.removeListener "data", @dataFunc
             
             # and to metadata
-            @stream.source.removeListener "metadata", @metaFunc
+            @stream.removeListener "metadata", @metaFunc
             
             # tell the caster we're done
             @stream.closeListener(@)

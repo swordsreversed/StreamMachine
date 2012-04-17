@@ -1,17 +1,30 @@
 StreamMachine = require("./src/streammachine/core")
+nconf = require("nconf")
 
-core = new StreamMachine
-    listen:     8000
-    log:     "/tmp/streammachine.log"
-    streams:
-        kpcclive:
-            source: type:"proxy", url:"http://206.221.211.12:80/", metaTitle: "89.3 KPCC"
-            rewind: seconds:(60*60*4)   # 4 hour buffer
-            name: "89.3 KPCC - Southern California Public Radio"            
-            
-        thecurrent:
-            source: type:"proxy", url:"http://currentstream1.publicradio.org:80/", metaTitle: "The Current" 
-            rewind: seconds:(60*30)     # 30 minute buffer
-            name: "The Current"
+# -- do we have a config file to open? -- #
+
+# get config from environment or command line
+nconf.env().argv()
+
+# add in config file
+nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streammachine.conf" } )
+
+#console.log "config file master is #{nconf.get("master")}"
+
+#exit()
+
+if nconf.get("master")
+    # we're a slave server, connecting to a master
+    # need to make sure we also have a setting for master:password
+    core = new StreamMachine.Slave nconf.get("master")
     
-console.log "Core is connected."
+    console.log "Core is connected as a slave."
+else
+    core = new StreamMachine
+        listen:     nconf.get("port")
+        log:        nconf.get("log")
+        slaves:     nconf.get("slaves")    
+    .configure
+        streams:    nconf.get("streams")
+    
+    console.log "Core is connected as a master."

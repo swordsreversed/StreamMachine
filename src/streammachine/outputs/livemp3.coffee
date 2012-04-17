@@ -20,11 +20,11 @@ module.exports = class LiveMP3
         @dataFunc = (chunk) => @res.write(chunk)
 
         # and start sending data...
-        @stream.source.on "data", @dataFunc
+        @stream.on "data", @dataFunc
                             
         @req.connection.on "close", =>
             # stop listening to stream
-            @stream.source.removeListener "data", @dataFunc
+            @stream.removeListener "data", @dataFunc
             
             # tell the caster we're done
             @stream.closeListener(@)
