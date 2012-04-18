@@ -13,7 +13,10 @@ nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streamma
 if nconf.get("master")
     # we're a slave server, connecting to a master
     # need to make sure we also have a setting for master:password
-    core = new StreamMachine.Slave nconf.get("master")
+    core = new StreamMachine.Slave 
+        master:     nconf.get("master")
+        listen:     nconf.get("port")
+        log:        nconf.get("log")
     
     console.log "Core is connected as a slave."
 else

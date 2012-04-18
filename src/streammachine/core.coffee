@@ -103,6 +103,8 @@ module.exports = class Core
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
+            @slaves = []
+            
             # -- set up our core logger -- #
             
             @log = new Logger name:"StreamMachine", streams: [
@@ -120,13 +122,18 @@ module.exports = class Core
             # -- load our streams configuration from redis -- #
             
             @redis = new @Redis @options.redis?
-            @redis.on "config", (streams) => @configure streams:streams
+            @redis.on "config", (streams) =>
+                @options.streams = streams
+                @configure streams:streams
+                
+                for sock in @slaves
+                    sock.emit "config", streams:streams
             
             # -- set up the socket connection for slaves -- #
             
             if !@options.slaves?.port || !@options.slaves?.password
                 @log.error("Invalid options for master server.  Must provide port and password.")
-                return false
+                return false                
                 
             # fire up a socket listener on our slave port
             @io = require("socket.io").listen @options.slaves?.port
@@ -150,24 +157,45 @@ module.exports = class Core
             @io.on "connection", (sock) =>
                 console.log "slave connection is #{sock.id}"
                 
-                # emit our configuration
-                sock.emit("config",@core.options.streams)
+                unless _u(@streams).isEmpty()
+                    # emit our configuration
+                    sock.emit "config", streams:@options.streams
+                    
+                @slaves.push sock
+                
+            @io.on "disconnect", (sock) =>
+                console.log "slave disconnect from #{sock.id}"
+                @slaves = _u(@slaves).without sock
 
     #----------
     
-    class @Slave
+    class @Slave extends Core
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
-            if !@options.server 
+            # -- Make sure we have the proper slave config options -- #
+            
+            if !@options.master?.server 
                 @core.log.error "Invalid options for slave server. Must provide server."
                 return false
                 
-            # connect to the master server
-            @socket = require('socket.io-client').connect @options.server
+            # -- FIXME: Set up slave logging -- #
+            
+            @log = new Logger name:"StreamMachine", streams: [
+                { stream:process.stdout, level:'debug' }
+            ], serializers:
+                req: Logger.stdSerializers.req
+        
+            @log.info("Slave instance initialized")
+                
+            # -- run Core's constructor -- #
+            
+            super()
+                            
+            # -- connect to the master server -- #
+            
+            @socket = require('socket.io-client').connect @options.master.server
             
             @socket.on "config", (config) =>
                 console.log "got config of ", config
-                
-                # now create our own core with that stream config
-                
+                @configure config
