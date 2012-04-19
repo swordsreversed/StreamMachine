@@ -1,15 +1,6 @@
 {
 	"port":		8000,
 	"log":		"/tmp/streammachine.log",
-    "streams": {
-    	"kpcclive": {
-    		"source": {
-    			"type": 		"proxy",
-				"url": 			"http://206.221.211.12:80",
-				"metaTitle":	"89.3 KPCC"
-    		}
-    	}
-	},
 	"slaves": {
 		"port":		8001,
 		"password":	"zxcasdqwe"

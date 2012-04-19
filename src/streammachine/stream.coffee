@@ -14,6 +14,8 @@ module.exports = class Stream extends EventEmitter
         @key = key
             
         @listeners = 0
+
+        @preroll = null
         
         @dataFunc = (chunk) => @emit "data", chunk
         @metaFunc = (chunk) => @emit "metadata", chunk
@@ -57,6 +59,14 @@ module.exports = class Stream extends EventEmitter
             return false
                         
         # -- Preroll -- #
+        
+        @log.debug "Preroll settings are ", opts.preroll
+        
+        @preroll.disconnect() if @preroll
+        
+        if opts.preroll?
+            # create a Preroller connection
+            @preroll = new @core.Preroller @, @key, opts.preroll
             
     #----------
         

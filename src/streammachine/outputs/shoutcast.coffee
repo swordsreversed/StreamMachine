@@ -31,9 +31,15 @@ module.exports = class Shoutcast
 
         @dataFunc = (chunk) => @res.write(chunk)
         
-        @stream.on "metadata",   @metaFunc
-        @stream.on "data",       @dataFunc
-                            
+        # -- send a preroll if we have one -- #
+        
+        if @stream.preroll
+            @stream.preroll.pump @res, => @connectSource()
+        else
+            @connectSource()
+
+        # -- what do we do when the connection is done? -- #
+        
         @req.connection.on "close", =>
             # stop listening to stream
             @stream.removeListener "data", @dataFunc
@@ -43,3 +49,12 @@ module.exports = class Shoutcast
             
             # tell the caster we're done
             @stream.closeListener(@)
+
+    #----------
+        
+    connectSource: ->
+        # -- now connect to our source -- #            
+        
+        @stream.on "metadata",   @metaFunc
+        @stream.on "data",       @dataFunc
+                            

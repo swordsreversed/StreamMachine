@@ -12,6 +12,7 @@ module.exports = class Core
     Redis:  require "./redis_config"
     Stream: require "./stream"
     Rewind: require "./rewind_buffer"
+    Preroller: require "./preroller"
         
     Sources:
         proxy:  require("./sources/proxy_room")
