@@ -109,7 +109,7 @@ module.exports = class LogController
             #console.log "in w3c logger with ", level, msg, meta, cb
             
             # for a valid w3c log, level should == "request", meta.
-            logline = "#{meta.ip} #{meta.ip} #{strftime(meta.time,"%F %T")} #{meta.path} 200 #{meta.bytes} #{meta.seconds}\n"
+            logline = "#{meta.ip} #{meta.ip} #{strftime(meta.time,"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
             if @file
                 # make sure there aren't any queued writes
