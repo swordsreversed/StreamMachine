@@ -2,7 +2,7 @@ _u = require("underscore")
 url = require('url')
 http = require "http"
 express = require "express"
-Logger = require "bunyan"
+Logger = require "./log_controller"
 
 module.exports = class Core
     DefaultOptions:
@@ -28,21 +28,64 @@ module.exports = class Core
     constructor: ->        
         @streams = {}
                 
-        # init our server
-        @server = express.createServer()
-        @server.use (req,res,next) => @streamRouter(req,res,next)
-        @server.listen @options.listen
-                
-        @log.debug "caster is listening on port #{@options.listen}"
+    #----------
+    
+    # We have three different log outputs we need to support and perhaps 
+    # configure:
+    #
+    # * stdout  -- Debug to the console.  Triggered by config['stdout'] = true
+    # * json    -- JSON log via Bunyan, written to a local file. Configured 
+    #   via config.json.file and config.json.level.
+    # * w3c     -- W3C-format logging, written to a local file. Configured via 
+    #   config.w3c.file.
+    
+    setUpLogging: (config) ->
+        customLevels = 
+            error:          50
+            request:        40
+            interaction:    30
+            debug:          10
+                            
+        transports = []
         
-        # start up the socket manager
-        @sockets = new @Outputs.sockets server:@server, core:@
+        # -- stdout -- #
         
+        if config.stdout
+            console.log "adding Console transport"
+            transports.push new (winston.transports.Console)
+                level:      config.stdout?.level        || "debug"
+                colorize:   config.stdout?.colorize     || false
+                timestamp:  config.stdout?.timestamp    || false
+        
+        # -- JSON -- #
+        
+        if config.json?.file
+            # set up JSON logging via Bunyan
+            transports.push new (winston.transports.File)
+                level:      config.json?.level || "interaction"
+                timestamp:  true
+                filename:   config.json?.file
+                json:       true
+        
+        # -- W3C -- #
+        
+        #if config.w3c?.file
+            # set up W3C-format logging
+            
+        
+        # -- Remote -- #
+        
+        
+        # create a winston logger for this instance
+        logger = new (winston.Logger) transports:transports, levels:customLevels
+                                
+        logger
+    
     #----------
         
-    # configure can be called on a new core, or it can be called to reconfigure 
-    # an existing core.  we need to support either one.
-    configure: (options) ->
+    # configureStreams can be called on a new core, or it can be called to 
+    # reconfigure an existing core.  we need to support either one.
+    configureStreams: (options) ->
         console.log "In configure with ", options
 
         # -- Sources -- #
@@ -59,11 +102,11 @@ module.exports = class Core
             console.log "stream for #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.info opts:opts, "Passing updated config to source: #{key}"
+                @log.debug opts:opts, "Passing updated config to source: #{key}"
                 @streams[key].configure opts
             else
-                @log.info opts:opts, "Starting up source: #{key}"
-                @streams[key] = new @Stream @, key, @log.child(source:key), opts
+                @log.debug opts:opts, "Starting up source: #{key}"
+                @streams[key] = new @Stream @, key, @log.child(stream:key), opts
                         
     #----------
     
@@ -100,21 +143,22 @@ module.exports = class Core
                             
     #----------
     
+    # Master Server
+    # 
+    # Masters don't handle stream connections directly.  Instead they host 
+    # configuration info and pass it on to slave servers.  They also consolidate 
+    # slave logging data.
+    
     class @Master extends Core
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
             @slaves = []
             
-            # -- set up our core logger -- #
+            # -- set up logging -- #
             
-            @log = new Logger name:"StreamMachine", streams: [
-                { stream:process.stdout, level:'debug' },
-                { path:@options.log, level:"debug" }
-            ], serializers:
-                req: Logger.stdSerializers.req
-        
-            @log.info("Instance initialized")
+            @log = new Logger @options.log
+            @log.debug("Instance initialized")
             
             # -- allow Core's constructor to run -- #
             
@@ -124,79 +168,99 @@ module.exports = class Core
             
             @redis = new @Redis @options.redis?
             @redis.on "config", (streams) =>
+                # stash the configuration
                 @options.streams = streams
-                @configure streams:streams
                 
+                # and then pass it on to any connected slaves
                 for sock in @slaves
                     sock.emit "config", streams:streams
             
             # -- set up the socket connection for slaves -- #
             
-            if !@options.slaves?.port || !@options.slaves?.password
+            if !@options.master?.port || !@options.master?.password
                 @log.error("Invalid options for master server.  Must provide port and password.")
                 return false                
                 
             # fire up a socket listener on our slave port
-            @io = require("socket.io").listen @options.slaves?.port
+            @io = require("socket.io").listen @options.master?.port
             
             # add our authentication
             @io.configure =>
-                @io.set "authorization", (handshakeData,callback) =>
-                    # look for password
-                    console.log "handshake data is ", handshakeData
-                    
-                    if @options.password
+                @io.set "authorization", (data,cb) =>
+                    # look for password                    
+                    if @options.master.password
                         # make sure we got the same password in the query
-                        if @options.slaves?.password == handshakeData.query?.password
-                            callback null, true
+                        if @options.master.password == data.query?.password
+                            cb null, true
                         else
-                            callback "Invalid slave password.", false
+                            cb "Invalid slave password.", false
                     else
-                        callback null, true
+                        cb null, true
             
             # look for slave connections    
             @io.on "connection", (sock) =>
-                console.log "slave connection is #{sock.id}"
+                @log.debug "slave connection is #{sock.id}"
                 
-                unless _u(@streams).isEmpty()
+                if @options.streams
                     # emit our configuration
                     sock.emit "config", streams:@options.streams
                     
                 @slaves.push sock
                 
+                # attach event handler for log reporting
+                sock.on "request", (obj = {}) =>
+                    @log.request obj
+                
+            # attach disconnect handler
             @io.on "disconnect", (sock) =>
-                console.log "slave disconnect from #{sock.id}"
+                @log.debug "slave disconnect from #{sock.id}"
                 @slaves = _u(@slaves).without sock
 
+
     #----------
+    
+    # Slave Server
+    #
+    # Slaves are born only knowing how to connect to their master. The master 
+    # gives them stream configuration, which the slave then uses to connect 
+    # and provide up streams to clients.  Logging data is always passed back 
+    # to the master, but can optionally also be stored on the slave host.
     
     class @Slave extends Core
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
+            # -- Set up logging -- #
+            
+            @log = new Logger @options.log
+            @log.debug("Instance initialized")
+            
             # -- Make sure we have the proper slave config options -- #
             
-            if !@options.master?.server 
-                @core.log.error "Invalid options for slave server. Must provide server."
+            if !@options.slave?.master 
+                @log.error "Invalid options for slave server. Must provide master."
                 return false
-                
-            # -- FIXME: Set up slave logging -- #
-            
-            @log = new Logger name:"StreamMachine", streams: [
-                { stream:process.stdout, level:'debug' }
-            ], serializers:
-                req: Logger.stdSerializers.req
-        
-            @log.info("Slave instance initialized")
-                
+                                
             # -- run Core's constructor -- #
             
             super()
+            
+            # -- set up our stream server -- #
+            
+            # init our server
+            @server = express.createServer()
+            @server.use (req,res,next) => @streamRouter(req,res,next)
+            @server.listen @options.listen
+                
+            @log.debug "Slave is listening on port #{@options.listen}"
+        
+            # start up the socket manager on the listener
+            @sockets = new @Outputs.sockets server:@server, core:@
                             
             # -- connect to the master server -- #
             
-            @socket = require('socket.io-client').connect @options.master.server
+            @socket = require('socket.io-client').connect @options.slave.master
             
             @socket.on "config", (config) =>
                 console.log "got config of ", config
-                @configure config
+                @configureStreams config

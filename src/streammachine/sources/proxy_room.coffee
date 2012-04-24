@@ -28,11 +28,11 @@ module.exports = class ProxyRoom extends EventEmitter
     #----------
         
     connect: (url) ->
-        @log.trace "connecting to #{@url}"
+        @log.debug "connecting to #{@url}"
         @stream = IcecastClient.createClient @url
         
         @stream.on "close", =>
-            @log.trace "Connection closed to #{@url}"
+            @log.debug "Connection closed to #{@url}"
             @connected = false
             
         @stream.on "data", (chunk) =>
@@ -61,8 +61,8 @@ module.exports = class ProxyRoom extends EventEmitter
                 # -- compute frames per second -- #
                 
                 @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                @log.trace "#{@key} setting framesPerSec to ", @framesPerSec
-                @log.trace "#{@key} first header is ", header
+                @log.debug "#{@key} setting framesPerSec to ", @framesPerSec
+                @log.debug "#{@key} first header is ", header
                 
                 # -- compute stream key -- #
                 

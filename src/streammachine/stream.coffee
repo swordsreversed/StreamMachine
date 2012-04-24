@@ -55,12 +55,12 @@ module.exports = class Stream extends EventEmitter
             else
                 @log.error "Failed to connect to new source"
         else
-            @log.error opts:opts, "Invalid source type."
+            @log.error "Invalid source type.", opts:opts
             return false
                         
         # -- Preroll -- #
         
-        @log.debug "Preroll settings are ", opts.preroll
+        @log.debug "Preroll settings are ", preroll:opts.preroll
         
         @preroll.disconnect() if @preroll
         
@@ -82,15 +82,24 @@ module.exports = class Stream extends EventEmitter
     registerListener: (listen) ->
         # increment our listener count
         @listeners += 1
-            
-        console.log "req is #{listen.req}"
-            
+        
+        # keep track of when they started listening
+        listen.startTime = (new Date)
+                        
         # log the connection start
-        @log.debug req:listen.req, listeners:@listeners, "Connection start"
+        @log.debug "Connection start", req:listen.req, listeners:@listeners
+        
+    #----------
             
     closeListener: (listen) ->
         # decrement listener count
         @listeners -= 1
-            
+        
+        # compute listening duration
+        seconds = null
+        if listen.startTime
+            seconds = ((new Date).getTime() - listen.startTime.getTime()) / 1000
+                    
         # log the connection end
-        @log.debug req:listen.req, listeners:@listeners, "Connection end"
+        @log.debug "Connection end", req:listen.req, listeners:@listeners, bytes:listen.req?.connection?.bytesWritten, seconds:seconds
+        @log.request "", path:listen.reqPath, ip:listen.reqIP, bytes:listen.req?.connection?.bytesWritten, seconds:seconds, time:listen.startTime, ua:listen.reqUA

@@ -10,19 +10,30 @@ nconf.env().argv()
 # add in config file
 nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streammachine.conf" } )
 
+# There are three potential modes of operation:
+# 1) Standalone -- One server, handling boths streams and configuration
+# 2) Master -- Central server in a master/slave setup. Does not handle any streams 
+#    directly, but hands out config info to slaves and gets back logging.
+# 3) Slave -- Connects to a master server for stream information.  Passes back 
+#    logging data. Offers up stream connections to clients.
+
 if nconf.get("master")
-    # we're a slave server, connecting to a master
-    # need to make sure we also have a setting for master:password
-    core = new StreamMachine.Slave 
-        master:     nconf.get("master")
-        listen:     nconf.get("port")
-        log:        nconf.get("log")
-    
-    console.log "Core is connected as a slave."
-else
+    # run as a master...
     core = new StreamMachine.Master
         listen:     nconf.get("port")
         log:        nconf.get("log")
-        slaves:     nconf.get("slaves")    
+        master:     nconf.get("master")
     
-    console.log "Core is connected as a master."
+else if nconf.get("slave")
+    # run as a slave
+    core = new StreamMachine.Slave
+        listen:     nconf.get("port")
+        log:        nconf.get("log")
+        slave:      nconf.get("slave")
+    
+else 
+    # run in standalone mode
+    core = new StreamMachine.Standalone
+        listen:     nconf.get("port")
+        log:        nconf.get("log")
+        streams:    nconf.get("streams")
