@@ -1,0 +1,9 @@
+{
+	"slave": { "master":"http://localhost:8001?password=zxcasdqwe" },
+	"port":		8010,
+	"log": {
+		"json": { "file": "/tmp/streamslave.log" }, 
+		"stdout": true,
+		"w3c": { "file": "/tmp/streamslave.w3c.log" }
+	}
+}

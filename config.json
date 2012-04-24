@@ -1,0 +1,10 @@
+{
+	"port":		8000,
+	"log": {
+		"json": { "file": "/tmp/streammachine.log" }, "stdout": true
+	},
+	"master": {
+		"port":		8001,
+		"password":	"zxcasdqwe"
+	}
+}

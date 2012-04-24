@@ -28,11 +28,11 @@ module.exports = class ProxyRoom extends EventEmitter
     #----------
         
     connect: (url) ->
-        @log.trace "connecting to #{@url}"
+        @log.debug "connecting to #{@url}"
         @stream = IcecastClient.createClient @url
         
         @stream.on "close", =>
-            @log.trace "Connection closed to #{@url}"
+            @log.debug "Connection closed to #{@url}"
             @connected = false
             
         @stream.on "data", (chunk) =>
@@ -40,9 +40,7 @@ module.exports = class ProxyRoom extends EventEmitter
             @emit "data", chunk
 
         @stream.on "metadata", (data) =>
-            #console.log "#{@key} got metadata chunk"
             meta = Icecast.parseMetadata(data)
-            #console.log "meta is ", meta
             
             if meta.StreamTitle
                 @metaTitle = meta.StreamTitle
@@ -59,10 +57,16 @@ module.exports = class ProxyRoom extends EventEmitter
         
         # we need to grab one frame to compute framesPerSec
         @parser.on "header", (data,header) =>
-            if !@framesPerSec
+            if !@framesPerSec || !@stream_key
+                # -- compute frames per second -- #
+                
                 @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                @log.trace "#{@key} setting framesPerSec to ", @framesPerSec
-                @log.trace "#{@key} first header is ", header
+                @log.debug "#{@key} setting framesPerSec to ", @framesPerSec
+                @log.debug "#{@key} first header is ", header
+                
+                # -- compute stream key -- #
+                
+                @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName == "Stereo" then "s" else "m")].join("-")
                 
             @emit "header", data, header
 
@@ -71,4 +75,13 @@ module.exports = class ProxyRoom extends EventEmitter
         
     #----------
         
+    disconnect: ->
+        console.log "FIXME: Need to handle disconnect in source"
         
+    #----------
+        
+    get_stream_key: (cb) ->
+        if @stream_key
+            cb? @stream_key
+        else
+            @once "header", => cb? @stream_key

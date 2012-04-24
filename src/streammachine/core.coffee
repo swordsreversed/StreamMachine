@@ -2,142 +2,265 @@ _u = require("underscore")
 url = require('url')
 http = require "http"
 express = require "express"
-Logger = require "bunyan"
-
+Logger = require "./log_controller"
 
 module.exports = class Core
     DefaultOptions:
         foo:        null
         streams:    {}
         
-    DefaultStreamOptions:
-        meta_interval:  10000
-        name:           ""
+    Redis:  require "./redis_config"
+    Stream: require "./stream"
+    Rewind: require "./rewind_buffer"
+    Preroller: require "./preroller"
         
-    @Rewind: require("./rewind_buffer")
-        
-    @Sources:
+    Sources:
         proxy:  require("./sources/proxy_room")
         
-    @Outputs:
+    Outputs:
         pumper:     require("./outputs/pumper")
         shoutcast:  require("./outputs/shoutcast")
         mp3:        require("./outputs/livemp3")
         sockets:    require("./outputs/sockets")
         
-    constructor: (options) ->
-        @options = _u(_u({}).extend(@DefaultOptions)).extend( options || {} )
+    #----------
         
+    constructor: ->        
         @streams = {}
+                
+    #----------
+    
+    # We have three different log outputs we need to support and perhaps 
+    # configure:
+    #
+    # * stdout  -- Debug to the console.  Triggered by config['stdout'] = true
+    # * json    -- JSON log via Bunyan, written to a local file. Configured 
+    #   via config.json.file and config.json.level.
+    # * w3c     -- W3C-format logging, written to a local file. Configured via 
+    #   config.w3c.file.
+    
+    setUpLogging: (config) ->
+        customLevels = 
+            error:          50
+            request:        40
+            interaction:    30
+            debug:          10
+                            
+        transports = []
         
-        # set up our core logger
-        @log = new Logger name:"StreamMachine", streams: [
-            { stream:process.stdout, level:'debug' },
-            { path:options.log, level:"debug" }
-        ], serializers:
-            req: Logger.stdSerializers.req
+        # -- stdout -- #
         
-        @log.info("Instance initialized")
+        if config.stdout
+            console.log "adding Console transport"
+            transports.push new (winston.transports.Console)
+                level:      config.stdout?.level        || "debug"
+                colorize:   config.stdout?.colorize     || false
+                timestamp:  config.stdout?.timestamp    || false
+        
+        # -- JSON -- #
+        
+        if config.json?.file
+            # set up JSON logging via Bunyan
+            transports.push new (winston.transports.File)
+                level:      config.json?.level || "interaction"
+                timestamp:  true
+                filename:   config.json?.file
+                json:       true
+        
+        # -- W3C -- #
+        
+        #if config.w3c?.file
+            # set up W3C-format logging
+            
+        
+        # -- Remote -- #
+        
+        
+        # create a winston logger for this instance
+        logger = new (winston.Logger) transports:transports, levels:customLevels
+                                
+        logger
+    
+    #----------
+        
+    # configureStreams can be called on a new core, or it can be called to 
+    # reconfigure an existing core.  we need to support either one.
+    configureStreams: (options) ->
+        console.log "In configure with ", options
+
+        # -- Sources -- #
+        
+        # are any of our current streams missing from the new options? if so, 
+        # disconnect them
+        for k,obj in @streams
+            obj.disconnect() unless options.streams?[k]
+            @streams.delete k
         
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers
-        for key,opts of @options.streams
-            @log.info opts:opts, "Starting up source: #{key}"
-            @streams[key] = new Core.Stream key, @log.child(source:key), opts
-        
-        # init our server
-        @server = express.createServer()
-        @_router(@server)
-        @server.listen @options.listen
-        
-        @log.debug "caster is listening on port #{@options.listen}"
-        
-        # start up the socket manager
-        @sockets = new Core.Outputs.sockets server:@server, core:@
-        
-    #----------
-    
-    _router: (app) ->                
-        # -- register a route for each of our streams -- #
-        _u(@streams).each (stream,key) =>
-            app.get "/#{key}(?:\.mp3)?", (req,res,next) =>
-                if req.query.socket?
-                    # socket listener
-                    @sockets.addListener stream,req,res
-                    
-                else if req.query.off?
-                    # rewind to a starting offset
-                    new Core.Rewind.Listener stream, req, res, Number(req.query.off)
-                    
-                else if req.query.pump?
-                    # pump listener pushes from the buffer as fast as possible
-                    new Core.Outputs.pumper stream, req, res
-                    
-                else
-                    # normal live stream (with or without shoutcast)
-                    if req.headers['icy-metadata']?
-                        # -- shoutcast listener -- #
-                        new Core.Outputs.shoutcast stream, req, res
-                    else
-                        # -- straight mp3 listener -- #
-                        new Core.Outputs.mp3 stream, req, res
+        for key,opts of options.streams
+            console.log "stream for #{key}"
+            if @streams[key]
+                # existing stream...  pass it updated configuration
+                @log.debug opts:opts, "Passing updated config to source: #{key}"
+                @streams[key].configure opts
+            else
+                @log.debug opts:opts, "Starting up source: #{key}"
+                @streams[key] = new @Stream @, key, @log.child(stream:key), opts
                         
-        # -- register route for web player -- #
-        #app.get "/"
-    
     #----------
-                
-    createSource: (key,log,opts) ->
-        # what type of source is this?
-        if Core.Sources[ opts.type ]
-            source = new Core.Sources[ opts.type ] key, log, opts
-            return source
-        else
-            console.error "Invalid source type: #{opts.type}"
-            process.exit(1)
     
-    #----------
+    streamRouter: (req,res,next) ->
+        # does the request match one of our streams?
+        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url
+            console.log "match is ", m[1]
+            stream = @streams[ m[1] ]
             
-    class @Stream
-        @DefaultOptions:
-            meta_interval:  10000
-            name:           ""
-            type:           null
-        
-        constructor: (key,log,opts) ->
+            # -- Stream match! -- #
+            if req.query.socket?
+                # socket listener
+                @sockets.addListener stream,req,res
+                    
+            else if req.query.off?
+                # rewind to a starting offset
+                new @Rewind.Listener stream, req, res, Number(req.query.off)
+                    
+            else if req.query.pump?
+                # pump listener pushes from the buffer as fast as possible
+                new @Outputs.pumper stream, req, res
+                    
+            else
+                # normal live stream (with or without shoutcast)
+                if req.headers['icy-metadata']?
+                    # -- shoutcast listener -- #
+                    new @Outputs.shoutcast stream, req, res
+                else
+                    # -- straight mp3 listener -- #
+                    new @Outputs.mp3 stream, req, res
+                
+        else
+            next()
+                            
+    #----------
+    
+    # Master Server
+    # 
+    # Masters don't handle stream connections directly.  Instead they host 
+    # configuration info and pass it on to slave servers.  They also consolidate 
+    # slave logging data.
+    
+    class @Master extends Core
+        constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
-            @log = log
-            @key = key
+            @slaves = []
             
-            @listeners = 0
+            # -- set up logging -- #
             
-            # make sure our source is valid
-            if Core.Sources[ opts.source?.type ]
-                @source = new Core.Sources[ opts.source?.type ] @, key, opts.source
-            else
-                @log.error opts:opts, "Invalid source type."
+            @log = new Logger @options.log
+            @log.debug("Instance initialized")
+            
+            # -- allow Core's constructor to run -- #
+            
+            super()
+            
+            # -- load our streams configuration from redis -- #
+            
+            @redis = new @Redis @options.redis?
+            @redis.on "config", (streams) =>
+                # stash the configuration
+                @options.streams = streams
+                
+                # and then pass it on to any connected slaves
+                for sock in @slaves
+                    sock.emit "config", streams:streams
+            
+            # -- set up the socket connection for slaves -- #
+            
+            if !@options.master?.port || !@options.master?.password
+                @log.error("Invalid options for master server.  Must provide port and password.")
+                return false                
+                
+            # fire up a socket listener on our slave port
+            @io = require("socket.io").listen @options.master?.port
+            
+            # add our authentication
+            @io.configure =>
+                @io.set "authorization", (data,cb) =>
+                    # look for password                    
+                    if @options.master.password
+                        # make sure we got the same password in the query
+                        if @options.master.password == data.query?.password
+                            cb null, true
+                        else
+                            cb "Invalid slave password.", false
+                    else
+                        cb null, true
+            
+            # look for slave connections    
+            @io.on "connection", (sock) =>
+                @log.debug "slave connection is #{sock.id}"
+                
+                if @options.streams
+                    # emit our configuration
+                    sock.emit "config", streams:@options.streams
+                    
+                @slaves.push sock
+                
+                # attach event handler for log reporting
+                sock.on "request", (obj = {}) =>
+                    @log.request obj
+                
+            # attach disconnect handler
+            @io.on "disconnect", (sock) =>
+                @log.debug "slave disconnect from #{sock.id}"
+                @slaves = _u(@slaves).without sock
+
+
+    #----------
+    
+    # Slave Server
+    #
+    # Slaves are born only knowing how to connect to their master. The master 
+    # gives them stream configuration, which the slave then uses to connect 
+    # and provide up streams to clients.  Logging data is always passed back 
+    # to the master, but can optionally also be stored on the slave host.
+    
+    class @Slave extends Core
+        constructor: (opts) ->
+            @options = _u.defaults opts||{}, @DefaultOptions
+            
+            # -- Set up logging -- #
+            
+            @log = new Logger @options.log
+            @log.debug("Instance initialized")
+            
+            # -- Make sure we have the proper slave config options -- #
+            
+            if !@options.slave?.master 
+                @log.error "Invalid options for slave server. Must provide master."
                 return false
+                                
+            # -- run Core's constructor -- #
             
-            # connect!
-            @source.connect()
+            super()
             
-            # set up a rewind buffer
-            @rewind = new Core.Rewind @, opts.rewind
+            # -- set up our stream server -- #
+            
+            # init our server
+            @server = express.createServer()
+            @server.use (req,res,next) => @streamRouter(req,res,next)
+            @server.listen @options.listen
+                
+            @log.debug "Slave is listening on port #{@options.listen}"
         
-        #----------
+            # start up the socket manager on the listener
+            @sockets = new @Outputs.sockets server:@server, core:@
+                            
+            # -- connect to the master server -- #
             
-        registerListener: (listen) ->
-            # increment our listener count
-            @listeners += 1
+            @socket = require('socket.io-client').connect @options.slave.master
             
-            # log the connection start
-            @log.debug req:listen.req, listeners:@listeners, "Connection start"
-            
-        closeListener: (listen) ->
-            # decrement listener count
-            @listeners -= 1
-            
-            # log the connection end
-            @log.debug req:listen.req, listeners:@listeners, "Connection end"
-            
+            @socket.on "config", (config) =>
+                console.log "got config of ", config
+                @configureStreams config

@@ -20,12 +20,10 @@ module.exports = class RewindBuffer
         @options = _u(_u({}).extend(@DefaultOptions)).extend options
         
         @stream = stream
-        
-        @source = @stream.source
-        
+                
         # use the first header to compute some constants
-        @source.once "header", (data,header) =>
-            @framesPerSec   = @source.framesPerSec
+        @stream.source.once "header", (data,header) =>
+            @framesPerSec   = @stream.source.framesPerSec
             @max            = Math.round @framesPerSec * @options.seconds
             @burst          = Math.round @framesPerSec * @options.burst
         
@@ -42,10 +40,10 @@ module.exports = class RewindBuffer
         # headers and data get sent separately. we need to grab the header so 
         # we can lump it back together with the frame data later
         @lastHeader = null
-        @source.on "header", (data,header) => @lastHeader = data
+        @stream.on "header", (data,header) => @lastHeader = data
                     
         # frame listener will be used to fill our buffer with mp3 frames
-        @source.on "frame", (frame) =>                
+        @stream.on "frame", (frame) =>                
             # make sure we don't get a frame before header
             if @lastHeader
                 # if we're at max length, shift off a frame (or more, if needed)

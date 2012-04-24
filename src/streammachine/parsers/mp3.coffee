@@ -1,6 +1,6 @@
 Stream = require('stream').Stream
 strtok = require('strtok')
-parseFrame = require("lame/lib/parse").parseFrameHeader
+parseFrame = require("./lib/parse").parseFrameHeader
 
 module.exports = class MP3 extends Stream
     ID3V1_LENGTH = 128
