@@ -1,6 +1,5 @@
 StreamMachine = require("./src/streammachine/core")
 nconf = require("nconf")
-require('nconf-redis')
 
 # -- do we have a config file to open? -- #
 
