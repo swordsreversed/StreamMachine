@@ -12,6 +12,7 @@ module.exports = class LogController
         error:          50
         request:        40
         interaction:    30
+        minute:         30
         debug:          10
         
     constructor: (config) ->
@@ -44,6 +45,16 @@ module.exports = class LogController
             transports.push new LogController.W3CLogger
                 level:      config.w3c.level || "request"
                 filename:   config.w3c.file
+                
+        # -- Cube -- #
+        
+        if config.cube?.server
+            # set up cube logging
+            transports.push new LogController.CubeLogger
+                server:     config.cube.server
+                port:       config.cube.port || 1080
+                event:      config.cube.event
+                level:      "minute"
         
         # -- Remote -- #
         
@@ -191,7 +202,27 @@ module.exports = class LogController
             super(opts)
             
         log: (level,msg,meta,cb) ->
-            console.log "sending log to master via socket"
             @sock.emit "log", level:level, msg:msg, meta:meta
             cb?()
             
+    #----------
+            
+    class @CubeLogger extends winston.Transport
+        name: "cube"
+        
+        constructor: (opts) ->
+            super(opts)
+            @options = opts
+            
+            @socket = null
+            @openSocket()
+            
+        #----------
+        
+        log: (level,msg,meta,cb) ->
+            @socket.send type:@options.minute_event, time:meta.time, data:meta if @socket
+            
+        #----------
+            
+        openSocket: ->
+            (@socket = new require("cube").emitter()).open @options.server, @options.port || 1080            

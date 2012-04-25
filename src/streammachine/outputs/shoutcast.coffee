@@ -24,9 +24,6 @@ module.exports = class Shoutcast
             "icy-name":             @stream.options.name
             "icy-metaint":          @stream.options.meta_interval
             
-        # register ourself as a listener
-        @stream.registerListener(@)
-        
         # write out our headers
         res.writeHead 200, headers
         
@@ -40,27 +37,10 @@ module.exports = class Shoutcast
         
         if @stream.preroll
             @stream.log.debug "making preroll request", stream:@stream.key
-            @stream.preroll.pump @res, => @connectSource()
+            @stream.preroll.pump @res, => @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
         else
-            @connectSource()
+            @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
 
         # -- what do we do when the connection is done? -- #
         
-        @req.connection.on "close", =>
-            # stop listening to stream
-            @stream.removeListener "data", @dataFunc
-            
-            # and to metadata
-            @stream.removeListener "metadata", @metaFunc
-            
-            # tell the caster we're done
-            @stream.closeListener(@)
-
-    #----------
-        
-    connectSource: ->
-        # -- now connect to our source -- #            
-        
-        @stream.on "metadata",   @metaFunc
-        @stream.on "data",       @dataFunc
-                            
+        @req.connection.on "close", => @stream.closeListener(@)

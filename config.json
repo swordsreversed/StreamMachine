@@ -1,8 +1,10 @@
 {
 	"port":		8000,
 	"log": {
-		"json": { "file": "/tmp/streammachine.log" }, "stdout": true,
-		"w3c": { "file": "/tmp/streammachine.w3c.log" }
+		"json": { "file": "/tmp/streammachine.log" }, 
+		"stdout": true,
+		"w3c": { "file": "/tmp/streammachine.w3c.log" },
+		"cube": { "server": "localhost", "port": 1080, "event": "stream_minutes" }
 	},
 	"master": {
 		"port":		8001,
