@@ -208,8 +208,9 @@ module.exports = class Core
                 @slaves.push sock
                 
                 # attach event handler for log reporting
-                sock.on "request", (obj = {}) =>
-                    @log.request obj
+                socklogger = @log.child slave:sock.handshake.address.address
+                sock.on "log", (obj = {}) => 
+                    socklogger[obj.level||debug].apply socklogger, [obj.msg||"",obj.meta||{}]
                 
             # attach disconnect handler
             @io.on "disconnect", (sock) =>
@@ -260,6 +261,10 @@ module.exports = class Core
             # -- connect to the master server -- #
             
             @socket = require('socket.io-client').connect @options.slave.master
+            
+            @socket.on "connect", =>
+                # connect up our logging proxy
+                @log.proxyToMaster @socket
             
             @socket.on "config", (config) =>
                 console.log "got config of ", config

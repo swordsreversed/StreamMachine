@@ -1,7 +1,8 @@
 {
 	"port":		8000,
 	"log": {
-		"json": { "file": "/tmp/streammachine.log" }, "stdout": true
+		"json": { "file": "/tmp/streammachine.log" }, "stdout": true,
+		"w3c": { "file": "/tmp/streammachine.w3c.log" }
 	},
 	"master": {
 		"port":		8001,

@@ -58,6 +58,14 @@ module.exports = class LogController
     
     #----------
     
+    # connect to our events and proxy interaction and request events through 
+    # to a master server over WebSockets
+    proxyToMaster: (sock) ->
+        @logger.remove(@logger.transports['socket']) if @logger.transports['socket']
+        @logger.add (new LogController.SocketLogger sock, level:"interaction"), {}, true
+    
+    #----------
+    
     RequestRewriter: (level,msg,meta) ->
         if meta?.req
             req = meta.req
@@ -106,10 +114,10 @@ module.exports = class LogController
         #----------
         
         log: (level,msg,meta,cb) ->
-            #console.log "in w3c logger with ", level, msg, meta, cb
+            console.log "in w3c logger with ", meta
             
             # for a valid w3c log, level should == "request", meta.
-            logline = "#{meta.ip} #{meta.ip} #{strftime(meta.time,"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
+            logline = "#{meta.ip} #{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
             if @file
                 # make sure there aren't any queued writes
@@ -173,3 +181,17 @@ module.exports = class LogController
             @queued.length = 0
             console.log "w3c finished flushing"
             @file.once "drain", => @emit "flush"
+            
+    #----------
+    
+    class @SocketLogger extends winston.Transport
+        name: "socket"
+        
+        constructor: (@sock,opts) ->
+            super(opts)
+            
+        log: (level,msg,meta,cb) ->
+            console.log "sending log to master via socket"
+            @sock.emit "log", level:level, msg:msg, meta:meta
+            cb?()
+            

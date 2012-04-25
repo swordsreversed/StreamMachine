@@ -97,9 +97,10 @@ module.exports = class Stream extends EventEmitter
         
         # compute listening duration
         seconds = null
+        endTime = (new Date)
         if listen.startTime
-            seconds = ((new Date).getTime() - listen.startTime.getTime()) / 1000
+            seconds = (endTime.getTime() - listen.startTime.getTime()) / 1000
                     
         # log the connection end
         @log.debug "Connection end", req:listen.req, listeners:@listeners, bytes:listen.req?.connection?.bytesWritten, seconds:seconds
-        @log.request "", path:listen.reqPath, ip:listen.reqIP, bytes:listen.req?.connection?.bytesWritten, seconds:seconds, time:listen.startTime, ua:listen.reqUA
+        @log.request "", path:listen.reqPath, ip:listen.reqIP, bytes:listen.req?.connection?.bytesWritten, seconds:seconds, time:endTime, ua:listen.reqUA
