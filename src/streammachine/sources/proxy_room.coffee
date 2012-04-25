@@ -29,7 +29,7 @@ module.exports = class ProxyRoom extends EventEmitter
         
     connect: (url) ->
         @log.debug "connecting to #{@url}"
-        @stream = IcecastClient.createClient @url
+        @stream = IcecastClient.createClient @url, "user-agent":"StreamMachine 0.1.0"
         
         @stream.on "close", =>
             @log.debug "Connection closed to #{@url}"

@@ -2,10 +2,9 @@ _u = require "underscore"
 EventEmitter = require('events').EventEmitter
 
 module.exports = class Stream extends EventEmitter
-    @DefaultOptions:
-        meta_interval:  10000
+    DefaultOptions:
+        meta_interval:  32768
         name:           ""
-        type:           null
         
     constructor: (@core,key,log,opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
@@ -118,14 +117,11 @@ module.exports = class Stream extends EventEmitter
             
     closeListener: (listen) ->
         # find listener in our listener array
-        console.log "looking for listener in ", @listeners
         lmeta = _u(@listeners).detect (obj) => obj.obj == listen
         
         if lmeta
-            console.log "listener found for closeListener"
-        
             # unregister listener handlers
-            @removeListener evt, func for evt,func in lmeta.handlers
+            @removeListener evt, func for evt,func of lmeta.handlers
             
             # remove from our listeners array
             @listeners = _u(@listeners).without lmeta
@@ -136,7 +132,7 @@ module.exports = class Stream extends EventEmitter
             seconds = (endTime.getTime() - lmeta.startTime.getTime()) / 1000
                     
             # log the connection end
-            @log.debug "Connection end", req:listen.req, listeners:@listeners, bytes:listen.req?.connection?.bytesWritten, seconds:seconds
+            @log.debug "Connection end", req:listen.req, listeners:@listeners.length, bytes:listen.req?.connection?.bytesWritten, seconds:seconds
             @log.request "", path:listen.reqPath, ip:listen.reqIP, bytes:listen.req?.connection?.bytesWritten, seconds:seconds, time:endTime, ua:listen.reqUA
             
             true

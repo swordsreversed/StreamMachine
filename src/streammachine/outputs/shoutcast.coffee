@@ -23,7 +23,7 @@ module.exports = class Shoutcast
             "Transfer-Encoding":    "identity"
             "icy-name":             @stream.options.name
             "icy-metaint":          @stream.options.meta_interval
-            
+                        
         # write out our headers
         res.writeHead 200, headers
         

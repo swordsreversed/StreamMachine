@@ -1,0 +1,11 @@
+{
+	"port":		8016,
+	"log": {
+		"stdout": true
+	},
+	"streams": {
+		"kpcclive": {
+			"source": { "type":"proxy", "url":"http://localhost:8015/kpcclive" }
+		}
+	}
+}

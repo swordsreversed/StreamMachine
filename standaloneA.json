@@ -1,0 +1,11 @@
+{
+	"port":		8015,
+	"log": {
+		"stdout": true
+	},
+	"streams": {
+		"kpcclive": {
+			"source": { "type":"proxy", "url":"http://206.221.211.12:80" }
+		}
+	}
+}

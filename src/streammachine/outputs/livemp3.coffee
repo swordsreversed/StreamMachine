@@ -4,27 +4,31 @@ module.exports = class LiveMP3
     constructor: (stream,req,res) ->
         @req = req
         @res = res
-        @stream = stream                
+        @stream = stream
+        
+        @reqIP      = req.connection.remoteAddress
+        @reqPath    = req.url
+        @reqUA      = req.headers?['user-agent']       
         
         headers = 
             "Content-Type":         "audio/mpeg"
             "Connection":           "close"
             "Transfer-Encoding":    "identity"
             
-        # register ourself as a listener
-        @stream.registerListener(@)
-        
         # write out our headers
         res.writeHead 200, headers
         
         @dataFunc = (chunk) => @res.write(chunk)
-
-        # and start sending data...
-        @stream.on "data", @dataFunc
                             
-        @req.connection.on "close", =>
-            # stop listening to stream
-            @stream.removeListener "data", @dataFunc
-            
-            # tell the caster we're done
-            @stream.closeListener(@)
+        # -- send a preroll if we have one -- #
+        
+        if @stream.preroll
+            @stream.log.debug "making preroll request", stream:@stream.key
+            @stream.preroll.pump @res, => @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
+        else
+            @stream.registerListener @, data:@dataFunc
+
+        # -- what do we do when the connection is done? -- #
+        
+        @req.connection.on "close", => @stream.closeListener(@)
+        

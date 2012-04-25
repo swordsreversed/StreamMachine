@@ -80,6 +80,10 @@ module.exports = class Sockets
             @req = req
             @res = res
             @rewind = rewind
+            
+            @reqIP      = req.connection.remoteAddress
+            @reqPath    = req.url
+            @reqUA      = req.headers?['user-agent']
 
             # set our internal offset to be live by default
             @_offset = offset

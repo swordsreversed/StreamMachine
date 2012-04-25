@@ -29,59 +29,6 @@ module.exports = class Core
         @streams = {}
                 
     #----------
-    
-    # We have three different log outputs we need to support and perhaps 
-    # configure:
-    #
-    # * stdout  -- Debug to the console.  Triggered by config['stdout'] = true
-    # * json    -- JSON log via Bunyan, written to a local file. Configured 
-    #   via config.json.file and config.json.level.
-    # * w3c     -- W3C-format logging, written to a local file. Configured via 
-    #   config.w3c.file.
-    
-    setUpLogging: (config) ->
-        customLevels = 
-            error:          50
-            request:        40
-            interaction:    30
-            debug:          10
-                            
-        transports = []
-        
-        # -- stdout -- #
-        
-        if config.stdout
-            console.log "adding Console transport"
-            transports.push new (winston.transports.Console)
-                level:      config.stdout?.level        || "debug"
-                colorize:   config.stdout?.colorize     || false
-                timestamp:  config.stdout?.timestamp    || false
-        
-        # -- JSON -- #
-        
-        if config.json?.file
-            # set up JSON logging via Bunyan
-            transports.push new (winston.transports.File)
-                level:      config.json?.level || "interaction"
-                timestamp:  true
-                filename:   config.json?.file
-                json:       true
-        
-        # -- W3C -- #
-        
-        #if config.w3c?.file
-            # set up W3C-format logging
-            
-        
-        # -- Remote -- #
-        
-        
-        # create a winston logger for this instance
-        logger = new (winston.Logger) transports:transports, levels:customLevels
-                                
-        logger
-    
-    #----------
         
     # configureStreams can be called on a new core, or it can be called to 
     # reconfigure an existing core.  we need to support either one.
@@ -131,7 +78,7 @@ module.exports = class Core
                     
             else
                 # normal live stream (with or without shoutcast)
-                if req.headers['icy-metadata']?
+                if req.headers['icy-metadata']
                     # -- shoutcast listener -- #
                     new @Outputs.shoutcast stream, req, res
                 else
@@ -141,6 +88,37 @@ module.exports = class Core
         else
             next()
                             
+    #----------
+    
+    class @Standalone extends Core
+        constructor: (opts) ->
+            @options = _u.defaults opts||{}, @DefaultOptions
+            
+            # -- Set up logging -- #
+            
+            @log = new Logger @options.log
+            @log.debug("Instance initialized")
+            
+            # -- run Core's constructor -- #
+            
+            super()
+            
+            # -- set up our stream server -- #
+            
+            # init our server
+            @server = express.createServer()
+            @server.use (req,res,next) => @streamRouter(req,res,next)
+            @server.listen @options.listen
+                
+            @log.debug "Standalone is listening on port #{@options.listen}"
+        
+            # start up the socket manager on the listener
+            @sockets = new @Outputs.sockets server:@server, core:@
+            
+            # -- initialize streams -- #
+            
+            @configureStreams streams:@options.streams
+    
     #----------
     
     # Master Server
