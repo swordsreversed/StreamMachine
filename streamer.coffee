@@ -22,6 +22,7 @@ if nconf.get("master")
         listen:     nconf.get("port")
         log:        nconf.get("log")
         master:     nconf.get("master")
+        redis:      nconf.get("redis")
     
 else if nconf.get("slave")
     # run as a slave

@@ -52,7 +52,6 @@ module.exports = class LogController
             # set up cube logging
             transports.push new LogController.CubeLogger
                 server:     config.cube.server
-                port:       config.cube.port || 1080
                 event:      config.cube.event
                 level:      "minute"
         
@@ -225,4 +224,4 @@ module.exports = class LogController
         #----------
             
         openSocket: ->
-            (@socket = new require("cube").emitter()).open @options.server, @options.port || 1080            
+            @socket = new require("cube").emitter(@options.server)            
