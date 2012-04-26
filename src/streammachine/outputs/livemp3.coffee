@@ -24,7 +24,7 @@ module.exports = class LiveMP3
         
         if @stream.preroll
             @stream.log.debug "making preroll request", stream:@stream.key
-            @stream.preroll.pump @res, => @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
+            @stream.preroll.pump @res, => @stream.registerListener @, data:@dataFunc
         else
             @stream.registerListener @, data:@dataFunc
 
