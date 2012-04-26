@@ -219,7 +219,7 @@ module.exports = class LogController
         #----------
         
         log: (level,msg,meta,cb) ->
-            @socket.send type:@options.minute_event, time:meta.time, data:meta if @socket
+            @socket.send type:@options.event, time:meta.time, data:meta if @socket
             
         #----------
             
