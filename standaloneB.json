@@ -5,7 +5,8 @@
 	},
 	"streams": {
 		"kpcclive": {
-			"source": { "type":"proxy", "url":"http://localhost:8015/kpcclive" }
+			"source": { "type":"proxy", "url":"http://localhost:8015/kpcclive" },
+			"root_route": true
 		}
 	}
 }

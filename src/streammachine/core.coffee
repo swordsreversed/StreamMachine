@@ -27,6 +27,8 @@ module.exports = class Core
         
     constructor: ->        
         @streams = {}
+        
+        @root_route = null
                 
     #----------
         
@@ -54,11 +56,20 @@ module.exports = class Core
             else
                 @log.debug opts:opts, "Starting up source: #{key}"
                 @streams[key] = new @Stream @, key, @log.child(stream:key), opts
+                
+            # should this stream accept requests to /?
+            if opts.root_route
+                @root_route = key
                         
     #----------
     
     streamRouter: (req,res,next) ->
         res.removeHeader("X-Powered-By");
+        
+        console.log "url is ", req.url
+        if @root_route && req.url == '/'
+            # pretend the request came in on the default stream
+            req.url = "/#{@root_route}"
         
         # does the request match one of our streams?
         if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url     
