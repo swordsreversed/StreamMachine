@@ -58,8 +58,12 @@ module.exports = class Core
     #----------
     
     streamRouter: (req,res,next) ->
+        res.removeHeader("X-Powered-By");
+        
         # does the request match one of our streams?
-        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url            
+        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url     
+            res.header("X-Powered-By","StreamMachine")
+            
             console.log "match is ", m[1]
             stream = @streams[ m[1] ]
             
