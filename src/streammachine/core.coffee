@@ -78,6 +78,15 @@ module.exports = class Core
             console.log "match is ", m[1]
             stream = @streams[ m[1] ]
             
+            # fend off any HEAD requests
+            if req.method == "HEAD"
+                res.writeHead 200, 
+                    "content-type": "audio/mpeg"
+                    "connection":   "close"
+                    
+                res.end()
+                return true
+            
             # -- Stream match! -- #
             if req.query.socket?
                 # socket listener
