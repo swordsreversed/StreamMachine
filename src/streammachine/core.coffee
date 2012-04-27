@@ -110,6 +110,7 @@ module.exports = class Core
                     new @Outputs.mp3 stream, req, res
                 
         else
+            @log.debug "Not Found", req:req
             next()
                             
     #----------
