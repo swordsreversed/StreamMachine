@@ -59,7 +59,7 @@ module.exports = class Core
     
     streamRouter: (req,res,next) ->
         # does the request match one of our streams?
-        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url
+        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.mp3)?$///.exec req.url            
             console.log "match is ", m[1]
             stream = @streams[ m[1] ]
             
@@ -107,6 +107,7 @@ module.exports = class Core
             
             # init our server
             @server = express.createServer()
+            @server.httpAllowHalfOpen = true
             @server.use (req,res,next) => @streamRouter(req,res,next)
             @server.listen @options.listen
                 
@@ -228,6 +229,7 @@ module.exports = class Core
             
             # init our server
             @server = express.createServer()
+            @server.httpAllowHalfOpen = true
             @server.use (req,res,next) => @streamRouter(req,res,next)
             @server.listen @options.listen
                 
