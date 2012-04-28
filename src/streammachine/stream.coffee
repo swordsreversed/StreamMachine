@@ -8,17 +8,30 @@ module.exports = class Stream extends EventEmitter
         
     constructor: (@core,key,log,opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
+        
+        # remove our max listener count
+        @setMaxListeners 0
             
         @log = log
         @key = key
-            
-        @listeners = []
-
+        
+        @_id_increment = 1
+        @_lmeta = {}
+        
         @preroll = null
         @mlog_timer = null
         
-        @dataFunc = (chunk) => @emit "data", chunk
-        @metaFunc = (chunk) => @emit "metadata", chunk
+        @dataFunc = (chunk) => 
+            #st = (new Date).getTime()
+            for id,l of @_lmeta
+                if l.data
+                    l.data(chunk)
+                    
+            #et = (new Date).getTime()
+            
+            #console.log "data tick took #{et - st}ms"
+        
+        @metaFunc = (chunk) => (l.meta(chunk) if l.meta) for id,l of @_lmeta
         
         # now run configure...
         @configure(opts)
@@ -75,7 +88,7 @@ module.exports = class Stream extends EventEmitter
             @mlog_timer = setInterval => 
                 # run through each listener and log minute or time listened
                 now = new Date
-                for l in @listeners
+                for id,l of @_lmeta
                     # we only log requests that have lasted more than one minute. 
                     # we use startTime for the length the session has been going, 
                     # but use minuteTime for accumulating unlogged time 
@@ -93,49 +106,64 @@ module.exports = class Stream extends EventEmitter
     #----------
         
     disconnect: ->
-        # disconnect any listeners
-        @closeListener(l) for l in @listeners
+        # handle clearing out lmeta
             
         # disconnect the stream source
         @source?.disconnect()
         
     #----------
             
-    registerListener: (listen,handlers={}) ->
-        # increment our listener count
-        @listeners.push obj:listen, handlers:handlers , startTime:(new Date), minuteTime:(new Date)
-
-        # register handlers
-        @on evt, func for evt,func of handlers
-        
+    registerListener: (listen,handlers) ->
+        # generate a metadata hash
+        lmeta = 
+            id:         @_id_increment++
+            obj:        listen
+            startTime:  (new Date) 
+            minuteTime: (new Date)
+            
+        for k in ['data','meta']
+            lmeta[ k ] = handlers[ k ] if handlers[ k ]
+            
+        # stash it...
+        @_lmeta[ lmeta.id ] = lmeta
+            
+        console.log "in registerListener for ", lmeta.id
+            
         # log the connection start
-        @log.debug "Connection start", req:listen.req, listeners:@listeners.length
-        
-        true
+        @log.debug "Connection start", req:listen.req, listeners:_u(@_lmeta).keys().length
+                
+        # return the id
+        lmeta.id
         
     #----------
             
-    closeListener: (listen) ->
-        # find listener in our listener array
-        lmeta = _u(@listeners).detect (obj) => obj.obj == listen
+    closeListener: (id) ->
+        console.log "in closeListener for ", id
+        
+        lmeta = @_lmeta[id]
         
         if lmeta
-            # unregister listener handlers
-            @removeListener evt, func for evt,func of lmeta.handlers
+            # -- remove from listeners -- #
+            delete @_lmeta[id]
             
-            # remove from our listeners array
-            @listeners = _u(@listeners).without lmeta
-        
+            # -- log the request's end -- #
+            
             # compute listening duration
             seconds = null
             endTime = (new Date)
             seconds = (endTime.getTime() - lmeta.startTime.getTime()) / 1000
                     
             # log the connection end
-            @log.debug "Connection end", req:listen.req, listeners:@listeners.length, bytes:listen.req?.connection?.bytesWritten, seconds:seconds
-            @log.request "", path:listen.reqPath, ip:listen.reqIP, bytes:listen.req?.connection?.bytesWritten, seconds:seconds, time:endTime, ua:listen.reqUA
-            
+            @log.debug "Connection end", id:id, req:lmeta.obj.req, listeners:_u(@_lmeta).keys().length, bytes:lmeta.obj.req?.connection?.bytesWritten, seconds:seconds
+        
+            @log.request "", 
+                path:       lmeta.obj.reqPath
+                ip:         lmeta.obj.reqIP
+                bytes:      lmeta.obj.req?.connection?.bytesWritten
+                seconds:    seconds
+                time:       endTime
+                ua:         lmeta.obj.reqUA
+        
             true
         else
-            @log.error "Failed to remove listener from stream", req:listen.req
-            false
+            console.log "Unable to find metadata for request ", id

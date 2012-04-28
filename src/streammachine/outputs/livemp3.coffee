@@ -5,6 +5,7 @@ module.exports = class LiveMP3
         @req = req
         @res = res
         @stream = stream
+        @id = null
         
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
@@ -19,16 +20,26 @@ module.exports = class LiveMP3
         res.writeHead 200, headers
         
         @dataFunc = (chunk) => @res.write(chunk)
-                            
+                                    
         # -- send a preroll if we have one -- #
         
         if @stream.preroll
             @stream.log.debug "making preroll request", stream:@stream.key
-            @stream.preroll.pump @res, => @stream.registerListener @, data:@dataFunc
+            @stream.preroll.pump @res, => @connectToStream()
         else
-            @stream.registerListener @, data:@dataFunc
-
-        # -- what do we do when the connection is done? -- #
+            @connectToStream()
+            
+        @req.connection.on "close", => @closeStream()
         
-        @req.connection.on "close", => @stream.closeListener(@)
+        
+    #----------
+    
+    connectToStream: ->
+        # -- register our listener -- #
+        @id = @stream.registerListener @, data:@dataFunc
+        
+    #----------
+    
+    closeStream: ->
+        @stream.closeListener @id if @id
         

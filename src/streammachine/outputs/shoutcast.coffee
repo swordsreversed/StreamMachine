@@ -6,6 +6,7 @@ module.exports = class Shoutcast
         @req = req
         @res = res
         @stream = stream
+        @id = null
         
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
@@ -26,21 +27,32 @@ module.exports = class Shoutcast
                         
         # write out our headers
         res.writeHead 200, headers
-        
+                
         @metaFunc = (data) =>
             if data.StreamTitle
                 @res.queueMetadata data
 
         @dataFunc = (chunk) => @res.write(chunk)
-        
+                
         # -- send a preroll if we have one -- #
         
         if @stream.preroll
             @stream.log.debug "making preroll request", stream:@stream.key
-            @stream.preroll.pump @res, => @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
+            @stream.preroll.pump @res, => @connectToStream()
         else
-            @stream.registerListener @, metadata:@metaFunc, data:@dataFunc
-
-        # -- what do we do when the connection is done? -- #
+            @connectToStream()        
+            
+        @req.connection.on "close", => @closeStream()
         
-        @req.connection.on "close", => @stream.closeListener(@)
+    #----------
+    
+    connectToStream: ->
+        # -- register our listener -- #
+        @id = @stream.registerListener @, data:@dataFunc, meta:@metaFunc
+        console.log "registered and got id of ", @id
+        
+    #----------
+    
+    closeStream: ->
+        @stream.closeListener @id if @id
+        
