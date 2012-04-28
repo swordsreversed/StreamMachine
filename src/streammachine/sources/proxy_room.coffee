@@ -18,7 +18,13 @@ module.exports = class ProxyRoom extends EventEmitter
         @connected      = false
         @framesPerSec   = null
         
+        @emit_duration  = 0.5
+        
+        @_chunk_queue = []
+        
         @log = @stream.log
+        
+        @last_header = null
         
         # connection drop handling
         @_maxBounces    = 10
@@ -40,10 +46,6 @@ module.exports = class ProxyRoom extends EventEmitter
             @log.debug "Lost connection to #{@url}. Retrying in 5 seconds"
             @connected = false
             
-        @stream.on "data", (chunk) =>
-            #console.log "#{@key} got data chunk"
-            @emit "data", chunk
-
         @stream.on "metadata", (data) =>
             meta = Icecast.parseMetadata(data)
             
@@ -57,8 +59,40 @@ module.exports = class ProxyRoom extends EventEmitter
 
         # attach mp3 parser for rewind buffer
         @parser = new Parser()
+        
+        # incoming -> Parser
         @stream.on "data",      (chunk)     => @parser.write chunk
-        @parser.on "frame",     (frame)     => @emit "frame", frame
+        
+        # outgoing -> Stream
+        @parser.on "frame", (frame) => 
+            @emit "frame", frame
+
+            # -- queue up frames until we get to @emit_duration -- #
+            if @last_header
+                # -- recombine frame and header -- #
+                
+                fbuf = new Buffer( @last_header.length + frame.length )
+                @last_header.copy(fbuf,0)
+                frame.copy(fbuf,@last_header.length)
+                @_chunk_queue.push fbuf
+                
+                if @framesPerSec && ( @_chunk_queue.length / @framesPerSec > @emit_duration )
+                    len = 0
+                    len += b.length for b in @_chunk_queue
+                
+                    # make this into one buffer
+                    buf = new Buffer(len)
+                    pos = 0
+                
+                    for fb in @_chunk_queue
+                        fb.copy(buf,pos)
+                        pos += fb.length
+                    
+                    # reset chunk array
+                    @_chunk_queue.length = 0
+                
+                    # emit new buffer
+                    @emit "data", buf
         
         # we need to grab one frame to compute framesPerSec
         @parser.on "header", (data,header) =>
@@ -73,6 +107,7 @@ module.exports = class ProxyRoom extends EventEmitter
                 
                 @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName == "Stereo" then "s" else "m")].join("-")
                 
+            @last_header = data
             @emit "header", data, header
 
         # return with success
