@@ -94,6 +94,8 @@ module.exports = class Core
                     </html>
                     """
             
+            return true
+            
         # crossdomain.xml
         if req.url == "/crossdomain.xml"
             res.writeHead 200, 
@@ -113,7 +115,7 @@ module.exports = class Core
         # -- Stream Routing -- #
         
         # does the request match one of our streams?
-        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.(mp3|pls))?$///.exec req.url     
+        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.(mp3|pls))?/?$///.exec req.url     
             res.header("X-Powered-By","StreamMachine")
             
             console.log "match is ", m[1]
