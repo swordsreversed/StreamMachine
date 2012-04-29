@@ -21,16 +21,7 @@ module.exports = class Stream extends EventEmitter
         @preroll = null
         @mlog_timer = null
         
-        @dataFunc = (chunk) => 
-            #st = (new Date).getTime()
-            for id,l of @_lmeta
-                if l.data
-                    l.data(chunk)
-                    
-            #et = (new Date).getTime()
-            
-            #console.log "data tick took #{et - st}ms"
-        
+        @dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta                    
         @metaFunc = (chunk) => (l.meta(chunk) if l.meta) for id,l of @_lmeta
         
         # now run configure...

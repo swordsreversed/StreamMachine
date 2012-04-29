@@ -5,7 +5,9 @@
 	},
 	"streams": {
 		"kpcclive": {
-			"source": { "type":"proxy", "url":"http://206.221.211.12:80" }
+			"source": { "type":"proxy", "url":"http://206.221.211.12:80" },
+			"host": "localhost:8015",
+			"root_route": true
 		}
 	}
 }
