@@ -28,11 +28,11 @@ module.exports = class Server
         # default URL (and also a mapping for weird stream.nsv route)
         if @core.root_route && (req.url == '/' || req.url == "/;stream.nsv")
             # pretend the request came in on the default stream
-            req.url = "/#{@root_route}"
+            req.url = "/#{@core.root_route}"
         
         # default playlist
         if @core.root_route && req.url == "/listen.pls"
-            req.url = "/#{@root_route}.pls"
+            req.url = "/#{@core.root_route}.pls"
         
         # -- utility routes -- #
     
