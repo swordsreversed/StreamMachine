@@ -65,6 +65,8 @@ module.exports = class Core
     
     streamRouter: (req,res,next) ->
         res.removeHeader("X-Powered-By");
+        
+        # -- default routes -- #
                 
         # default URL (and also a mapping for weird stream.nsv route)
         if @root_route && (req.url == '/' || req.url == "/;stream.nsv")
@@ -74,6 +76,23 @@ module.exports = class Core
         # default playlist
         if @root_route && req.url == "/listen.pls"
             req.url = "/#{@root_route}.pls"
+            
+        # -- utility routes -- #
+        
+        # index.html
+        if req.url == "/index.html"
+            res.writeHead 200,
+                "content-type": "text/html"
+                "connection": "close"
+            
+            res.end """
+                    <html>
+                        <head><title>StreamMachine</title></head>
+                        <body>
+                            <h1>OK</h1>
+                        </body>
+                    </html>
+                    """
             
         # crossdomain.xml
         if req.url == "/crossdomain.xml"
@@ -90,6 +109,8 @@ module.exports = class Core
                     """
             
             return true
+            
+        # -- Stream Routing -- #
         
         # does the request match one of our streams?
         if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.(mp3|pls))?$///.exec req.url     
