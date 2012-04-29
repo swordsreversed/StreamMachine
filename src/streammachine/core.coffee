@@ -6,13 +6,16 @@ Logger = require "./log_controller"
 
 module.exports = class Core
     DefaultOptions:
-        foo:        null
-        streams:    {}
+        streams:            {}
+        # after a new deployment, allow a one hour grace period for 
+        # connected listeners
+        max_zombie_life:    1000 * 60 * 60
         
     Redis:  require "./redis_config"
     Stream: require "./stream"
     Rewind: require "./rewind_buffer"
     Preroller: require "./preroller"
+    Server: require "./server"
         
     Sources:
         proxy:  require("./sources/proxy_room")
@@ -29,6 +32,41 @@ module.exports = class Core
         @streams = {}
         
         @root_route = null
+        
+        # attach a USR2 handler that causes us to stop listening. this is 
+        # used to allow a new server to start up
+        process.on "SIGTERM", =>
+            @log.debug "Got SIGTERM in core...  Starting shutdown"
+            
+            # stop accepting new connections
+            @server?.stopListening()
+            
+            # when should we get pushy?
+            @_shutdownMaxTime = (new Date).getTime() + @options.max_zombie_life
+            
+            # need to start a process to quit when existing connections disconnect
+            @_shutdownTimeout = setInterval =>
+                # have we used up the grace period yet?
+                force_shut = if (new Date).getTime() > @_shutdownMaxTime then true else false
+                
+                # build a listener count for all streams
+                listeners = 0
+                for k,stream of @streams
+                    slisteners = stream.countListeners()
+                    
+                    if slisteners == 0 || force_shut
+                        # if everyone's done (or we're feeling pushy), disconnect
+                        stream.disconnect()
+                    else
+                        listeners += slisteners
+                    
+                if listeners == 0
+                    # everyone's out...  go ahead and shut down
+                    @log.debug "Shutdown complete", => process.exit()
+                else
+                    @log.debug "Still awaiting shutdown; #{listeners} listeners"
+                
+            , 60 * 1000
                 
     #----------
         
@@ -42,6 +80,7 @@ module.exports = class Core
         # are any of our current streams missing from the new options? if so, 
         # disconnect them
         for k,obj in @streams
+            console.log "calling disconnect on ", k
             obj.disconnect() unless options.streams?[k]
             @streams.delete k
         
@@ -63,116 +102,6 @@ module.exports = class Core
                         
     #----------
     
-    streamRouter: (req,res,next) ->
-        res.removeHeader("X-Powered-By");
-        
-        # -- default routes -- #
-                
-        # default URL (and also a mapping for weird stream.nsv route)
-        if @root_route && (req.url == '/' || req.url == "/;stream.nsv")
-            # pretend the request came in on the default stream
-            req.url = "/#{@root_route}"
-            
-        # default playlist
-        if @root_route && req.url == "/listen.pls"
-            req.url = "/#{@root_route}.pls"
-            
-        # -- utility routes -- #
-        
-        # index.html
-        if req.url == "/index.html"
-            res.writeHead 200,
-                "content-type": "text/html"
-                "connection": "close"
-            
-            res.end """
-                    <html>
-                        <head><title>StreamMachine</title></head>
-                        <body>
-                            <h1>OK</h1>
-                        </body>
-                    </html>
-                    """
-            
-            return true
-            
-        # crossdomain.xml
-        if req.url == "/crossdomain.xml"
-            res.writeHead 200, 
-                "content-type": "text/xml"
-                "connection": "close"
-                
-            res.end """
-                    <?xml version="1.0"?>
-                    <!DOCTYPE cross-domain-policy SYSTEM "http://www.macromedia.com/xml/dtds/cross-domain-policy.dtd">
-                    <cross-domain-policy>
-                    <allow-access-from domain="*" />
-                    </cross-domain-policy>
-                    """
-            
-            return true
-            
-        # -- Stream Routing -- #
-        
-        # does the request match one of our streams?
-        if m = ///^\/(#{_u(@streams).keys().join("|")})(?:\.(mp3|pls))?/?$///.exec req.url     
-            res.header("X-Powered-By","StreamMachine")
-            
-            console.log "match is ", m[1]
-            stream = @streams[ m[1] ]
-            
-            # fend off any HEAD requests
-            if req.method == "HEAD"
-                res.writeHead 200, 
-                    "content-type": "audio/mpeg"
-                    "connection":   "close"
-                    
-                res.end()
-                return true
-            
-            # -- Handle playlist request -- #
-                
-            console.log "format is ", m[2]
-            
-            if m[2] && m[2] == "pls"
-                host = req.headers?.host || stream.options.host
-                
-                res.writeHead 200,
-                    "content-type": "audio/x-scpls"
-                    "connection":   "close"
-                                        
-                res.end("[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{stream.key}/\n")
-                return true
-            
-            # -- Stream match! -- #
-            
-            if req.query.socket?
-                # socket listener
-                @sockets.addListener stream,req,res
-                    
-            else if req.query.off?
-                # rewind to a starting offset
-                new @Rewind.Listener stream, req, res, Number(req.query.off)
-                    
-            else if req.query.pump?
-                # pump listener pushes from the buffer as fast as possible
-                new @Outputs.pumper stream, req, res
-                    
-            else
-                # normal live stream (with or without shoutcast)
-                if req.headers['icy-metadata']
-                    # -- shoutcast listener -- #
-                    new @Outputs.shoutcast stream, req, res
-                else
-                    # -- straight mp3 listener -- #
-                    new @Outputs.mp3 stream, req, res
-                
-        else
-            @log.debug "Not Found", req:req
-            next()
-                            
-    #----------
-    
     class @Standalone extends Core
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
@@ -189,15 +118,13 @@ module.exports = class Core
             # -- set up our stream server -- #
             
             # init our server
-            @server = express.createServer()
-            @server.httpAllowHalfOpen = true
-            @server.use (req,res,next) => @streamRouter(req,res,next)
+            @server = new @Server @
             @server.listen @options.listen
                 
             @log.debug "Standalone is listening on port #{@options.listen}"
         
             # start up the socket manager on the listener
-            @sockets = new @Outputs.sockets server:@server, core:@
+            @sockets = new @Outputs.sockets server:@server.server, core:@
             
             # -- initialize streams -- #
             
@@ -311,15 +238,14 @@ module.exports = class Core
             # -- set up our stream server -- #
             
             # init our server
-            @server = express.createServer()
-            @server.httpAllowHalfOpen = true
-            @server.use (req,res,next) => @streamRouter(req,res,next)
+            # init our server
+            @server = new @Server @
             @server.listen @options.listen
-                
+            
             @log.debug "Slave is listening on port #{@options.listen}"
         
             # start up the socket manager on the listener
-            @sockets = new @Outputs.sockets server:@server, core:@
+            @sockets = new @Outputs.sockets server:@server.server, core:@
                             
             # -- connect to the master server -- #
             

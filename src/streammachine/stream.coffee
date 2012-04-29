@@ -103,6 +103,11 @@ module.exports = class Stream extends EventEmitter
         @source?.disconnect()
         
     #----------
+    
+    countListeners: ->
+        _u(@_lmeta).keys().length
+        
+    #----------
             
     registerListener: (listen,handlers) ->
         # generate a metadata hash
