@@ -9,6 +9,8 @@ nconf.env().argv()
 # add in config file
 nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streammachine.conf" } )
 
+process.title = "node: StreamMachine"
+
 # There are three potential modes of operation:
 # 1) Standalone -- One server, handling boths streams and configuration
 # 2) Master -- Central server in a master/slave setup. Does not handle any streams 

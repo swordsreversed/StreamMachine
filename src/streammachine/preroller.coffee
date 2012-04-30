@@ -9,6 +9,8 @@ module.exports = class Preroller
     constructor: (@stream,@key,opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
         
+        @_counter = 1
+        
         if !@options.server
             @stream.log.error("Cannot connect to preroll without a server")
             return false
@@ -28,32 +30,53 @@ module.exports = class Preroller
             cb?()
             return true
 
+        count = @_counter++
+
         # -- make a request to the preroll server -- #
         
         opts = 
             host:       @options.server
             path:       [@options.path,@key,@stream_key].join("/")
-            
-        #console.log "res is ", res
         
+        conn = res.stream?.connection || res.connection
+                
+        console.log "firing preroll request", count
         req = http.get opts, (rres) =>
-            unless res.stream?.connection.destroyed || res.connection?.destroyed
-                if rres.statusCode == 200
-                    # stream preroll through to the output
-                    rres.on "data", (chunk) =>
-                        res.write(chunk)
+            console.log "got preroll response ", count
+            if rres.statusCode == 200
+                # stream preroll through to the output
+                rres.on "data", (chunk) =>
+                    res.write(chunk)
 
-                    # when preroll is done, call the output's callback
-                    rres.on "end", =>
-                        cb?()
-                        return true
-                    
-                else
+                # when preroll is done, call the output's callback
+                rres.on "end", =>
+                    conn.removeListener "close", conn_pre_abort
+                    conn.removeListener "end", conn_pre_abort
                     cb?()
                     return true
+                    
             else
-                # connection was destroyed during our fetch
-                rres.destroy()
+                conn.removeListener "close", conn_pre_abort
+                conn.removeListener "end", conn_pre_abort
+                cb?()
+                return true
+                
+        req.on "socket", (sock) =>
+            console.log "socket granted for ", count
+            
+        req.on "error", (err) =>
+            console.log "got a request error for ", count, err
+            
+        # attach a close listener to the response, to be fired if it gets 
+        # shut down and we should abort the request
+
+        conn_pre_abort = => 
+            console.log "aborting preroll ", count
+            req.abort()
+        
+        conn.once "close", conn_pre_abort
+        conn.once "end", conn_pre_abort
+        
     
     #----------
     

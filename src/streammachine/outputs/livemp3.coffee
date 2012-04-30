@@ -27,7 +27,11 @@ module.exports = class LiveMP3
             else
                 @connectToStream()
             
-        @req.connection.on "close", => @closeStream()
+        # register our various means of disconnection
+        @req.connection.on "end",   => @disconnect()
+        @req.connection.on "close", => @disconnect()
+        @res.connection.on "close", => @disconnect()
+        
         
     #----------
     
@@ -38,6 +42,9 @@ module.exports = class LiveMP3
         
     #----------
     
-    closeStream: ->
-        @stream.closeListener @id if @id
-        
+    disconnect: ->
+        if @id
+            @stream.closeListener @id 
+            @id = null
+            
+        @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)

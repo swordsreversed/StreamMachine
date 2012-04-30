@@ -33,6 +33,13 @@ module.exports = class Core
         
         @root_route = null
         
+        # -- Don't crash on uncaughtException errors -- #
+        
+        process.on "uncaughtException", (error) =>
+          @log.error "uncaught exception: " + error, stack:error.stack        
+
+        # -- Graceful Shutdown -- #
+        
         # attach a USR2 handler that causes us to stop listening. this is 
         # used to allow a new server to start up
         process.on "SIGTERM", =>
@@ -237,7 +244,6 @@ module.exports = class Core
             
             # -- set up our stream server -- #
             
-            # init our server
             # init our server
             @server = new @Server @
             @server.listen @options.listen

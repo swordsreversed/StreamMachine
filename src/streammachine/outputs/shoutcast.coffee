@@ -11,7 +11,7 @@ module.exports = class Shoutcast
         
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
-        process.nextTick =>      
+        process.nextTick =>     
             # convert this into an icecast response
             @res = new icecast.IcecastWriteStack @res, @stream.options.meta_interval
             @res.queueMetadata StreamTitle:@stream.source.metaTitle, StreamUrl:@stream.source.metaURL
@@ -39,9 +39,25 @@ module.exports = class Shoutcast
                 @stream.preroll.pump @res, => @connectToStream()
             else
                 @connectToStream()       
-            
-        @req.connection.on "close", => @closeStream()
         
+        # register our various means of disconnection
+        @req.connection.on "end",   => @disconnect()
+        @req.connection.on "close", => @disconnect()
+        @res.connection.on "close", => @disconnect()
+        
+        @res.on "error", (err) =>
+            console.log "got a response error for ", @id
+        
+        
+    #----------
+    
+    disconnect: ->
+        if @id
+            @stream.closeListener @id
+            @id = null
+            
+        @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)
+    
     #----------
     
     connectToStream: ->
@@ -50,7 +66,4 @@ module.exports = class Shoutcast
             @id = @stream.registerListener @, data:@dataFunc, meta:@metaFunc
         
     #----------
-    
-    closeStream: ->
-        @stream.closeListener @id if @id
-        
+            

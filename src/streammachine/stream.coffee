@@ -98,6 +98,7 @@ module.exports = class Stream extends EventEmitter
         
     disconnect: ->
         # handle clearing out lmeta
+        l.obj.disconnect() for k,l of @_lmeta
             
         # disconnect the stream source
         @source?.disconnect()
