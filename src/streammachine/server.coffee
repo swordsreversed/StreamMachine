@@ -27,7 +27,7 @@ module.exports = class Server
         # -- default routes -- #
                     
         # default URL (and also a mapping for weird stream.nsv route)
-        if @core.root_route && (req.url == '/' || req.url == "/;stream.nsv")
+        if @core.root_route && (req.url == '/' || req.url == "/;stream.nsv" || req.url == "/;")
             # pretend the request came in on the default stream
             req.url = "/#{@core.root_route}"
         
