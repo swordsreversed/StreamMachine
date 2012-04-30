@@ -33,21 +33,27 @@ module.exports = class Preroller
         opts = 
             host:       @options.server
             path:       [@options.path,@key,@stream_key].join("/")
+            
+        #console.log "res is ", res
         
         req = http.get opts, (rres) =>
-            if rres.statusCode == 200
-                # stream preroll through to the output
-                rres.on "data", (chunk) =>
-                    res.write(chunk)
+            unless res.stream?.connection.destroyed || res.connection?.destroyed
+                if rres.statusCode == 200
+                    # stream preroll through to the output
+                    rres.on "data", (chunk) =>
+                        res.write(chunk)
 
-                # when preroll is done, call the output's callback
-                rres.on "end", =>
+                    # when preroll is done, call the output's callback
+                    rres.on "end", =>
+                        cb?()
+                        return true
+                    
+                else
                     cb?()
                     return true
-                    
             else
-                cb?()
-                return true
+                # connection was destroyed during our fetch
+                rres.destroy()
     
     #----------
     

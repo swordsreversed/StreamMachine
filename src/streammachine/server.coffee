@@ -1,5 +1,6 @@
 express = require "express"
 _u = require("underscore")
+util = require 'util'
 
 module.exports = class Server
     constructor: (@core) ->
@@ -24,7 +25,7 @@ module.exports = class Server
         res.removeHeader("X-Powered-By");
     
         # -- default routes -- #
-            
+                    
         # default URL (and also a mapping for weird stream.nsv route)
         if @core.root_route && (req.url == '/' || req.url == "/;stream.nsv")
             # pretend the request came in on the default stream
