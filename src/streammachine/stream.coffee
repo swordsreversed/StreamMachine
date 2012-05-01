@@ -44,26 +44,27 @@ module.exports = class Stream extends EventEmitter
             
             # bring the new / only source up
             source = new @core.Sources[ opts.source?.type ] @, @key, opts.source
-            if source.connect()
-                if old_source
-                    # unhook from the old source's events
-                    old_source.removeListener "metadata",   @metaFunc
-                    old_source.removeListener "data",       @dataFunc
+            process.nextTick =>
+                if source.connect()
+                    if old_source
+                        # unhook from the old source's events
+                        old_source.removeListener "metadata",   @metaFunc
+                        old_source.removeListener "data",       @dataFunc
                     
-                @source = source
+                    @source = source
                     
-                # connect to the new source's events
-                source.on "metadata",   @metaFunc
-                source.on "data",       @dataFunc
+                    # connect to the new source's events
+                    source.on "metadata",   @metaFunc
+                    source.on "data",       @dataFunc
                 
-                # note that we've got a new source
-                console.log "emit source event"
-                @emit "source", @source
+                    # note that we've got a new source
+                    console.log "emit source event"
+                    @emit "source", @source
 
-                # disconnect the old source, which we're now no longer using
-                old_source?.disconnect()
-            else
-                @log.error "Failed to connect to new source"
+                    # disconnect the old source, which we're now no longer using
+                    old_source?.disconnect()
+                else
+                    @log.error "Failed to connect to new source"
         else
             @log.error "Invalid source type.", opts:opts
             return false

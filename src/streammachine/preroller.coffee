@@ -19,8 +19,8 @@ module.exports = class Preroller
         
         console.log "waiting to call get_stream_key"
         @stream.once "source", (source) =>
-            @stream_key = source.get_stream_key()
-            @stream.log.debug "Stream key is #{@stream_key}"
+            source.get_stream_key (@stream_key) =>
+                @stream.log.debug "Stream key is #{@stream_key}"
         
     #----------
     
