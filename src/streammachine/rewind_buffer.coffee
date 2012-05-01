@@ -21,7 +21,7 @@ module.exports = class RewindBuffer
         
         @stream = stream
         
-        @framesPerSec = null
+        @secsPerChunk = null
         @max = null
         @burst = null
                         
@@ -37,28 +37,20 @@ module.exports = class RewindBuffer
         
         # -- set up header and frame functions -- #
         
-        @lastHeader = null
-        @headerFunc = (data,header) => @lastHeader = data
-        
-        @frameFunc = (frame) =>                
-            # make sure we don't get a frame before header
-            if @lastHeader
-                # if we're at max length, shift off a frame (or more, if needed)
-                while @buffer.length > @max
-                    @buffer.shift()
+        @dataFunc = (chunk) =>
+            # if we're at max length, shift off a chunk (or more, if needed)
+            while @buffer.length > @max
+                @buffer.shift()
 
-                # take the new frame, add the header back in, and push it to the buffer
-                buf = new Buffer( @lastHeader.length + frame.length )
-                @lastHeader.copy(buf,0)
-                frame.copy(buf,@lastHeader.length)
-                @buffer.push buf
+            # push the chunk on the buffer
+            @buffer.push chunk
 
-                # loop through all connected listeners and pass the frame buffer at 
-                # their offset.
-                bl = @buffer.length
-                for l in @listeners
-                    # we'll give them whatever is at length - offset
-                    l.writeFrame @buffer[ bl - 1 - l._offset ]
+            # loop through all connected listeners and pass the frame buffer at 
+            # their offset.
+            bl = @buffer.length
+            for l in @listeners
+                # we'll give them whatever is at length - offset
+                l.writeFrame @buffer[ bl - 1 - l._offset ]
         
         # -- look for stream connections -- #
                 
@@ -67,38 +59,32 @@ module.exports = class RewindBuffer
             # -- disconnect from old source -- #
             
             if @source
-                @source.removeListener "header", @headerFunc
-                @source.removeListener "frame", @frameFunc
+                @source.removeListener "data", @dataFunc
             
             # -- compute initial stats -- #
             
             source.once "header", (data,header) =>
-                if @framesPerSec && @framesPerSec == @stream.source.framesPerSec
+                if @secsPerChunk && @secsPerChunk == @stream.source.emit_duration
                     # reconnecting, but rate matches so we can keep using 
                     # our existing buffer.
                     @log.debug "Rewind buffer validated new source.  Reusing buffer."
                 
                 else
-                    if @framesPerSec
+                    if @secsPerChunk
                         # we're reconnecting, but didn't match rate...  we 
                         # should wipe out the old buffer
                         @buffer = []
                         
                     # compute new frame numbers
-                    @framesPerSec   = @stream.source.framesPerSec
-                    @max            = Math.round @framesPerSec * @options.seconds
-                    @burst          = Math.round @framesPerSec * @options.burst
+                    @secsPerChunk   = @stream.source.emit_duration
+                    @max            = Math.round @options.seconds / @secsPerChunk
+                    @burst          = Math.round @options.burst / @secsPerChunk
         
                     console.log "Rewind's max buffer length is ", @max
                 
-            # headers and data get sent separately. we need to grab the header so 
-            # we can lump it back together with the frame data later
-            @lastHeader = null
-            source.on "header", @headerFunc
+            # connect our data listener
+            source.on "data", @dataFunc
                     
-            # frame listener will be used to fill our buffer with mp3 frames
-            source.on "frame", @frameFunc
-
             # keep track of our source
             @source = source
 
@@ -106,13 +92,13 @@ module.exports = class RewindBuffer
     
     bufferedSecs: ->
         # convert buffer length to seconds
-        Math.round @buffer.length / @framesPerSec 
+        Math.round @buffer.length / @secsPerChunk 
         
     #----------
     
     checkOffset: (offset) ->
         # we're passed offset in seconds. we'll convert it to frames
-        offset = Math.round Number(offset) * @framesPerSec
+        offset = Math.round Number(offset) / @secsPerChunk
         
         console.log "asked about offset of ", offset
         
@@ -145,7 +131,7 @@ module.exports = class RewindBuffer
         if offset > @buffer.length
             offset = @buffer.length
             
-        length = Math.round(length*@framesPerSec)
+        length = Math.round(length/@secsPerChunk)
         if length > offset
             length = offset
             
