@@ -87,12 +87,24 @@ module.exports = class Stream extends EventEmitter
                         dur = ( now.getTime() / 1000 - l.minuteTime.getTime() / 1000 )
                         @log.minute "", path:l.obj.reqPath, time:now, ua:l.obj.reqUA, duration:dur
                         l.minuteTime = now
-                
+                                        
             , 60*1000
             
         else if @mlog_timer && !opts.log_minutes
             clearInterval @mlog_timer
             @mlog_timer = null
+            
+        # FIXME -- Temporarily poll buffer size for listeners every minute
+        @buf_timer = setInterval =>
+            all_buf = 0
+            for id,l of @_lmeta
+                conn = l.obj.req?.socket
+                all_buf += conn?.bufferSize || 0
+                @log.debug "Buffer size", bufferSize:conn?.bufferSize || "UNKNOWN"
+                
+            @log.debug "All buffers: #{all_buf}"
+        , 60*1000
+                
                         
     #----------
         
