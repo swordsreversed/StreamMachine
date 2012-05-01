@@ -21,12 +21,13 @@ module.exports = class Stream extends EventEmitter
         
         @preroll = null
         @mlog_timer = null
-        
+
+        @frameFunc = (chunk) => 
         @dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta                    
         @metaFunc = (chunk) => (l.meta(chunk) if l.meta) for id,l of @_lmeta
         
         # now run configure...
-        @configure(opts)
+        process.nextTick => @configure(opts)
                                     
         # set up a rewind buffer
         @rewind = new @core.Rewind @, opts.rewind
@@ -54,6 +55,10 @@ module.exports = class Stream extends EventEmitter
                 # connect to the new source's events
                 source.on "metadata",   @metaFunc
                 source.on "data",       @dataFunc
+                
+                # note that we've got a new source
+                console.log "emit source event"
+                @emit "source", @source
 
                 # disconnect the old source, which we're now no longer using
                 old_source?.disconnect()

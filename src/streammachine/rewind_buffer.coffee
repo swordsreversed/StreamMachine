@@ -20,15 +20,11 @@ module.exports = class RewindBuffer
         @options = _u(_u({}).extend(@DefaultOptions)).extend options
         
         @stream = stream
-                
-        # use the first header to compute some constants
-        @stream.source.once "header", (data,header) =>
-            @framesPerSec   = @stream.source.framesPerSec
-            @max            = Math.round @framesPerSec * @options.seconds
-            @burst          = Math.round @framesPerSec * @options.burst
         
-            console.log "max buffer length is ", @max
-        
+        @framesPerSec = null
+        @max = null
+        @burst = null
+                        
         # each listener should be an object that defines obj._offset and 
         # obj.writeFrame. We implement RewindBuffer.Listener, but other 
         # classes can work with those pieces
@@ -36,14 +32,15 @@ module.exports = class RewindBuffer
         
         # create buffer as an array
         @buffer = []
-                
-        # headers and data get sent separately. we need to grab the header so 
-        # we can lump it back together with the frame data later
+        
+        @source = null
+        
+        # -- set up header and frame functions -- #
+        
         @lastHeader = null
-        @stream.on "header", (data,header) => @lastHeader = data
-                    
-        # frame listener will be used to fill our buffer with mp3 frames
-        @stream.on "frame", (frame) =>                
+        @headerFunc = (data,header) => @lastHeader = data
+        
+        @frameFunc = (frame) =>                
             # make sure we don't get a frame before header
             if @lastHeader
                 # if we're at max length, shift off a frame (or more, if needed)
@@ -62,7 +59,49 @@ module.exports = class RewindBuffer
                 for l in @listeners
                     # we'll give them whatever is at length - offset
                     l.writeFrame @buffer[ bl - 1 - l._offset ]
+        
+        # -- look for stream connections -- #
+                
+        @stream.on "source", (source) =>
+            console.log "RewindBuffer got source event"
+            # -- disconnect from old source -- #
+            
+            if @source
+                @source.removeListener "header", @headerFunc
+                @source.removeListener "frame", @frameFunc
+            
+            # -- compute initial stats -- #
+            
+            source.once "header", (data,header) =>
+                if @framesPerSec && @framesPerSec == @stream.source.framesPerSec
+                    # reconnecting, but rate matches so we can keep using 
+                    # our existing buffer.
+                    @log.debug "Rewind buffer validated new source.  Reusing buffer."
+                
+                else
+                    if @framesPerSec
+                        # we're reconnecting, but didn't match rate...  we 
+                        # should wipe out the old buffer
+                        @buffer = []
                         
+                    # compute new frame numbers
+                    @framesPerSec   = @stream.source.framesPerSec
+                    @max            = Math.round @framesPerSec * @options.seconds
+                    @burst          = Math.round @framesPerSec * @options.burst
+        
+                    console.log "Rewind's max buffer length is ", @max
+                
+            # headers and data get sent separately. we need to grab the header so 
+            # we can lump it back together with the frame data later
+            @lastHeader = null
+            source.on "header", @headerFunc
+                    
+            # frame listener will be used to fill our buffer with mp3 frames
+            source.on "frame", @frameFunc
+
+            # keep track of our source
+            @source = source
+
     #----------
     
     bufferedSecs: ->
@@ -88,6 +127,15 @@ module.exports = class RewindBuffer
             console.log "Not available. Instead giving max buffer of ", @buffer.length - 1
             return @buffer.length - 1
             
+    #----------
+    
+    pumpSeconds: (seconds) ->
+        # pump the most recent X seconds
+        
+        frames = @checkOffset seconds
+            
+        @pumpFrom(frames,frames)
+        
     #----------
     
     pumpFrom: (offset,length) ->

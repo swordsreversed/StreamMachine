@@ -62,6 +62,9 @@ module.exports = class Shoutcast
     
     connectToStream: ->
         unless @req.connection.destroyed
+            # -- pump 30 seconds from the rewind buffer -- #
+            @res.write @stream.rewind.pumpSeconds(30) if @stream.rewind
+        
             # -- register our listener -- #
             @id = @stream.registerListener @, data:@dataFunc, meta:@metaFunc
         
