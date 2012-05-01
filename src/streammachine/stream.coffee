@@ -4,6 +4,7 @@ EventEmitter = require('events').EventEmitter
 module.exports = class Stream extends EventEmitter
     DefaultOptions:
         meta_interval:  32768
+        max_buffer:     4194304 # 4 megabits (64 seconds of 64k audio)
         name:           ""
         
     constructor: (@core,key,log,opts) ->
@@ -94,14 +95,23 @@ module.exports = class Stream extends EventEmitter
             clearInterval @mlog_timer
             @mlog_timer = null
             
-        # FIXME -- Temporarily poll buffer size for listeners every minute
+        # -- Set up bufferSize poller -- #
+        
+        # We disconnect clients that have fallen too far behind on their 
+        # buffers. Buffer size can be configured via the "max_buffer" setting, 
+        # which takes bits
+        console.log "max buffer size is ", @options.max_buffer
         @buf_timer = setInterval =>
             all_buf = 0
             for id,l of @_lmeta
                 conn = l.obj.req?.socket
-                all_buf += conn?.bufferSize || 0
-                @log.debug "Buffer size", bufferSize:conn?.bufferSize || "UNKNOWN"
                 
+                all_buf += conn?.bufferSize||0
+                
+                if (conn?.bufferSize||0) > @options.max_buffer
+                    @log.debug "Connection exceeded max buffer size.", req:l.obj.req, bufferSize:conn.bufferSize
+                    l.obj.disconnect()
+
             @log.debug "All buffers: #{all_buf}"
         , 60*1000
                 
