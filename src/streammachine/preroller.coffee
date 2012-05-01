@@ -17,9 +17,9 @@ module.exports = class Preroller
         
         # -- need to look at the stream to get characteristics -- #
         
-        console.log "calling get_stream_key"
-        @stream.source?.get_stream_key (key) =>
-            @stream_key = key
+        console.log "waiting to call get_stream_key"
+        @stream.once "source", (source) =>
+            @stream_key = source.get_stream_key()
             @stream.log.debug "Stream key is #{@stream_key}"
         
     #----------
