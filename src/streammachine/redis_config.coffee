@@ -24,14 +24,14 @@ module.exports = class RedisConfig extends EventEmitter
                     console.log "Got redis config of ", streams
                     @emit "config", streams
             
-            # now go into PUB/SUB mode and subscribe for config updates
-            @client.on "message", (channel,message) => 
-                if message
-                    streams = JSON.parse(message.toString())
-                    console.log "Got redis config of ", streams
-                    @emit "config", streams
+                # now go into PUB/SUB mode and subscribe for config updates
+                @client.on "message", (channel,message) => 
+                    if message
+                        streams = JSON.parse(message.toString())
+                        console.log "Got redis config of ", streams
+                        @emit "config", streams
                     
-            @client.subscribe @options.key
+                @client.subscribe @options.key
             
     _config: ->
         console.log "Querying config from Redis"
