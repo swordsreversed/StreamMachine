@@ -71,8 +71,9 @@ module.exports = class Preroller
         # shut down and we should abort the request
 
         conn_pre_abort = => 
-            console.log "aborting preroll ", count
-            req.abort()
+            if conn.destroyed
+                console.log "aborting preroll ", count
+                req.abort()
         
         conn.once "close", conn_pre_abort
         conn.once "end", conn_pre_abort

@@ -51,19 +51,20 @@ module.exports = class Shoutcast
         
     #----------
     
-    disconnect: ->
-        if @id
-            @stream.closeListener @id
-            @id = null
+    disconnect: (force=false) ->
+        if force || @req.connection.destroyed
+            if @id
+                @stream.closeListener @id
+                @id = null
             
-        @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)
+            @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)
     
     #----------
     
     connectToStream: ->
         unless @req.connection.destroyed
             # -- pump 30 seconds from the rewind buffer -- #
-            @res.write @stream.rewind.pumpSeconds(30) if @stream.rewind
+            @res.write @stream.rewind.pumpSeconds(30)||(new Buffer(0)) if @stream.rewind
         
             # -- register our listener -- #
             @id = @stream.registerListener @, data:@dataFunc, meta:@metaFunc

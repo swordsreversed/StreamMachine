@@ -4,19 +4,22 @@ IcecastClient = require('icecast-stack/client')
 _u = require('underscore')
 Parser = require("../parsers/mp3")
 
+util = require 'util'
+
+
 module.exports = class ProxyRoom extends EventEmitter
     DefaultOptions:
         url:     ""
         
     #----------
     
-    constructor: (stream,key,options) ->
+    constructor: (@stream,@key,options) ->
         @options = _u(_u({}).extend(@DefaultOptions)).extend( options || {} )
-        @key            = key
-        @stream         = stream
         @url            = @options.url
         @connected      = false
         @framesPerSec   = null
+        
+        @_in_disconnect = false
         
         @emit_duration  = 0.5
         
@@ -27,6 +30,7 @@ module.exports = class ProxyRoom extends EventEmitter
         @last_header = null
         
         # connection drop handling
+        # (FIXME: bouncing not yet implemented)
         @_maxBounces    = 10
         @_bounces       = 0
         @_bounceInt     = 5
@@ -38,33 +42,37 @@ module.exports = class ProxyRoom extends EventEmitter
         
     connect: ->
         @log.debug "connecting to #{@url}"
-        @stream = IcecastClient.createClient @url, "user-agent":"StreamMachine 0.1.0"
+        @icecast = IcecastClient.createClient @url, "user-agent":"StreamMachine 0.1.0"
         
-        @stream.on "close", =>
-            setTimeout ( => @connect() ), 5000
+        @icecast.on "close", =>
+            console.log "icecast got close event"
+            unless @_in_disconnect
+                setTimeout ( => @connect() ), 5000
             
-            @log.debug "Lost connection to #{@url}. Retrying in 5 seconds"
-            @connected = false
+                @log.debug "Lost connection to #{@url}. Retrying in 5 seconds"
+                @connected = false
             
-        @stream.on "metadata", (data) =>
-            meta = Icecast.parseMetadata(data)
+        @icecast.on "metadata", (data) =>
+            unless @_in_disconnect
+                console.log "parsing ", data
+                meta = Icecast.parseMetadata(data)
             
-            if meta.StreamTitle
-                @metaTitle = meta.StreamTitle
+                if meta.StreamTitle
+                    @metaTitle = meta.StreamTitle
             
-            if meta.StreamUrl
-                @metaURL = meta.StreamUrl
+                if meta.StreamUrl
+                    @metaURL = meta.StreamUrl
                 
-            @emit "metadata", StreamTitle:@metaTitle, StreamUrl:@metaURL
+                @emit "metadata", StreamTitle:@metaTitle, StreamUrl:@metaURL
 
         # attach mp3 parser for rewind buffer
         @parser = new Parser()
         
         # incoming -> Parser
-        @stream.on "data",      (chunk)     => @parser.write chunk
+        @icecast.on "data", (chunk) => @parser.write chunk
         
         # outgoing -> Stream
-        @parser.on "frame", (frame) => 
+        @parser.on "frame", (frame) =>
             @emit "frame", frame
 
             # -- queue up frames until we get to @emit_duration -- #
@@ -100,7 +108,7 @@ module.exports = class ProxyRoom extends EventEmitter
                 # -- compute frames per second -- #
                 
                 @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                @log.debug "#{@key} setting framesPerSec to ", @framesPerSec
+                @log.debug "#{@key} setting framesPerSec to ", frames:@framesPerSec
                 @log.debug "#{@key} first header is ", header
                 
                 # -- compute stream key -- #
@@ -116,7 +124,18 @@ module.exports = class ProxyRoom extends EventEmitter
     #----------
         
     disconnect: ->
-        console.log "FIXME: Need to handle disconnect in source"
+        @_in_disconnect = true
+        
+        @icecast.removeAllListeners()
+        @parser.removeAllListeners()
+        @removeAllListeners()
+        
+        @icecast.destroy()        
+        
+        @parser = null
+        @icecast = null
+        
+        console.log "Shut down proxy source using #{@url}"
         
     #----------
         

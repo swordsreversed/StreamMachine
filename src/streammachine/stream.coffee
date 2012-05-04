@@ -22,7 +22,6 @@ module.exports = class Stream extends EventEmitter
         @preroll = null
         @mlog_timer = null
 
-        @frameFunc = (chunk) => 
         @dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta                    
         @metaFunc = (chunk) => (l.meta(chunk) if l.meta) for id,l of @_lmeta
         
@@ -43,26 +42,30 @@ module.exports = class Stream extends EventEmitter
             old_source = @source || null
             
             # bring the new / only source up
-            source = new @core.Sources[ opts.source?.type ] @, @key, opts.source
+            newsource = new @core.Sources[ opts.source.type ] @, @key, opts.source
             process.nextTick =>
-                if source.connect()
-                    if old_source
-                        # unhook from the old source's events
-                        old_source.removeListener "metadata",   @metaFunc
-                        old_source.removeListener "data",       @dataFunc
+                if newsource.connect()
+                    # look for a header to say the new source is up and running
+                    newsource.once "header", =>
+                        
+                        if old_source
+                            # unhook from the old source's events
+                            old_source.removeListener "metadata",   @metaFunc
+                            old_source.removeListener "data",       @dataFunc
                     
-                    @source = source
+                        @source = newsource
                     
-                    # connect to the new source's events
-                    source.on "metadata",   @metaFunc
-                    source.on "data",       @dataFunc
+                        # connect to the new source's events
+                        newsource.on "metadata",   @metaFunc
+                        newsource.on "data",       @dataFunc
                 
-                    # note that we've got a new source
-                    console.log "emit source event"
-                    @emit "source", @source
+                        # note that we've got a new source
+                        process.nextTick =>
+                            console.log "emit source event"
+                            @emit "source", newsource
 
-                    # disconnect the old source, which we're now no longer using
-                    old_source?.disconnect()
+                        # disconnect the old source, which we're now no longer using
+                        old_source?.disconnect()
                 else
                     @log.error "Failed to connect to new source"
         else
@@ -126,7 +129,7 @@ module.exports = class Stream extends EventEmitter
         
     disconnect: ->
         # handle clearing out lmeta
-        l.obj.disconnect() for k,l of @_lmeta
+        l.obj.disconnect(true) for k,l of @_lmeta
             
         # disconnect the stream source
         @source?.disconnect()

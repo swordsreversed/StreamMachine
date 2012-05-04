@@ -21,7 +21,7 @@ module.exports = class RewindBuffer
         
         @stream = stream
         
-        @secsPerChunk = null
+        @secsPerChunk = Infinity
         @max = null
         @burst = null
                         
@@ -54,20 +54,22 @@ module.exports = class RewindBuffer
         
         # -- look for stream connections -- #
                 
-        @stream.on "source", (source) =>
-            console.log "RewindBuffer got source event"
+        @stream.on "source", (newsource) =>
+            @stream.log.debug "RewindBuffer got source event"
             # -- disconnect from old source -- #
             
-            if @source
-                @source.removeListener "data", @dataFunc
+            @source.removeListener "data", @dataFunc if @source
+            
+            console.log "removed data listener"
             
             # -- compute initial stats -- #
-            
-            source.once "header", (data,header) =>
-                if @secsPerChunk && @secsPerChunk == @stream.source.emit_duration
+                        
+            newsource.once "header", (data,header) =>
+                console.log "in rewind once header listener", @secsPerChunk, newsource.emit_duration
+                if @secsPerChunk && @secsPerChunk == newsource.emit_duration
                     # reconnecting, but rate matches so we can keep using 
                     # our existing buffer.
-                    @log.debug "Rewind buffer validated new source.  Reusing buffer."
+                    @stream.log.debug "Rewind buffer validated new source.  Reusing buffer."
                 
                 else
                     if @secsPerChunk
@@ -76,17 +78,17 @@ module.exports = class RewindBuffer
                         @buffer = []
                         
                     # compute new frame numbers
-                    @secsPerChunk   = @stream.source.emit_duration
+                    @secsPerChunk   = newsource.emit_duration
                     @max            = Math.round @options.seconds / @secsPerChunk
                     @burst          = Math.round @options.burst / @secsPerChunk
         
                     console.log "Rewind's max buffer length is ", @max
                 
-            # connect our data listener
-            source.on "data", @dataFunc
+                # connect our data listener
+                newsource.on "data", @dataFunc
                     
-            # keep track of our source
-            @source = source
+                # keep track of our source
+                @source = newsource
 
     #----------
     
@@ -106,7 +108,7 @@ module.exports = class RewindBuffer
             console.log "offset is invalid! 0 for live."
             return 0
                     
-        if @buffer.length > offset
+        if @buffer.length >= offset
             console.log "Granted. current buffer length is ", @buffer.length
             return offset
         else
@@ -126,6 +128,8 @@ module.exports = class RewindBuffer
     
     pumpFrom: (offset,length) ->
         # we want to send _length_ frames, starting at _offset_
+        
+        return null if offset == 0
         
         # sanity checks...
         if offset > @buffer.length

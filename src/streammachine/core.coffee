@@ -80,7 +80,7 @@ module.exports = class Core
     # configureStreams can be called on a new core, or it can be called to 
     # reconfigure an existing core.  we need to support either one.
     configureStreams: (options) ->
-        console.log "In configure with ", options
+        @log.debug "In configure with ", options:options
 
         # -- Sources -- #
         
@@ -97,10 +97,10 @@ module.exports = class Core
             console.log "stream for #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.debug opts:opts, "Passing updated config to source: #{key}"
+                @log.debug "Passing updated config to source: #{key}", opts:opts
                 @streams[key].configure opts
             else
-                @log.debug opts:opts, "Starting up source: #{key}"
+                @log.debug "Starting up source: #{key}", opts:opts
                 @streams[key] = new @Stream @, key, @log.child(stream:key), opts
                 
             # should this stream accept requests to /?
@@ -162,7 +162,7 @@ module.exports = class Core
             
             # -- load our streams configuration from redis -- #
             
-            @redis = new @Redis @options.redis?
+            @redis = new @Redis @options.redis
             @redis.on "config", (streams) =>
                 # stash the configuration
                 @options.streams = streams
