@@ -1,5 +1,10 @@
 {
+  "name": "StreamMachine",
+  "version": "0.1.0",
   "dependencies": {
+    "coffee-script": {
+      "version": "1.3.1"
+    },
     "express": {
       "version": "2.5.8",
       "dependencies": {
@@ -26,7 +31,7 @@
       "version": "0.2.3",
       "dependencies": {
         "stream-stack": {
-          "version": "1.1.3"
+          "version": "1.1.4"
         },
         "http-stack": {
           "version": "0.1.3",
@@ -149,7 +154,7 @@
       "version": "0.1.1"
     },
     "underscore": {
-      "version": "1.3.1"
+      "version": "1.3.3"
     },
     "winston": {
       "version": "0.5.11",
@@ -179,6 +184,39 @@
         },
         "stack-trace": {
           "version": "0.0.6"
+        }
+      }
+    },
+    "cube": {
+      "version": "0.2.0",
+      "dependencies": {
+        "mongodb": {
+          "version": "0.9.9-8",
+          "dependencies": {
+            "bson": {
+              "version": "0.0.4"
+            }
+          }
+        },
+        "node-static": {
+          "version": "0.5.9"
+        },
+        "pegjs": {
+          "version": "0.6.2"
+        },
+        "vows": {
+          "version": "0.5.11",
+          "dependencies": {
+            "eyes": {
+              "version": "0.1.7"
+            }
+          }
+        },
+        "websocket": {
+          "version": "1.0.3"
+        },
+        "websocket-server": {
+          "version": "1.4.04"
         }
       }
     }
