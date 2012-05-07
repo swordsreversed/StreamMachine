@@ -180,8 +180,8 @@ module.exports = class Core
             # fire up a socket listener on our slave port
             @io = require("socket.io").listen @options.master?.port
             
-            # by calling this @server, it will get disconnected on SIGTERM
-            @server = @io
+            # disconnect from our port on SIGTERM
+            process.on "SIGTERM", => @io.close()
             
             # add our authentication
             @io.configure =>
