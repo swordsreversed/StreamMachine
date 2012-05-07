@@ -158,10 +158,14 @@ module.exports = class LogController
             @_opening = true
                         
             initFile = true
-            if path.existsSync @options.filename
-                # existing file...  don't write headers, just open so we can 
-                # start appending
-                initFile = false
+            if path.existsSync(@options.filename)
+                # file exists...  see if there's anything in it
+                stats = fs.statSync(@options.filename)
+                
+                if stats.size > 0
+                    # existing file...  don't write headers, just open so we can 
+                    # start appending
+                    initFile = false
                 
             @file = fs.createWriteStream @options.filename
             
