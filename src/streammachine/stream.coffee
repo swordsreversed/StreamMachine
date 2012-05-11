@@ -119,7 +119,7 @@ module.exports = class Stream extends EventEmitter
                 
                 if (conn?.bufferSize||0) > @options.max_buffer
                     @log.debug "Connection exceeded max buffer size.", req:l.obj.req, bufferSize:conn.bufferSize
-                    l.obj.disconnect()
+                    l.obj.disconnect(true)
 
             @log.debug "All buffers: #{all_buf}"
         , 60*1000
