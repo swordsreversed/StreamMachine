@@ -81,6 +81,9 @@ module.exports = class Sockets
             @res = res
             @rewind = rewind
             
+            @res.chunkedEncoding = false
+            @res.useChunkedEncodingByDefault = false
+
             @reqIP      = req.connection.remoteAddress
             @reqPath    = req.url
             @reqUA      = req.headers?['user-agent']
@@ -95,7 +98,6 @@ module.exports = class Sockets
             headers = 
                 "Content-Type":         "audio/mpeg"
                 "Connection":           "keep-alive"
-                "Transfer-Encoding":    "identity"
                 "Content-Range":        "bytes 0-*/*"
                 "Accept-Ranges":        "none"
 

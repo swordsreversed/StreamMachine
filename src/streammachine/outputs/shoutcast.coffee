@@ -12,20 +12,21 @@ module.exports = class Shoutcast
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
         process.nextTick =>     
+            @res.chunkedEncoding = false
+            @res.useChunkedEncodingByDefault = false
+            
             # convert this into an icecast response
             @res = new icecast.IcecastWriteStack @res, @stream.options.meta_interval
             @res.queueMetadata StreamTitle:@stream.source.metaTitle, StreamUrl:@stream.source.metaURL
         
             headers = 
                 "Content-Type":         "audio/mpeg"
-                "Connection":           "close"
-                "Transfer-Encoding":    "identity"
                 "icy-name":             @stream.options.name
                 "icy-metaint":          @stream.options.meta_interval
                         
             # write out our headers
             res.writeHead 200, headers
-                
+                            
             @metaFunc = (data) =>
                 if data.StreamTitle
                     @res.queueMetadata data

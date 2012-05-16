@@ -195,6 +195,9 @@ module.exports = class RewindBuffer
             @res = res
             @rewind = rewind
             
+            @res.chunkedEncoding = false
+            @res.useChunkedEncodingByDefault = false
+            
             # set our internal offset to be invalid by default
             @_offset = -1
             
@@ -204,7 +207,6 @@ module.exports = class RewindBuffer
             headers = 
                 "Content-Type":         "audio/mpeg"
                 "Connection":           "close"
-                "Transfer-Encoding":    "identity"
                 
             # write out our headers
             res.writeHead 200, headers

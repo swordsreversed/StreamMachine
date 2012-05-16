@@ -7,6 +7,7 @@ module.exports = class Server
         
         @server = express.createServer()
         @server.httpAllowHalfOpen = true
+        @server.useChunkedEncodingByDefault = false
         @server.use (req,res,next) => @streamRouter(req,res,next)
         
     #----------

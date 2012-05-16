@@ -9,10 +9,11 @@ module.exports = class LiveMP3
         @reqUA      = req.headers?['user-agent']       
 
         process.nextTick =>
+            @res.chunkedEncoding = false
+            @res.useChunkedEncodingByDefault = false
+            
             headers = 
                 "Content-Type":         "audio/mpeg"
-                "Connection":           "close"
-                "Transfer-Encoding":    "identity"
             
             # write out our headers
             res.writeHead 200, headers

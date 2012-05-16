@@ -19,7 +19,6 @@ module.exports = class Pumper
         headers = 
             "Content-Type":         "audio/mpeg"
             "Connection":           "close"
-            "Transfer-Encoding":    "identity"
             "Content-Length":       pumpBuf.length
         
         # write out our headers
