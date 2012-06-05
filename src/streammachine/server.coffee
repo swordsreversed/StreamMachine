@@ -74,7 +74,7 @@ module.exports = class Server
         # -- Stream Routing -- #
     
         # does the request match one of our streams?
-        if m = ///^\/(#{_u(@core.streams).keys().join("|")})(?:\.(mp3|pls))?/?$///.exec req.url     
+        if m = ///^\/(#{_u(@core.streams).keys().join("|")})(?:\.(mp3|pls))?///.exec req.url     
             res.header("X-Powered-By","StreamMachine")
         
             console.log "match is ", m[1]
@@ -105,15 +105,15 @@ module.exports = class Server
         
             # -- Stream match! -- #
         
-            if req.query.socket?
+            if req.param("socket")
                 # socket listener
                 @core.sockets.addListener stream,req,res
                 
-            else if req.query.off?
+            else if req.param("off")
                 # rewind to a starting offset
-                new @core.Rewind.Listener stream, req, res, Number(req.query.off)
+                new @core.Rewind.Listener stream, req, res, Number(req.param("off"))
                 
-            else if req.query.pump?
+            else if req.param("pump")
                 # pump listener pushes from the buffer as fast as possible
                 new @core.Outputs.pumper stream, req, res
                 
@@ -128,3 +128,4 @@ module.exports = class Server
             
         else
             @core.log.debug "Not Found", req:req
+            next()
