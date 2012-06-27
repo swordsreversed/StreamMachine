@@ -7,8 +7,8 @@ module.exports = class Shoutcast
                 
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
-        @reqUA      = req.headers?['user-agent']
-        
+        @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+                
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
         process.nextTick =>     
@@ -35,7 +35,7 @@ module.exports = class Shoutcast
                 
             # -- send a preroll if we have one -- #
         
-            if @stream.preroll
+            if @stream.preroll && !@req.param("preskip")
                 @stream.log.debug "making preroll request", stream:@stream.key
                 @stream.preroll.pump @res, => @connectToStream()
             else

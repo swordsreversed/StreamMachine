@@ -6,7 +6,7 @@ module.exports = class LiveMP3
         
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
-        @reqUA      = req.headers?['user-agent']       
+        @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
 
         process.nextTick =>
             @res.chunkedEncoding = false
@@ -22,7 +22,7 @@ module.exports = class LiveMP3
                                     
             # -- send a preroll if we have one -- #
         
-            if @stream.preroll
+            if @stream.preroll && !@req.param("preskip")
                 @stream.log.debug "making preroll request", stream:@stream.key
                 @stream.preroll.pump @res, => @connectToStream()
             else
