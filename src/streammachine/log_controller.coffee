@@ -124,8 +124,6 @@ module.exports = class LogController
         #----------
         
         log: (level,msg,meta,cb) ->
-            console.log "in w3c logger with ", meta
-            
             # for a valid w3c log, level should == "request", meta.
             logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
