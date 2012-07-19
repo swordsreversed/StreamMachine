@@ -127,7 +127,7 @@ module.exports = class LogController
             console.log "in w3c logger with ", meta
             
             # for a valid w3c log, level should == "request", meta.
-            logline = "#{meta.ip} #{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
+            logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
             if @file
                 # make sure there aren't any queued writes
