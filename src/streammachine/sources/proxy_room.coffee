@@ -13,6 +13,7 @@ module.exports = class ProxyRoom extends EventEmitter
         
     #----------
     
+    TYPE: -> "Proxy (#{@url})"
     constructor: (@stream,@key,options) ->
         @options = _u(_u({}).extend(@DefaultOptions)).extend( options || {} )
         @url            = @options.url

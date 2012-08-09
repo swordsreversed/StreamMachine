@@ -8,6 +8,10 @@ module.exports = class Server
         @server = express.createServer()
         @server.httpAllowHalfOpen = true
         @server.useChunkedEncodingByDefault = false
+
+        @admin = new (require "./admin/router") core:@core
+        @server.use "/admin", @admin.server
+        
         @server.use (req,res,next) => @streamRouter(req,res,next)
         
     #----------

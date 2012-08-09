@@ -17,7 +17,7 @@ module.exports = class Preroller
         
         # -- need to look at the stream to get characteristics -- #
         
-        console.log "waiting to call get_stream_key"
+        @stream.log.debug "waiting to call get_stream_key"
         @stream.once "source", (source) =>
             source.get_stream_key (@stream_key) =>
                 @stream.log.debug "Stream key is #{@stream_key}"
@@ -40,9 +40,9 @@ module.exports = class Preroller
         
         conn = res.stream?.connection || res.connection
                 
-        console.log "firing preroll request", count
+        @stream.log.debug "firing preroll request", count
         req = http.get opts, (rres) =>
-            console.log "got preroll response ", count
+            @stream.log.debug "got preroll response ", count
             if rres.statusCode == 200
                 # stream preroll through to the output
                 rres.on "data", (chunk) =>
@@ -62,17 +62,17 @@ module.exports = class Preroller
                 return true
                 
         req.on "socket", (sock) =>
-            console.log "socket granted for ", count
+            @stream.log.debug "socket granted for ", count
             
         req.on "error", (err) =>
-            console.log "got a request error for ", count, err
+            @stream.log.debug "got a request error for ", count, err
             
         # attach a close listener to the response, to be fired if it gets 
         # shut down and we should abort the request
 
         conn_pre_abort = => 
             if conn.destroyed
-                console.log "aborting preroll ", count
+                @stream.log.debug "aborting preroll ", count
                 req.abort()
         
         conn.once "close", conn_pre_abort

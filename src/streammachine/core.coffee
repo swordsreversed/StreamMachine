@@ -110,6 +110,7 @@ module.exports = class Core
     #----------
     
     class @Standalone extends Core
+        MODE: "StandAlone"
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
@@ -146,6 +147,8 @@ module.exports = class Core
     # slave logging data.
     
     class @Master extends Core
+        
+        MODE: "Master"
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
@@ -227,6 +230,8 @@ module.exports = class Core
     # to the master, but can optionally also be stored on the slave host.
     
     class @Slave extends Core
+        
+        MODE: "Slave"
         constructor: (opts) ->
             @options = _u.defaults opts||{}, @DefaultOptions
             
