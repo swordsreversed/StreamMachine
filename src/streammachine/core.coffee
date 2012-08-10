@@ -132,7 +132,7 @@ module.exports = class Core
             @log.debug "Standalone is listening on port #{@options.listen}"
         
             # start up the socket manager on the listener
-            @sockets = new @Outputs.sockets server:@server.server, core:@
+            @sockets = new @Outputs.sockets io:@server.io, core:@
             
             # -- initialize streams -- #
             

@@ -8,14 +8,13 @@ module.exports = class Sockets
         
     constructor: (options) ->
         @options = _u(_u({}).extend(@DefaultOptions)).extend( options || {} )
-            
-        @io = require("socket.io").listen @options.server
-        @core = @options.core
+        
+        @io     = @options.io
+        @core   = @options.core
         
         @sessions = {}
         
         _u(@core.streams).each (v,k) =>
-            console.log 
             # register connection listener
             @io.of("/#{k}").on "connection", (sock) =>
                 console.log "connection is ", sock.id

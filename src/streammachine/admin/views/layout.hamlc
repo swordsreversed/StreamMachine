@@ -6,7 +6,9 @@
     %meta(name="viewport" content="width=device-width, initial-scale=1.0")
     %title= if @TITLE? then "#{@TITLE} : StreamMachine" else "StreamMachine Admin"
     
-    %link(href="/admin/stylesheets/admin.css" media="screen" rel="stylesheet" type="text/css")
+    != css("admin")
+    != js("admin")
+    %script(src="/socket.io/socket.io.js" type="text/javascript")
 
   %body
     .navbar.navbar-fixed-top
@@ -21,9 +23,15 @@
       .content
         .row
           .span9
-            != @body
+            %h1 Loading...
           .span3
-            .well.sidebar-nav
-              %h3 Sidebar
+            #sidebar.well.sidebar-nav
+              
       %footer
-        %p StreamMachine
+        %p StreamMachine: http://github.com/StreamMachine/StreamMachine
+
+  :javascript
+    $(function() {
+      window.SM = new streammachine.Admin()    
+    })
+    

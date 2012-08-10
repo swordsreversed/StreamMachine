@@ -10,14 +10,8 @@ module.exports = class Router
         @server.set "view engine", "hamlc"
         @server.engine '.hamlc', require('haml-coffee').__express
         
-        # attach our assets
-        asset_path = path.join(__dirname,"..","..","..","assets")
-            
-        @server.use require('express-partials')()
-        @server.use require('less-middleware') src:asset_path
-        @server.use(express.static(asset_path))
-
         # -- Routing -- #
         
         @server.get "/", (req,res) =>
-            res.render "index", core:@core
+            console.log "sockets is ", @core.sockets.io
+            res.render "layout", core:@core

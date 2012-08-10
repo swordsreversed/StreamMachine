@@ -1,23 +1,28 @@
 express = require "express"
 _u = require("underscore")
 util = require 'util'
+fs = require 'fs'
+path = require 'path'
 
 module.exports = class Server
     constructor: (@core) ->
         
-        @server = express.createServer()
+        @server = express()
         @server.httpAllowHalfOpen = true
         @server.useChunkedEncodingByDefault = false
+        @server.use require('connect-assets')()
 
-        @admin = new (require "./admin/router") core:@core
+        @admin = new (require "./admin/router") core:@core        
         @server.use "/admin", @admin.server
-        
+                
         @server.use (req,res,next) => @streamRouter(req,res,next)
         
     #----------
     
     listen: (port) ->
-        @server.listen port
+        @hserver = @server.listen port
+        @io = require("socket.io").listen @hserver
+        @hserver
         
     #----------
         
