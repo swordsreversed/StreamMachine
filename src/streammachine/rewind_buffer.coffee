@@ -17,7 +17,7 @@ module.exports = class RewindBuffer
         burst:      30          # 30 seconds burst
     
     constructor: (stream,options = {}) ->
-        @options = _u(_u({}).extend(@DefaultOptions)).extend options
+        @options = _u.defaults options||{}, @DefaultOptions
         
         @stream = stream
         

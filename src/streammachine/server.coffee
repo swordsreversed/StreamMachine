@@ -4,7 +4,7 @@ util = require 'util'
 fs = require 'fs'
 path = require 'path'
 
-module.exports = class Server
+module.exports = class Server extends require('events').EventEmitter
     constructor: (@core) ->
         
         @server = express()
@@ -12,8 +12,8 @@ module.exports = class Server
         @server.useChunkedEncodingByDefault = false
         @server.use require('connect-assets')()
 
-        @admin = new (require "./admin/router") core:@core        
-        @server.use "/admin", @admin.server
+        @admin = new (require "./admin/router") core:@core, server:@        
+        @server.use "/admin", @admin.app
                 
         @server.use (req,res,next) => @streamRouter(req,res,next)
         
@@ -22,6 +22,7 @@ module.exports = class Server
     listen: (port) ->
         @hserver = @server.listen port
         @io = require("socket.io").listen @hserver
+        @emit "io_connected", @io
         @hserver
         
     #----------

@@ -16,9 +16,11 @@ module.exports = class Core
     Rewind: require "./rewind_buffer"
     Preroller: require "./preroller"
     Server: require "./server"
+    SourceIn: require "./source_in"
         
     Sources:
-        proxy:  require("./sources/proxy_room")
+        proxy:      require("./sources/proxy_room")
+        icecast:    require("./sources/icecast")
         
     Outputs:
         pumper:     require("./outputs/pumper")
@@ -106,6 +108,13 @@ module.exports = class Core
             # should this stream accept requests to /?
             if opts.root_route
                 @root_route = key
+                
+    #----------
+    
+    # Build a hash of stream information, including sources and listener counts
+    
+    streamInfo: ->
+        s.info() for k,s of @streams
                         
     #----------
     
@@ -133,6 +142,10 @@ module.exports = class Core
         
             # start up the socket manager on the listener
             @sockets = new @Outputs.sockets io:@server.io, core:@
+            
+            # -- start the source listener -- #
+            
+            @sourcein = new @SourceIn core:@, port:opts.source_port
             
             # -- initialize streams -- #
             

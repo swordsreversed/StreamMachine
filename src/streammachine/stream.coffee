@@ -1,23 +1,31 @@
 _u = require "underscore"
-EventEmitter = require('events').EventEmitter
 
-module.exports = class Stream extends EventEmitter
+# Streams are the endpoints that listeners connect to. A stream has many listeners 
+# and can have one or more sources, though only one is active at once. Other sources 
+# are kept active as backups and can be used for failover should the original 
+# source disconnect.
+#
+# In the initial config, the stream can also specify a fallback source that will be 
+# used only when no other source is connected.  
+
+module.exports = class Stream extends require('events').EventEmitter
     DefaultOptions:
         meta_interval:  32768
         max_buffer:     4194304 # 4 megabits (64 seconds of 64k audio)
         name:           ""
         
-    constructor: (@core,key,log,opts) ->
+    constructor: (@core,@key,@log,opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
+        
+        @STATUS = "Initializing"
         
         # remove our max listener count
         @setMaxListeners 0
             
-        @log = log
-        @key = key
-        
         @_id_increment = 1
         @_lmeta = {}
+        
+        @sources = []
         
         @preroll = null
         @mlog_timer = null
@@ -29,49 +37,94 @@ module.exports = class Stream extends EventEmitter
         process.nextTick => @configure(opts)
                                     
         # set up a rewind buffer
-        @rewind = new @core.Rewind @, opts.rewind
+        @rewind = new @core.Rewind @, opts.rewind        
             
     #----------
+    
+    info: ->
+        key:        @key
+        status:     @STATUS
+        sources:    []
+        listeners:  @countListeners()
+        options:    @options
         
-    configure: (opts) ->
-        # -- Source -- #
-        
-        # make sure our source is valid
-        if @core.Sources[ opts.source?.type ]
-            # stash our existing source if we have one
-            old_source = @source || null
-            
-            # bring the new / only source up
-            newsource = new @core.Sources[ opts.source.type ] @, @key, opts.source
-            process.nextTick =>
-                if newsource.connect()
-                    # look for a header to say the new source is up and running
-                    newsource.once "header", =>
-                        
-                        if old_source
-                            # unhook from the old source's events
-                            old_source.removeListener "metadata",   @metaFunc
-                            old_source.removeListener "data",       @dataFunc
-                    
-                        @source = newsource
-                    
-                        # connect to the new source's events
-                        newsource.on "metadata",   @metaFunc
-                        newsource.on "data",       @dataFunc
-                
-                        # note that we've got a new source
-                        process.nextTick =>
-                            console.log "emit source event"
-                            @emit "source", newsource
-
-                        # disconnect the old source, which we're now no longer using
-                        old_source?.disconnect()
+    #----------
+    
+    addSource: (source,cb) ->
+        # add a disconnect monitor
+        source.once "disconnect", =>
+            # was this our current source?
+            if @sources[0] == source
+                # yes...  need to promote the next one (if there is one)
+                if @sources.length > 1
+                    @sources = _u(@sources).without @source
+                    @useSource @sources[0]
                 else
-                    @log.error "Failed to connect to new source"
+                    @log.debug "Source disconnected. None remaining."
+            else
+                # no... just remove it from the list
+                @sources = _u(@sources).without @source
+        
+        # check whether this source should be made active. If should be if 
+        # the active source is defined as a fallback
+        
+        if @sources[0]?.options.fallback || !@sources[0]
+            # go to the front
+            @log.debug "Promoting new source to replace fallback."
+            @useSource source, cb
         else
-            @log.error "Invalid source type.", opts:opts
-            return false
-                        
+            # add the source to the end of our list
+            @log.debug "Sticking new source on the end of the list."
+            @sources.push source
+        
+            # and emit our source event
+            @emit "add_source", source
+            
+            cb?()
+            
+    #----------
+
+    useSource: (newsource,cb=null) ->
+        # stash our existing source if we have one
+        old_source = @source || null
+
+        # set a five second timeout for the switchover
+        alarm = setTimeout =>
+            @log.debug "Failed to get source switchover in five seconds"
+            cb?(false)
+        , 5000
+        
+        # Look for a header before switching
+        newsource.once "header", =>
+            if old_source
+                # unhook from the old source's events
+                old_source.removeListener "metadata",   @metaFunc
+                old_source.removeListener "data",       @dataFunc
+                    
+            @source = newsource
+                    
+            # connect to the new source's events
+            newsource.on "metadata",   @metaFunc
+            newsource.on "data",       @dataFunc
+                
+            # note that we've got a new source
+            process.nextTick =>
+                console.log "emit source event"
+                @emit "source", newsource
+
+            # jump our new source to the front of the list (and remove it from
+            # anywhere else in the list)
+            @sources = _u.flatten [newsource,_u(@sources).without newsource]
+            
+            # cancel our timeout
+            clearTimeout alarm
+            
+            # give the a-ok to the callback
+            cb?(true)
+
+    #----------
+    
+    configure: (opts) ->
         # -- Preroll -- #
         
         @log.debug "Preroll settings are ", preroll:opts.preroll
@@ -123,7 +176,21 @@ module.exports = class Stream extends EventEmitter
 
             @log.debug "All buffers: #{all_buf}"
         , 60*1000
-                
+        
+        # -- Hardcoded Source -- #
+        
+        # This is an initial source like a proxy that should be connected from 
+        # our end, rather than waiting for an incoming connection
+        
+        if opts.source?
+            console.log "Connecting initial source"
+            newsource = new @core.Sources[ opts.source.type ] @, opts.source
+            newsource.connect()
+            @useSource newsource, (result) =>
+                if result
+                    @log.debug "Source connected."
+                else
+                    @log.error "Source connection failed."
                         
     #----------
         
@@ -131,8 +198,8 @@ module.exports = class Stream extends EventEmitter
         # handle clearing out lmeta
         l.obj.disconnect(true) for k,l of @_lmeta
             
-        # disconnect the stream source
-        @source?.disconnect()
+        # disconnect any stream sources
+        s.disconnect() for s in @sources
         
     #----------
     
@@ -156,6 +223,7 @@ module.exports = class Stream extends EventEmitter
         @_lmeta[ lmeta.id ] = lmeta
             
         console.log "in registerListener for ", lmeta.id
+        debugger;
             
         # log the connection start
         @log.debug "Connection start", req:listen.req, listeners:_u(@_lmeta).keys().length

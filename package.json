@@ -2,7 +2,7 @@
   "name": "StreamMachine",
   "version": "0.1.0",
   "description": "Flexible live streaming for broadcast audio.",
-  "keywords": ["audio broadcast shoutcast"],
+  "keywords": ["audio","broadcast","shoutcast","icecast"],
   "homepage": "http://github.com/SCPR/StreamMachine/",
   "author": {"name": "Eric Richardson", "url": "http://ericrichardson.com"},
   "repository": {"type": "git", "url": "http://github.com/SCPR/StreamMachine.git"},
@@ -22,6 +22,7 @@
     "cube": "0.2.0",
 	"haml-coffee": "1.4.1",
 	"less-middleware": "0.1.4",
-	"connect-assets": "2.2.1"
+	"connect-assets": "2.2.1",
+	"ice-stack": "git://github.com/StreamMachine/node-ice-stack.git"
   }
 }

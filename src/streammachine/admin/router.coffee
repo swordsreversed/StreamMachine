@@ -5,13 +5,21 @@ path = require "path"
 module.exports = class Router
     constructor: (opts) ->
         @core = opts?.core
-        @server = express()
-        @server.set "views", __dirname + "/views"
-        @server.set "view engine", "hamlc"
-        @server.engine '.hamlc', require('haml-coffee').__express
+        @server = opts?.server
+        
+        @app = express()
+        @app.set "views", __dirname + "/views"
+        @app.set "view engine", "hamlc"
+        @app.engine '.hamlc', require('haml-coffee').__express
         
         # -- Routing -- #
         
-        @server.get "/", (req,res) =>
-            console.log "sockets is ", @core.sockets.io
+        @app.get "/", (req,res) =>
             res.render "layout", core:@core
+            
+        # -- Socket Requests -- #
+
+        @server.once "io_connected", (@io) =>
+            @io.of("/ADMIN").on "connection", (sock) =>
+                sock.emit "welcome", @core.stream_info()                
+        

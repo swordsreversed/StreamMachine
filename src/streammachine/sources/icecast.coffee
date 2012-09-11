@@ -1,76 +1,37 @@
-{EventEmitter}  = require "events"
-Icecast = require("icecast-stack")
-IcecastClient = require('icecast-stack/client')
-_u = require('underscore')
+_u = require "underscore"
 Parser = require("../parsers/mp3")
+Icecast = require("icecast-stack")
 
-util = require 'util'
-
-module.exports = class ProxyRoom extends require("./base")
+module.exports = class Icecast extends require("./base")
     DefaultOptions:
-        url:     ""
+        foo: "bar"
         
     #----------
     
-    TYPE: -> "Proxy (#{@url})"
+    TYPE: -> "Icecast ()"
+    
     constructor: (@stream,options) ->
         @options = _u.defaults options||{}, @DefaultOptions
-        @url            = @options.url
-        @connected      = false
-        @framesPerSec   = null
         
-        @_in_disconnect = false
-        
-        @emit_duration  = 0.5
-        
-        @_chunk_queue = []
+        @req = @options.req
+        @res = @options.res
         
         @log = @stream.log
         
+        @emit_duration  = 0.5
+    
+        # data is going to start streaming in as data on req. We need to pipe 
+        # it into a parser to turn it into frames, headers, etc
+        
+        @parser = new Parser()
+        @_chunk_queue = []
         @last_header = null
         
-        # connection drop handling
-        # (FIXME: bouncing not yet implemented)
-        @_maxBounces    = 10
-        @_bounces       = 0
-        @_bounceInt     = 5
-        
-        @metaTitle = @options.metaTitle || null
-        @metaURL = @options.metaURL || null
-    
-    #----------
-        
-    connect: ->
-        @log.debug "connecting to #{@url}"
-        @icecast = IcecastClient.createClient @url, "user-agent":"StreamMachine 0.1.0"
-        
-        @icecast.on "close", =>
-            console.log "proxy got close event"
-            unless @_in_disconnect
-                setTimeout ( => @connect() ), 5000
-            
-                @log.debug "Lost connection to #{@url}. Retrying in 5 seconds"
-                @connected = false
-            
-        @icecast.on "metadata", (data) =>
-            unless @_in_disconnect
-                console.log "parsing ", data
-                meta = Icecast.parseMetadata(data)
-            
-                if meta.StreamTitle
-                    @metaTitle = meta.StreamTitle
-            
-                if meta.StreamUrl
-                    @metaURL = meta.StreamUrl
+        console.log "req is ", @req
                 
-                @emit "metadata", StreamTitle:@metaTitle, StreamUrl:@metaURL
-
-        # attach mp3 parser for rewind buffer
-        @parser = new Parser()
-        
         # incoming -> Parser
-        @icecast.on "data", (chunk) => @parser.write chunk
-        
+        @req.on "data", (chunk) => @parser.write chunk
+            
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
             @emit "frame", frame
@@ -117,23 +78,19 @@ module.exports = class ProxyRoom extends require("./base")
                 
             @last_header = data
             @emit "header", data, header
+            
+        @req.on "end", =>
+            @log.debug "Icecast source got end event"
+            # source has gone away
+            @emit "disconnect"
+            @res.end()
 
         # return with success
         @connected = true
-        
-    #----------
-        
-    disconnect: ->
-        @_in_disconnect = true
-        
-        @icecast.removeAllListeners()
-        @parser.removeAllListeners()
-        @removeAllListeners()
-        
-        @icecast.destroy()        
-        
-        @parser = null
-        @icecast = null
-        
-        console.log "Shut down proxy source using #{@url}"
     
+    #----------
+    
+    disconnect: ->
+        @res.end()
+        @connected = false
+        @emit "disconnect"
