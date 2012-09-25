@@ -1,6 +1,6 @@
 {
-	"slave": { "master":"http://localhost:8001?password=zxcasdqwe" },
-	"port":		8010,
+	"slave": { "master":"http://localhost:8020?password=zxcasdqwe" },
+	"port":		8017,
 	"log": {
 		"json": { "file": "/tmp/streamslave.log" }, 
 		"stdout": true,

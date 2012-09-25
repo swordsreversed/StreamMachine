@@ -38,6 +38,7 @@ module.exports = class RewindBuffer
         # -- set up header and frame functions -- #
         
         @dataFunc = (chunk) =>
+            #@stream.log.debug "Rewind data func", length:@buffer.length
             # if we're at max length, shift off a chunk (or more, if needed)
             while @buffer.length > @max
                 @buffer.shift()
@@ -58,9 +59,9 @@ module.exports = class RewindBuffer
             @stream.log.debug "RewindBuffer got source event"
             # -- disconnect from old source -- #
             
-            @source.removeListener "data", @dataFunc if @source
-            
-            console.log "removed data listener"
+            if @source
+                @source.removeListener "data", @dataFunc 
+                @stream.log.debug "removed old rewind data listener"
             
             # -- compute initial stats -- #
                         
@@ -82,7 +83,7 @@ module.exports = class RewindBuffer
                     @max            = Math.round @options.seconds / @secsPerChunk
                     @burst          = Math.round @options.burst / @secsPerChunk
         
-                    console.log "Rewind's max buffer length is ", @max
+                    @stream.log.debug "Rewind's max buffer length is ", max:@max, secsPerChunk:@secsPerChunk
                 
                 # connect our data listener
                 newsource.on "data", @dataFunc
@@ -102,17 +103,17 @@ module.exports = class RewindBuffer
         # we're passed offset in seconds. we'll convert it to frames
         offset = Math.round Number(offset) / @secsPerChunk
         
-        console.log "asked about offset of ", offset
+        @stream.log.debug "asked about offset of ", offset:offset
         
         if offset < 0
-            console.log "offset is invalid! 0 for live."
+            @stream.log.debug "offset is invalid! 0 for live."
             return 0
                     
         if @buffer.length >= offset
-            console.log "Granted. current buffer length is ", @buffer.length
+            @stream.log.debug "Granted. current buffer length is ", length:@buffer.length
             return offset
         else
-            console.log "Not available. Instead giving max buffer of ", @buffer.length - 1
+            @stream.log.debug "Not available. Instead giving max buffer of ", length:@buffer.length - 1
             return @buffer.length - 1
             
     #----------
@@ -144,7 +145,7 @@ module.exports = class RewindBuffer
         pumpLen = 0
         pumpLen += @buffer[ bl - 1 - (offset - i) ].length for i in [1..length]
         
-        console.log "creating buffer of ", pumpLen, offset, length, bl
+        @stream.log.debug "creating buffer of ", pumpLen, offset, length, bl
         
         pumpBuf = new Buffer pumpLen
 

@@ -20,23 +20,24 @@ process.title = "node: StreamMachine"
 
 if nconf.get("master")
     # run as a master...
-    core = new StreamMachine.Master
+    core = new StreamMachine.MasterMode
         listen:         nconf.get("port")
         log:            nconf.get("log")
         master:         nconf.get("master")
         redis:          nconf.get("redis")
         source_port:    nconf.get("source_port")
+        streams:        nconf.get("streams")
     
 else if nconf.get("slave")
     # run as a slave
-    core = new StreamMachine.Slave
+    core = new StreamMachine.SlaveMode
         listen:         nconf.get("port")
         log:            nconf.get("log")
         slave:          nconf.get("slave")
     
 else 
     # run in standalone mode
-    core = new StreamMachine.Standalone
+    core = new StreamMachine.StandaloneMode
         listen:         nconf.get("port")
         log:            nconf.get("log")
         streams:        nconf.get("streams")

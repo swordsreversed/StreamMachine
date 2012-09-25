@@ -24,7 +24,10 @@ module.exports = class Icecast extends require("./base")
         # it into a parser to turn it into frames, headers, etc
         
         @parser = new Parser()
+        
         @_chunk_queue = []
+        @_chunk_queue_ts = null
+        
         @last_header = null
         
         console.log "req is ", @req
@@ -45,6 +48,9 @@ module.exports = class Icecast extends require("./base")
                 frame.copy(fbuf,@last_header.length)
                 @_chunk_queue.push fbuf
                 
+                if !@_chunk_queue_ts
+                    @_chunk_queue_ts = (new Date)
+                
                 if @framesPerSec && ( @_chunk_queue.length / @framesPerSec > @emit_duration )
                     len = 0
                     len += b.length for b in @_chunk_queue
@@ -56,12 +62,15 @@ module.exports = class Icecast extends require("./base")
                     for fb in @_chunk_queue
                         fb.copy(buf,pos)
                         pos += fb.length
+                        
+                    buf_ts = @_chunk_queue_ts
                     
                     # reset chunk array
                     @_chunk_queue.length = 0
+                    @_chunk_queue_ts = (new Date)
                 
                     # emit new buffer
-                    @emit "data", buf
+                    @emit "data", { data:buf, ts:buf_ts }
         
         # we need to grab one frame to compute framesPerSec
         @parser.on "header", (data,header) =>

@@ -5,7 +5,7 @@ path = require "path"
 module.exports = class Router
     constructor: (opts) ->
         @core = opts?.core
-        @server = opts?.server
+        @port = opts?.port
         
         @app = express()
         @app.set "views", __dirname + "/views"
@@ -18,8 +18,23 @@ module.exports = class Router
             res.render "layout", core:@core
             
         # -- Socket Requests -- #
+        
+        
 
         @server.once "io_connected", (@io) =>
             @io.of("/ADMIN").on "connection", (sock) =>
-                sock.emit "welcome", @core.stream_info()                
+                sock.emit "welcome", @core.stream_info()
+        
+                
+###
+API:
+
+/streams
+-- Get stream information (is source connected, etc)
+
+/streams/(stream)
+-- Get detailed information on one stream
+
+/streams/(stream)/promote
+###                
         

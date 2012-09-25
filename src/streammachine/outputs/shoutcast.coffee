@@ -8,6 +8,8 @@ module.exports = class Shoutcast
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
         @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+        
+        console.log "new connection with ", @stream
                 
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
@@ -17,7 +19,7 @@ module.exports = class Shoutcast
             
             # convert this into an icecast response
             @res = new icecast.IcecastWriteStack @res, @stream.options.meta_interval
-            @res.queueMetadata StreamTitle:@stream.source.metaTitle, StreamUrl:@stream.source.metaURL
+            @res.queueMetadata StreamTitle:@stream.metaTitle, StreamUrl:@stream.metaURL
         
             headers = 
                 "Content-Type":         "audio/mpeg"

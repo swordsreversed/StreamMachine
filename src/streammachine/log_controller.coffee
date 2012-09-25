@@ -102,6 +102,8 @@ module.exports = class LogController
                     
                     @parent[k].apply @, args
                     
+            @child = (opts={}) -> new LogController.Child(@parent,_u.extend(@opts,opts))
+                    
     #----------
     
     class @W3CLogger extends winston.Transport

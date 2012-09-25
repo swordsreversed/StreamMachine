@@ -5,16 +5,20 @@ fs = require 'fs'
 path = require 'path'
 
 module.exports = class Server extends require('events').EventEmitter
-    constructor: (@core) ->
+    DefaultOptions:
+        core:           null
+        slave_mode:     false
+        mount_admin:    true
+    
+    constructor: (opts) ->
+        @opts = _u.defaults opts||{}, @DefaultOptions
+        
+        @core = @opts.core
         
         @server = express()
         @server.httpAllowHalfOpen = true
         @server.useChunkedEncodingByDefault = false
-        @server.use require('connect-assets')()
-
-        @admin = new (require "./admin/router") core:@core, server:@        
-        @server.use "/admin", @admin.app
-                
+                                    
         @server.use (req,res,next) => @streamRouter(req,res,next)
         
     #----------
