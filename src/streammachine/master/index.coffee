@@ -95,7 +95,7 @@ module.exports = class Master extends require("events").EventEmitter
                 # attach event handler for log reporting
                 socklogger = @log.child slave:sock.handshake.address.address
                 sock.on "log", (obj = {}) => 
-                    socklogger[obj.level||debug].apply socklogger, [obj.msg||"",obj.meta||{}]
+                    socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
                 
             # attach disconnect handler
             @io.on "disconnect", (sock) =>
@@ -158,8 +158,14 @@ module.exports = class Master extends require("events").EventEmitter
             @dataFunc = (chunk) => 
                 for s in @master.slaves
                     s.emit "streamdata:#{@key}", chunk
+                    
+            @metaFunc = (chunk) =>
+                for s in @master.slaves
+                    s.emit "streammeta:#{@key}", chunk
             
             @stream.on "data", @dataFunc
+            @stream.on "metadata", @metaFunc
             
         destroy: ->
             @stream.removeListener "data", @dataFunc
+            @stream.removeListener "metadata", @dataFunc

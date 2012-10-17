@@ -9,8 +9,6 @@ module.exports = class Shoutcast
         @reqPath    = req.url
         @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
         
-        console.log "new connection with ", @stream
-                
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
         process.nextTick =>     

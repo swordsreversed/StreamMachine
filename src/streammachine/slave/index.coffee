@@ -37,7 +37,7 @@ module.exports = class Slave extends require("events").EventEmitter
             @master.on "connect", =>
                 # connect up our logging proxy
                 @log.debug "Connected to master."
-                @log.proxyToMaster @socket
+                @log.proxyToMaster @master
             
             @master.on "config", (config) =>
                 console.log "got config of ", config
@@ -141,9 +141,8 @@ module.exports = class Slave extends require("events").EventEmitter
             
             @log.debug "created SocketSource for #{@key}"
             
-            @master.on "streamdata:#{@key}", (chunk) => @emit "data", chunk
-            #@io.on "metadata",  (chunk) => @emit 'metadata', chunk
-            #@io.on "header",    (chunk) => @emit "header", chunk
+            @master.on "streamdata:#{@key}",    (chunk) => @emit "data", chunk
+            @master.on "streammeta:#{@key}",    (chunk) => @emit 'metadata', chunk
             
         disconnect: ->
             console.log "SocketSource disconnect for #{key} called"
