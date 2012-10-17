@@ -18,6 +18,7 @@ module.exports = class Master extends require("events").EventEmitter
         
         @slaves = []
         @streams = {}
+        @proxies = {}
         
         # -- set up logging -- #
         
@@ -63,13 +64,16 @@ module.exports = class Master extends require("events").EventEmitter
             # fire up a socket listener on our slave port
             @io = require("socket.io").listen @options.master.port
             
-            console.log "io is ", @io
-            
+            @_initIOProxies()
+                        
             # FIXME: disconnect from our port on SIGTERM
             # process.on "SIGTERM", => @io.close()
             
             # add our authentication
             @io.configure =>
+                # don't bombard us with stream data
+                @io.disable "log"
+                
                 @io.set "authorization", (data,cb) =>
                     @log.debug "In authorization for slave connection."
                     # look for password                    
@@ -109,7 +113,7 @@ module.exports = class Master extends require("events").EventEmitter
         
         # are any of our current streams missing from the new options? if so, 
         # disconnect them
-        for k,obj in @streams
+        for k,obj of @streams
             @log.debug "calling destroy on ", k
             obj.destroy() unless options?[k]
             @streams.delete k
@@ -125,15 +129,37 @@ module.exports = class Master extends require("events").EventEmitter
             else
                 @log.debug "Starting up master stream: #{key}", opts:opts
                 @streams[key] = new Stream @, key, @log.child(stream:key), opts 
-                @attachIOProxy @streams[key] if @io?
+                
+        @_initIOProxies()
                 
         @emit "streams", @streams
     
     #----------
+    
+    _initIOProxies: ->
+        return false if !@io
         
-    attachIOProxy: (stream) ->
-        ns = @io.of "stream:#{stream.key}"
+        # any to add?
+        for k,obj of @streams
+            @proxies[k] = new Master.StreamProxy key:k, stream:obj, master:@
+            
+        # any to remove?
+        for k,obj of @proxies
+            @proxies[k].destroy if !@streams[k]
         
-        stream.on "data", (chunk) => ns.emit "data", chunk
-        stream.on "metadata", (chunk) => ns.emit "metadata", chunk
-        stream.on "header", (chunk) => ns.emit "header", chunk
+    #----------
+        
+    class @StreamProxy extends require("events").EventEmitter
+        constructor: (opts) ->
+            @key = opts.key
+            @stream = opts.stream
+            @master = opts.master
+                        
+            @dataFunc = (chunk) => 
+                for s in @master.slaves
+                    s.emit "streamdata:#{@key}", chunk
+            
+            @stream.on "data", @dataFunc
+            
+        destroy: ->
+            @stream.removeListener "data", @dataFunc

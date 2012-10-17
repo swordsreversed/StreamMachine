@@ -107,7 +107,7 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers
-        for key,opts of options
+        for key,opts of options?.streams
             console.log "stream for #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
@@ -115,10 +115,12 @@ module.exports = class Slave extends require("events").EventEmitter
                 @streams[key].configure opts
             else
                 @log.debug "Starting up source: #{key}", opts:opts
-                @streams[key] = new Stream @, key, @log.child(stream:key), opts
+                
+                slog = @log.child stream:key
+                @streams[key] = new Stream @, key, slog, opts
                 
                 if @master
-                    source = new Slave.SocketSource master:@master, key:key
+                    source = new Slave.SocketSource master:@master, key:key, log:slog
                     @streams[key].useSource(source)
                 
             # should this stream accept requests to /?
@@ -129,16 +131,19 @@ module.exports = class Slave extends require("events").EventEmitter
     
     # emulate a source connection, receiving data via sockets from our master server
                 
-    class @SocketSource
+    class @SocketSource extends require("events").EventEmitter
         constructor: (opts) ->
             @master = opts.master
             @key = opts.key
+            @log = opts.log
             
-            @io = @master.of "stream:#{@key}"
+            #@io = @master.of "stream:#{@key}"
             
-            @io.on 'data',      (chunk) => @emit "data", chunk
-            @io.on "metadata",  (chunk) => @emit 'metadata', chunk
-            @io.on "header",    (chunk) => @emit "header", chunk
+            @log.debug "created SocketSource for #{@key}"
+            
+            @master.on "streamdata:#{@key}", (chunk) => @emit "data", chunk
+            #@io.on "metadata",  (chunk) => @emit 'metadata', chunk
+            #@io.on "header",    (chunk) => @emit "header", chunk
             
         disconnect: ->
             console.log "SocketSource disconnect for #{key} called"
