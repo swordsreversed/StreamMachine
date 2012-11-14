@@ -53,6 +53,24 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # start up the socket manager on the listener
         #@sockets = new @Outputs.sockets server:@server.server, core:@
+        
+        # -- Listener Counts -- #
+        
+        # once each minute, count all listeners and send them on to the master
+        
+        @_listeners_interval = setInterval =>
+            counts = {}
+            total = 0
+            
+            for k,s of @streams
+                l = s.listeners()
+                counts[k] = l
+                total += l
+
+            @log.debug "sending listeners: #{total}", counts
+            @master?.emit "listeners", counts:counts, total:total
+
+        , 30 * 1000
                             
         # -- Graceful Shutdown -- #
         

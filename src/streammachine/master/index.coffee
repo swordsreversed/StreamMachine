@@ -20,6 +20,8 @@ module.exports = class Master extends require("events").EventEmitter
         @streams = {}
         @proxies = {}
         
+        @listeners = slaves:{}, streams:{}, total:0
+        
         # -- set up logging -- #
         
         @log = @options.logger
@@ -96,6 +98,12 @@ module.exports = class Master extends require("events").EventEmitter
                 socklogger = @log.child slave:sock.handshake.address.address
                 sock.on "log", (obj = {}) => 
                     socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
+                    
+                # look for listener counts
+                sock.on "listeners", (obj = {}) =>
+                    @log.debug "slave #{sock.id} sent #{obj.total} listeners"
+                    @listeners.slaves[ sock.id ] = obj.total
+                    
                 
             # attach disconnect handler
             @io.on "disconnect", (sock) =>

@@ -53,7 +53,7 @@ module.exports = class Stream extends require('events').EventEmitter
         key:        @key
         status:     @STATUS
         sources:    []
-        listeners:  @countListeners()
+        listeners:  @listeners()
         options:    @options
         
     #----------
@@ -130,7 +130,7 @@ module.exports = class Stream extends require('events').EventEmitter
         
     #----------
     
-    countListeners: ->
+    listeners: ->
         _u(@_lmeta).keys().length
         
     #----------
