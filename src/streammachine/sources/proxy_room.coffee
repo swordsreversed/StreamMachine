@@ -39,6 +39,13 @@ module.exports = class ProxyRoom extends require("./base")
         @metaURL = @options.metaURL || null
     
     #----------
+    
+    info: ->
+        source:     @TYPE?() ? @TYPE
+        connected:  @connected
+        url:        @url
+    
+    #----------
         
     connect: ->
         @log.debug "connecting to #{@url}"

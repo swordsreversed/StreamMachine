@@ -99,6 +99,13 @@ module.exports = class Icecast extends require("./base")
     
     #----------
     
+    info: ->
+        source:     @TYPE?() ? @TYPE
+        connected:  @connected
+        url:        [@req.connection.remoteAddress,@req.connection.remotePort].join(":")
+    
+    #----------
+    
     disconnect: ->
         @res.end()
         @connected = false

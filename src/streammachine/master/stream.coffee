@@ -35,7 +35,32 @@ module.exports = class Stream extends require('events').EventEmitter
                     @log.debug "Source connected."
                 else
                     @log.error "Source connection failed."
+                    
+        # -- Listener Tracking -- #
+        
+        # We track listener counts from each slave. They get reported by 
+        # the slave to the master, which then calls recordSlaveListeners 
+        # to record them here.
+        
+        # We need to also get rid of old counts from a slave that goes 
+        # offline, though, so we attach an interval function to remove 
+        # numbers that haven't been updated in the last two minutes.
+        
+        @_listeners = {}
+        
+        setInterval =>
+            now = Number(new Date)
+            for s,c of @_listeners
+                delete @_listeners[s] if now - (120 * 1000) > c.last_at||0
+        , 60 * 1000
 
+    #----------
+    
+    status: ->
+        stream:     @key
+        listeners:  @listeners()
+        sources:    ( s.info() for s in @sources )
+    
     #----------
     
     addSource: (source,cb) ->
@@ -119,6 +144,25 @@ module.exports = class Stream extends require('events').EventEmitter
     
     configure: (opts) ->
         # there's not currently any configuration done here on the master side
+        
+    #----------
+    
+    listeners: ->
+        total = 0
+        total += c.count for s,c of @_listeners
+        total
+        
+    listenersBySlave: ->
+        @_listeners
+    
+    #----------
+    
+    recordSlaveListeners: (slave,count) ->
+        if !@_listeners[slave]
+            @_listeners[slave] = count:0, last_at:null
+            
+        @_listeners[slave].count = count
+        @_listeners[slave].last_at = Number(new Date)
     
     #----------
         

@@ -12,20 +12,42 @@ module.exports = class Router
         @app.set "view engine", "hamlc"
         @app.engine '.hamlc', require('haml-coffee').__express
         
-        # -- Routing -- #
+        # -- Param Handlers -- #
         
+        @app.param "stream", (req,res,next,key) =>
+            # make sure it's a valid stream key
+            if key? && s = @core.streams[ key ]
+                req.stream = s
+                next()
+            else
+                res.status(404).end "Invalid stream.\n"
+                
+        # -- options support for CORS -- #
+        
+        corsFunc = (req,res,next) =>
+          res.header('Access-Control-Allow-Origin', '*');
+          res.header('Access-Control-Allow-Credentials', true); 
+          res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+          res.header('Access-Control-Allow-Headers', 'Content-Type'); 
+          next()
+        
+        @app.use corsFunc
+      
+        @app.options "*", (req,res) =>
+            res.status(200).end ""
+            
+        # -- Routing -- #
+                
         @app.get "/", (req,res) =>
             res.render "layout", core:@core
             
-        # -- Socket Requests -- #
-        
-        
-
-        @server.once "io_connected", (@io) =>
-            @io.of("/ADMIN").on "connection", (sock) =>
-                sock.emit "welcome", @core.stream_info()
-        
-                
+        @app.get "/api/streams", (req,res) =>
+            # return JSON version of the status for all streams
+            res.status(200).end JSON.stringify @core.streamsInfo()
+            
+        @app.get "/api/streams/:stream", (req,res) =>
+            
+        @server = @app.listen @port
 ###
 API:
 

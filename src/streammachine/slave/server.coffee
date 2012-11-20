@@ -86,12 +86,12 @@ module.exports = class Server extends require('events').EventEmitter
             return true
         
         # -- Stream Routing -- #
-    
+        
         # does the request match one of our streams?
         if m = ///^\/(#{_u(@core.streams).keys().join("|")})(?:\.(mp3|pls))?///.exec req.url     
             res.header("X-Powered-By","StreamMachine")
         
-            console.log "match is ", m[1]
+            console.log "match is ", m
             stream = @core.streams[ m[1] ]
         
             # fend off any HEAD requests

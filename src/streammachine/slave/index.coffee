@@ -56,7 +56,7 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # -- Listener Counts -- #
         
-        # once each minute, count all listeners and send them on to the master
+        # once every 30 seconds, count all listeners and send them on to the master
         
         @_listeners_interval = setInterval =>
             counts = {}

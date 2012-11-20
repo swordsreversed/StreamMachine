@@ -53,7 +53,7 @@ module.exports = class Master extends require("events").EventEmitter
                 
         # -- create a server to provide the admin -- #
         
-        #@server = new Admin core:@, port:( @options.master?.port || @options.port )
+        @server = new Admin core:@, port:( @options.master?.port || @options.port )
         
         # -- start the source listener -- #
             
@@ -64,7 +64,7 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.master?.port && @options.master?.password
             @log.debug "Master listening to port ", port:@options.master.port
             # fire up a socket listener on our slave port
-            @io = require("socket.io").listen @options.master.port
+            @io = require("socket.io").listen @server?.server || @options.master.port
             
             @_initIOProxies()
                         
@@ -103,7 +103,8 @@ module.exports = class Master extends require("events").EventEmitter
                 sock.on "listeners", (obj = {}) =>
                     @log.debug "slave #{sock.id} sent #{obj.total} listeners"
                     @listeners.slaves[ sock.id ] = obj.total
-                    
+                    for k,c of obj.counts
+                        @streams[k]?.recordSlaveListeners sock.id, c
                 
             # attach disconnect handler
             @io.on "disconnect", (sock) =>
@@ -141,6 +142,11 @@ module.exports = class Master extends require("events").EventEmitter
         @_initIOProxies()
                 
         @emit "streams", @streams
+        
+    #----------
+    
+    streamsInfo: ->
+        obj.status() for k,obj of @streams
     
     #----------
     
