@@ -1,9 +1,16 @@
 _u = require "underscore"
+uuid = require "node-uuid"
 
 Rewind = require('../rewind_buffer')
 Proxy = require('../sources/proxy_room')
 
 # Master streams are about source management. 
+
+# Events:
+# * source: emits when a source is promoted to active
+# * add_source: emits when a source is added to the source list, but not made active
+# * disconnect: emits when a source disconnects. `active` boolean indicates whether 
+#   this was the live source. `count` integer indicates remaining sources
 
 module.exports = class Stream extends require('events').EventEmitter
     constructor: (@core,@key,@log,@opts)->
@@ -30,7 +37,7 @@ module.exports = class Stream extends require('events').EventEmitter
             console.log "Connecting initial source"
             newsource = new Proxy @, opts.source
             newsource.connect()
-            @useSource newsource, (result) =>
+            @addSource newsource, (result) =>
                 if result
                     @log.debug "Source connected."
                 else
@@ -56,14 +63,24 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
     
-    status: ->
-        stream:     @key
-        listeners:  @listeners()
-        sources:    ( s.info() for s in @sources )
+    status: (detailed=false)->
+        if detailed
+            stream:             @key
+            sources:            ( s.info() for s in @sources )
+            listeners:          @listeners()
+            listeners_by_slave: @listenersBySlave()            
+            
+        else
+            stream:     @key
+            listeners:  @listeners()
+            sources:    ( s.info() for s in @sources )
     
     #----------
     
     addSource: (source,cb) ->
+        # set the source's UUID
+        source.setUUID uuid.v4()
+        
         # add a disconnect monitor
         source.once "disconnect", =>
             # was this our current source?
@@ -71,17 +88,20 @@ module.exports = class Stream extends require('events').EventEmitter
                 # yes...  need to promote the next one (if there is one)
                 if @sources.length > 1
                     @sources = _u(@sources).without @source
-                    @useSource @sources[0]
+                    @useSource @sources[0]                    
+                    @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
                     @log.debug "Source disconnected. None remaining."
+                    @emit "disconnect", active:true, count:0, source:@source
             else
                 # no... just remove it from the list
                 @sources = _u(@sources).without @source
+                @emit "disconnect", active:false, count:@sources.length, source:@source
         
         # check whether this source should be made active. It should be if 
         # the active source is defined as a fallback
         
-        if @sources[0]?.options.fallback || !@sources[0]
+        if !@sources[0] || @sources[0]?.options.fallback
             # go to the front
             @log.debug "Promoting new source to replace fallback."
             @useSource source, cb
@@ -140,6 +160,26 @@ module.exports = class Stream extends require('events').EventEmitter
             # give the a-ok to the callback
             cb?(true)
             
+    #----------
+    
+    promoteSource: (uuid,cb) ->
+        # do we have a source with this UUID?
+        if ns = _u(@sources).find( (s) => s.uuid == uuid )
+            # we do... 
+            # make sure it isn't already the active source, though
+            if ns == @sources[0]
+                # it is.  nothing to be done.
+                cb? "Source is already active"
+            else
+                # it isn't. we can try to promote it
+                @useSource ns, (status) =>
+                    if status
+                        cb? null, msg:"Promoted source to active.", uuid:uuid
+                    else
+                        cb? "Source promotion hit five second timeout."
+        else
+            cb? "Unable to find a source with that UUID on #{@key}"
+    
     #----------
     
     configure: (opts) ->

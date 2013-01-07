@@ -15,6 +15,9 @@ module.exports = class ProxyRoom extends require("./base")
     TYPE: -> "Proxy (#{@url})"
     constructor: (@stream,options) ->
         @options = _u.defaults options||{}, @DefaultOptions
+        
+        super()
+        
         @url            = @options.url
         @connected      = false
         @framesPerSec   = null
@@ -44,6 +47,8 @@ module.exports = class ProxyRoom extends require("./base")
         source:     @TYPE?() ? @TYPE
         connected:  @connected
         url:        @url
+        stream_key: @stream_key
+        uuid:       @uuid
     
     #----------
         

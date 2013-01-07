@@ -30,7 +30,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
                     res.writeHead 200, headers
                     
                     # now create a new source
-                    source = new @core.Sources.icecast stream, req:req,res:res
+                    source = new (require "../sources/icecast") stream, req:req,res:res
                     stream.addSource source
                 else
                     res.writeHead 401, headers
@@ -55,7 +55,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
             console.log "type/value is ", type, user, pass
             
-            if pass == stream.options.source_password
+            if pass == stream.opts.source_password
                 true
             else
                 false

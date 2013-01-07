@@ -13,6 +13,8 @@ module.exports = class Icecast extends require("./base")
     constructor: (@stream,options) ->
         @options = _u.defaults options||{}, @DefaultOptions
         
+        super()
+        
         @req = @options.req
         @res = @options.res
         
@@ -70,7 +72,9 @@ module.exports = class Icecast extends require("./base")
                     @_chunk_queue_ts = (new Date)
                 
                     # emit new buffer
-                    @emit "data", { data:buf, ts:buf_ts }
+                    @log.debug "emit with #{buf.length}"
+                    @emit "data", buf
+                    #@emit "data", { data:buf, ts:buf_ts }
         
         # we need to grab one frame to compute framesPerSec
         @parser.on "header", (data,header) =>
@@ -100,9 +104,13 @@ module.exports = class Icecast extends require("./base")
     #----------
     
     info: ->
+        console.log "ice res is ", @res
+        
         source:     @TYPE?() ? @TYPE
         connected:  @connected
-        url:        [@req.connection.remoteAddress,@req.connection.remotePort].join(":")
+        url:        "INVALID" #[@req.connection.remoteAddress,@req.connection.remotePort].join(":")
+        stream_key: @stream_key
+        uuid:       @uuid
     
     #----------
     

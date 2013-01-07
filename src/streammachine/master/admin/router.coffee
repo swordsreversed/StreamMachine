@@ -45,7 +45,29 @@ module.exports = class Router
             # return JSON version of the status for all streams
             res.status(200).end JSON.stringify @core.streamsInfo()
             
+        @app.post "/api/streams", (req,res) =>
+            # add a new stream
+            
+            # TODO... this needs to trigger an update that writes into Redis
+            
         @app.get "/api/streams/:stream", (req,res) =>
+            # get detailed stream information
+            res.status(200).end JSON.stringify req.stream.status(true)
+            
+        @app.post "/api/streams/:stream/promote", (req,res) =>
+            # promote a stream source to active
+            # We'll just pass on the UUID and leave any logic to the stream
+            req.stream.promoteSource req.query.uuid, (err,msg) =>
+                if err
+                    res.status(200).end JSON.stringify error:err
+                else
+                    res.status(200).end JSON.stringify msg
+            
+        @app.post "/api/streams/:stream/drop", (req,res) =>
+            # drop a stream source
+            
+        @app.delete "/api/streams/:stream", (req,res) =>
+            # delete a stream
             
         @server = @app.listen @port
 ###
