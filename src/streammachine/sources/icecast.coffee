@@ -72,7 +72,6 @@ module.exports = class Icecast extends require("./base")
                     @_chunk_queue_ts = (new Date)
                 
                     # emit new buffer
-                    @log.debug "emit with #{buf.length}"
                     @emit "data", buf
                     #@emit "data", { data:buf, ts:buf_ts }
         
@@ -91,8 +90,15 @@ module.exports = class Icecast extends require("./base")
                 
             @last_header = data
             @emit "header", data, header
+        
+        @req.on "close", =>
+            @connected = false
+            @log.debug "Icecast source got close event"
+            @emit "disconnect"
+            @res.end()
             
         @req.on "end", =>
+            @connected = false
             @log.debug "Icecast source got end event"
             # source has gone away
             @emit "disconnect"
