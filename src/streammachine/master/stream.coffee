@@ -83,11 +83,13 @@ module.exports = class Stream extends require('events').EventEmitter
         
         # add a disconnect monitor
         source.once "disconnect", =>
+            # remove it from the list
+            @sources = _u(@sources).without @source
+            
             # was this our current source?
-            if @sources[0] == source
+            if @source == source
                 # yes...  need to promote the next one (if there is one)
-                if @sources.length > 1
-                    @sources = _u(@sources).without @source
+                if @sources.length > 0
                     @useSource @sources[0]                    
                     @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
@@ -95,7 +97,6 @@ module.exports = class Stream extends require('events').EventEmitter
                     @emit "disconnect", active:true, count:0, source:@source
             else
                 # no... just remove it from the list
-                @sources = _u(@sources).without @source
                 @emit "disconnect", active:false, count:@sources.length, source:@source
         
         # check whether this source should be made active. It should be if 

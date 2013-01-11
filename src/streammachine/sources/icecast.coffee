@@ -31,9 +31,7 @@ module.exports = class Icecast extends require("./base")
         @_chunk_queue_ts = null
         
         @last_header = null
-        
-        console.log "req is ", @req
-                
+                        
         # incoming -> Parser
         @req.on "data", (chunk) => @parser.write chunk
             
@@ -86,7 +84,7 @@ module.exports = class Icecast extends require("./base")
                 
                 # -- compute stream key -- #
                 
-                @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName == "Stereo" then "s" else "m")].join("-")
+                @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
                 
             @last_header = data
             @emit "header", data, header
@@ -110,8 +108,6 @@ module.exports = class Icecast extends require("./base")
     #----------
     
     info: ->
-        console.log "ice res is ", @res
-        
         source:     @TYPE?() ? @TYPE
         connected:  @connected
         url:        "INVALID" #[@req.connection.remoteAddress,@req.connection.remotePort].join(":")
