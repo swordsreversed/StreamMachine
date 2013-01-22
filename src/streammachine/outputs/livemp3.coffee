@@ -7,6 +7,7 @@ module.exports = class LiveMP3
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
         @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+        @offset     = @req.param("offset") || -1
 
         process.nextTick =>
             @res.chunkedEncoding = false
@@ -36,20 +37,13 @@ module.exports = class LiveMP3
         
     #----------
     
-    connectToStream: ->
-        unless @req.connection.destroyed
-            # -- pump 30 seconds from the rewind buffer -- #
-            @res.write @stream.rewind.pumpSeconds(30) if @stream.rewind
-        
-            # -- register our listener -- #
-            @id = @stream.registerListener @, data:@dataFunc
-        
-    #----------
-    
     disconnect: (force=false) ->
         if force || @req.connection.destroyed
-            if @id
-                @stream.closeListener @id 
-                @id = null
-            
+            @source?.disconnect()            
             @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)
+    
+    #----------
+    
+    connectToStream: ->
+        unless @req.connection.destroyed
+            @source = @stream.listen @, offset:@offset, pump:true, on_data:@dataFunc
