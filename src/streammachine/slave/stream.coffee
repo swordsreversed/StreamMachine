@@ -5,19 +5,25 @@ Rewind = require "../rewind_buffer"
 
 # Streams are the endpoints that listeners connect to. 
 
-module.exports = class Stream extends require('events').EventEmitter
+module.exports = class Stream extends require('../rewind_buffer')
     DefaultOptions:
         meta_interval:  32768
         max_buffer:     4194304 # 4 megabits (64 seconds of 64k audio)
         name:           ""
+        seconds:        (60*60*4) # 4 hours
+        burst:          30
         
     constructor: (@core,@key,@log,opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
         
+        @STATUS = "Initializing"
+
+        # initialize RewindBuffer
+        super()
+        
         @metaTitle  = ""
         @metaURL    = ""
         
-        @STATUS = "Initializing"
         
         # remove our max listener count
         @setMaxListeners 0
@@ -28,7 +34,7 @@ module.exports = class Stream extends require('events').EventEmitter
         @preroll = null
         @mlog_timer = null
 
-        @dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta
+        #@dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta
 
         @metaFunc = (chunk) => 
             (l.meta(chunk) if l.meta) for id,l of @_lmeta
@@ -38,7 +44,7 @@ module.exports = class Stream extends require('events').EventEmitter
                 @streamURL      = chunk.streamURL
                 
         @on "source", =>
-            @source.on "data", @dataFunc
+            #@source.on "data", @dataFunc
             @source.on "meta", @metaFunc
         
         # now run configure...
@@ -50,11 +56,12 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
     
     info: ->
-        key:        @key
-        status:     @STATUS
-        sources:    []
-        listeners:  @listeners()
-        options:    @options
+        key:            @key
+        status:         @STATUS
+        sources:        []
+        listeners:      @listeners()
+        options:        @options
+        bufferedSecs:   @bufferedSecs()
         
     #----------
     
@@ -134,33 +141,27 @@ module.exports = class Stream extends require('events').EventEmitter
         _u(@_lmeta).keys().length
         
     #----------
-            
-    registerListener: (listen,handlers) ->
+    
+    listen: (obj,opts) ->
         # generate a metadata hash
         lmeta = 
             id:         @_id_increment++
-            obj:        listen
+            obj:        obj
             startTime:  (new Date) 
             minuteTime: (new Date)
-            
-        for k in ['data','meta']
-            lmeta[ k ] = handlers[ k ] if handlers[ k ]
-            
-        # stash it...
-        @_lmeta[ lmeta.id ] = lmeta
-            
-        console.log "in registerListener for ", lmeta.id
-        debugger;
-            
-        # log the connection start
-        @log.debug "Connection start", req:listen.req, listeners:_u(@_lmeta).keys().length
-                
-        # return the id
-        lmeta.id
         
+        # get a rewinder (handles the actual broadcast)
+        lmeta.rewind = @getRewinder lmeta.id, opts
+        
+        # stash the object
+        @_lmeta[ lmeta.id ] = lmeta
+        
+        # return the rewinder (so that they can change offsets, etc)
+        lmeta.rewind
+    
     #----------
             
-    closeListener: (id) ->
+    disconnectListener: (id) ->
         console.log "in closeListener for ", id
         
         lmeta = @_lmeta[id]
@@ -188,5 +189,3 @@ module.exports = class Stream extends require('events').EventEmitter
                 ua:         lmeta.obj.reqUA
         
             true
-        else
-            console.log "Unable to find metadata for request ", id

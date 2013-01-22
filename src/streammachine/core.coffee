@@ -48,7 +48,7 @@ module.exports = class Core
             @slave  = new Slave _u.extend opts, logger:@log.child(mode:"slave")
                         
             @master.on "config", (streams) =>
-                console.log "calling configureStreams on slave"
+                console.log "calling configureStreams on slave with ", streams
                 @slave.configureStreams streams
             
             # proxy data events from master -> slave

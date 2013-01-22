@@ -112,7 +112,7 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
            
     configureStreams: (options) ->
-        @log.debug "In configure with ", options:options
+        @log.debug "In slave configureStreams with ", options:options
 
         # -- Sources -- #
         
@@ -125,8 +125,8 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers
-        for key,opts of options?.streams
-            console.log "stream for #{key}"
+        for key,opts of options
+            console.log "Slave stream for #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
                 @log.debug "Passing updated config to source: #{key}", opts:opts

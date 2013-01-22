@@ -2,12 +2,13 @@ _u = require 'underscore'
 icecast = require("icecast-stack")
 
 module.exports = class Shoutcast
-    constructor: (@stream,@req,@res) ->
+    constructor: (@stream,@req,@res,@opts) ->
         @id = null
-                
+                        
         @reqIP      = req.connection.remoteAddress
         @reqPath    = req.url
         @reqUA      = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+        @offset     = @req.param("offset") || -1
         
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
@@ -36,7 +37,7 @@ module.exports = class Shoutcast
             # -- send a preroll if we have one -- #
         
             if @stream.preroll && !@req.param("preskip")
-                @stream.log.debug "making preroll request", stream:@stream.key
+                @stream.log.debug "making preroll request"
                 @stream.preroll.pump @res, => @connectToStream()
             else
                 @connectToStream()       
@@ -54,21 +55,14 @@ module.exports = class Shoutcast
     
     disconnect: (force=false) ->
         if force || @req.connection.destroyed
-            if @id
-                @stream.closeListener @id
-                @id = null
-            
+            @source?.disconnect()            
             @res?.end() unless (@res.stream?.connection?.destroyed || @res.connection?.destroyed)
     
     #----------
     
     connectToStream: ->
         unless @req.connection.destroyed
-            # -- pump 30 seconds from the rewind buffer -- #
-            @res.write @stream.rewind.pumpSeconds(30)||(new Buffer(0)) if @stream.rewind
-        
-            # -- register our listener -- #
-            @id = @stream.registerListener @, data:@dataFunc, meta:@metaFunc
+            @source = @stream.listen @, offset:@offset, pump:true, on_data:@dataFunc, on_meta:@metaFunc
         
     #----------
             

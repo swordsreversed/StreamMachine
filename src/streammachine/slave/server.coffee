@@ -123,10 +123,6 @@ module.exports = class Server extends require('events').EventEmitter
                 # socket listener
                 @core.sockets.addListener stream,req,res
                 
-            else if req.param("off")
-                # rewind to a starting offset
-                new @core.Rewind.Listener stream, req, res, Number(req.param("off"))
-                
             else if req.param("pump")
                 # pump listener pushes from the buffer as fast as possible
                 new @core.Outputs.pumper stream, req, res

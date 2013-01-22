@@ -1,7 +1,7 @@
 _u = require "underscore"
 uuid = require "node-uuid"
 
-Rewind = require('../rewind_buffer')
+#Rewind = require('../rewind_buffer')
 Proxy = require('../sources/proxy_room')
 
 # Master streams are about source management. 
@@ -22,7 +22,7 @@ module.exports = class Stream extends require('events').EventEmitter
         @STATUS = "Initializing"
         
         # set up a rewind buffer
-        @rewind = new Rewind @, @opts.rewind
+        #@rewind = new Rewind @, @opts.rewind
         
         @metaFunc = (meta) => @emit "metadata", meta
         @dataFunc = (data) => @emit "data", data

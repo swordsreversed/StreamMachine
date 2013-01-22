@@ -110,7 +110,7 @@ module.exports = class Icecast extends require("./base")
     info: ->
         source:     @TYPE?() ? @TYPE
         connected:  @connected
-        url:        "INVALID" #[@req.connection.remoteAddress,@req.connection.remotePort].join(":")
+        url:        "UNKNOWN" #[@req.connection.remoteAddress,@req.connection.remotePort].join(":")
         stream_key: @stream_key
         uuid:       @uuid
     
