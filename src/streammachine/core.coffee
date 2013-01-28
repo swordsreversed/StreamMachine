@@ -50,6 +50,7 @@ module.exports = class Core
             @master.on "config", (streams) =>
                 console.log "calling configureStreams on slave with ", streams
                 @slave.configureStreams streams
+                @slave._onConnect()
             
             # proxy data events from master -> slave
             @master.on "streams", (streams) =>

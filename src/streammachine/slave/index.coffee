@@ -147,9 +147,11 @@ module.exports = class Slave extends require("events").EventEmitter
             @_retrying = null
         
         @connected = true
-        # connect up our logging proxy
-        @log.debug "Connected to master."
-        @log.proxyToMaster @master
+        
+        if @master
+            # connect up our logging proxy
+            @log.debug "Connected to master."
+            @log.proxyToMaster @master
         
         # start listening
         @server.listen @options.listen
