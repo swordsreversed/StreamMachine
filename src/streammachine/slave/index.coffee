@@ -4,6 +4,8 @@ Logger = require "../log_controller"
 Stream = require "./stream"
 Server = require "./server"
 
+Socket = require "socket.io-client"
+
 module.exports = class Slave extends require("events").EventEmitter
     DefaultOptions:
         foo: "bar"
@@ -20,6 +22,16 @@ module.exports = class Slave extends require("events").EventEmitter
         
         @streams = {}
         @root_route = null
+        
+        @connected = false
+        
+        @_retrying = null
+        @_retryConnection = =>
+            @log.debug "Failed to connect to master. Trying again in 5 seconds."
+            @_retrying = setTimeout =>
+                @log.debug "Retrying connection to master."
+                @_connectMaster()
+            , 5000
             
         # -- Set up logging -- #
         
@@ -32,22 +44,13 @@ module.exports = class Slave extends require("events").EventEmitter
             
             @log.debug "Connecting to master at ", master:@options.slave.master
             
-            @master = require('socket.io-client').connect @options.slave.master
-            
-            @master.on "connect", =>
-                # connect up our logging proxy
-                @log.debug "Connected to master."
-                @log.proxyToMaster @master
-            
-            @master.on "config", (config) =>
-                console.log "got config of ", config
-                @configureStreams config
-                                            
+            @_connectMaster()
+                                                        
         # -- set up our stream server -- #
             
         # init our server
         @server = new Server core:@
-        @server.listen @options.listen
+        #@server.listen @options.listen
             
         @log.debug "Slave is listening on port #{@options.listen}"
         
@@ -59,6 +62,8 @@ module.exports = class Slave extends require("events").EventEmitter
         # once every 30 seconds, count all listeners and send them on to the master
         
         @_listeners_interval = setInterval =>
+            return if !@connected?
+            
             counts = {}
             total = 0
             
@@ -108,6 +113,57 @@ module.exports = class Slave extends require("events").EventEmitter
                    @log.debug "Still awaiting shutdown; #{listeners} listeners"
                 
             , 60 * 1000
+    
+    #----------
+    
+    _connectMaster: ->
+        @log.debug "Trying connection to master."
+        @master = Socket.connect @options.slave.master, "connect timeout":5000
+            
+        @master.on "connect", => @_onConnect()
+        @master.on "reconnect", => @_onConnect()
+            
+        @master.on "connect_failed", @_retryConnection
+        @master.on "error", (err) =>
+            if err.code =~ /ECONNREFUSED/
+                @_retryConnection()
+            else
+                console.log "got connection error of ", err
+            
+        @master.on "config", (config) =>
+            console.log "got config of ", config
+            @configureStreams config
+                
+        @master.on "disconnect", =>
+            @_onDisconnect()
+    
+    #----------
+    
+    _onConnect: ->
+        return false if @connected
+        
+        if @_retrying
+            clearTimeout @_retrying
+            @_retrying = null
+        
+        @connected = true
+        # connect up our logging proxy
+        @log.debug "Connected to master."
+        @log.proxyToMaster @master
+        
+        # start listening
+        @server.listen @options.listen
+        
+        true
+        
+    _onDisconnect: ->
+        @connected = false
+        @log.debug "Disconnected from master."
+        @server?.stopListening()
+        
+        @log.proxyToMaster()
+        
+        true
     
     #----------
            

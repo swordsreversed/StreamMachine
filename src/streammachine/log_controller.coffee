@@ -72,7 +72,7 @@ module.exports = class LogController
     # to a master server over WebSockets
     proxyToMaster: (sock) ->
         @logger.remove(@logger.transports['socket']) if @logger.transports['socket']
-        @logger.add (new LogController.SocketLogger sock, level:"interaction"), {}, true
+        @logger.add (new LogController.SocketLogger sock, level:"interaction"), {}, true if sock
     
     #----------
     
