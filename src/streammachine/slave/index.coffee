@@ -73,6 +73,8 @@ module.exports = class Slave extends require("events").EventEmitter
                 total += l
 
             @log.debug "sending listeners: #{total}", counts
+            
+            @emit "listeners", counts:counts, total:total
             @master?.emit "listeners", counts:counts, total:total
 
         , 30 * 1000

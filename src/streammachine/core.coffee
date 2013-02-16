@@ -69,6 +69,8 @@ module.exports = class Core
                             else
                                 console.log "Unable to map master -> slave for #{k}"
                     
+            @slave.on "listeners", (obj) =>
+                @master._recordListeners "standalone", obj
             
             @log.debug "Standalone is listening on port #{@options.listen}"
                     

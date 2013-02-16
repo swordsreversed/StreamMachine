@@ -1,16 +1,34 @@
 _u = require("underscore")
 express = require "express"
 path = require "path"
+hamlc = require "haml-coffee"
+Assets = require "connect-assets"
 
 module.exports = class Router
     constructor: (opts) ->
         @core = opts?.core
         @port = opts?.port
         
+        if !@port
+            throw "Admin requires a port"
+            
+        @core.log.debug "Admin is listening on #{@port}"
+        
         @app = express()
         @app.set "views", __dirname + "/views"
         @app.set "view engine", "hamlc"
-        @app.engine '.hamlc', require('haml-coffee').__express
+        @app.engine '.hamlc', hamlc.__express
+        
+        #@app.use require('connect-assets')()
+        
+        Assets.jsCompilers.hamlc =
+          match: /\.js$/
+          compileSync: (sourcePath, source) ->
+             assetName = path.basename(sourcePath, '.hamlc')
+             compiled = hamlc.template(source, assetName)
+             compiled
+             
+        @app.use Assets()
         
         # -- Param Handlers -- #
         
@@ -38,9 +56,6 @@ module.exports = class Router
             
         # -- Routing -- #
                 
-        @app.get "/", (req,res) =>
-            res.render "layout", core:@core
-            
         @app.get "/api/streams", (req,res) =>
             # return JSON version of the status for all streams
             res.status(200).end JSON.stringify @core.streamsInfo()
@@ -68,6 +83,12 @@ module.exports = class Router
             
         @app.delete "/api/streams/:stream", (req,res) =>
             # delete a stream
+            
+        @app.get /.*/, (req,res) =>
+            res.render "layout", 
+                core:       @core
+                server:     "http://#{req.headers.host}/api"
+                streams:    JSON.stringify(@core.streamsInfo())
             
         @server = @app.listen @port
 ###

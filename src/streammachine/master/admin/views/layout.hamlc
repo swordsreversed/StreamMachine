@@ -8,30 +8,34 @@
     
     != css("admin")
     != js("admin")
-    %script(src="/socket.io/socket.io.js" type="text/javascript")
 
   %body
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
-          %a.brand(href="/admin/") StreamMachine
+          %a.brand(href="/") StreamMachine
           %ul.nav
             %li
-              %a{href:"/admin/streams/"} Streams
+              %a{href:"/"} Streams
 
     .container
       .content
         .row
-          .span9
+          #cbody.span9
             %h1 Loading...
           .span3
             #sidebar.well.sidebar-nav
-              
+      
+      %p/        
       %footer
         %p StreamMachine: http://github.com/StreamMachine/StreamMachine
 
   :javascript
     $(function() {
-      window.SM = new streammachine.Admin()    
+      window.SM = new streammachine.Admin({
+        streams:      #{@streams},
+        server:       "#{@server}",
+        redis_config: #{ if @core.redis? then true else false }
+      })    
     })
     

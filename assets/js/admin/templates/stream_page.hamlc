@@ -1,0 +1,29 @@
+%h1= @stream
+
+%h2 #{@listeners} Listeners
+
+%h2 Sources
+
+%table.table.table-striped
+  %thead
+    %th
+      Info
+    %th
+      Connected
+    %th
+      Stream Key
+    %th
+      Options
+      
+  - for s in @sources
+    %tr
+      %td
+        = s.uuid
+        %br/
+        = s.source
+      %td
+        = if s.connected then "Yes" else "No"
+      %td
+        = s.stream_key
+      %td
+        Options...

@@ -53,7 +53,7 @@ module.exports = class Master extends require("events").EventEmitter
                 
         # -- create a server to provide the admin -- #
         
-        @server = new Admin core:@, port:( @options.master?.port || @options.port )
+        @server = new Admin core:@, port:( @options.master?.port || @options.admin_port )
         
         # -- start the source listener -- #
             
@@ -101,10 +101,7 @@ module.exports = class Master extends require("events").EventEmitter
                     
                 # look for listener counts
                 sock.on "listeners", (obj = {}) =>
-                    @log.debug "slave #{sock.id} sent #{obj.total} listeners"
-                    @listeners.slaves[ sock.id ] = obj.total
-                    for k,c of obj.counts
-                        @streams[k]?.recordSlaveListeners sock.id, c
+                    @_recordListeners sock.id, obj
                 
             # attach disconnect handler
             @io.on "disconnect", (sock) =>
@@ -112,6 +109,12 @@ module.exports = class Master extends require("events").EventEmitter
                 @slaves = _u(@slaves).without sock
             
     #----------
+    
+    _recordListeners: (slave,obj) ->
+        @log.debug "slave #{slave} sent #{obj.total} listeners"
+        @listeners.slaves[ slave ] = obj.total
+        for k,c of obj.counts
+            @streams[k]?.recordSlaveListeners slave, c
     
     # configureStreams can be called on a new core, or it can be called to 
     # reconfigure an existing core.  we need to support either one.

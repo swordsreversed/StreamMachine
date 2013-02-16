@@ -1,0 +1,20 @@
+%h1= @title
+
+%h2 Stream Key
+
+%input(type="text",name="key")
+
+%h2 Hostname
+
+%input(type="text",name="host")
+
+%h2 Source Password
+
+%input(type="text",name="source_pass")
+
+%h2 Fallback Source?
+
+%p This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
+
+%input(type="text",name="fallback")
+
