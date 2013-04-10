@@ -1,22 +1,11 @@
 _u = require "underscore"
 Parser = require("../parsers/mp3")
-Icecast = require("icecast-stack")
 
-module.exports = class Icecast extends require("./base")
-    DefaultOptions:
-        foo: "bar"
-        
-    #----------
+module.exports = class IcecastSource extends require("./base")    
+    TYPE: -> "Icecast (#{[@sock.remoteAddress,@sock.remotePort].join(":")})"
     
-    TYPE: -> "Icecast ()"
-    
-    constructor: (@stream,options) ->
-        @options = _u.defaults options||{}, @DefaultOptions
-        
+    constructor: (@stream,@sock,@headers) ->
         super()
-        
-        @req = @options.req
-        @res = @options.res
         
         @log = @stream.log
         
@@ -25,16 +14,18 @@ module.exports = class Icecast extends require("./base")
         # data is going to start streaming in as data on req. We need to pipe 
         # it into a parser to turn it into frames, headers, etc
         
-        @parser = new Parser()
+        console.log "New Icecast source!"
         
+        @parser = new Parser()
+                
         @_chunk_queue = []
         @_chunk_queue_ts = null
         
         @last_header = null
-                        
+        
         # incoming -> Parser
-        @req.on "data", (chunk) => @parser.write chunk
-            
+        @sock.pipe @parser
+        
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
             @emit "frame", frame
@@ -89,18 +80,18 @@ module.exports = class Icecast extends require("./base")
             @last_header = data
             @emit "header", data, header
         
-        @req.on "close", =>
+        @sock.on "close", =>
             @connected = false
             @log.debug "Icecast source got close event"
             @emit "disconnect"
-            @res.end()
+            @sock.end()
             
-        @req.on "end", =>
+        @sock.on "end", =>
             @connected = false
             @log.debug "Icecast source got end event"
             # source has gone away
             @emit "disconnect"
-            @res.end()
+            @sock.end()
 
         # return with success
         @connected = true
@@ -110,7 +101,7 @@ module.exports = class Icecast extends require("./base")
     info: ->
         source:     @TYPE?() ? @TYPE
         connected:  @connected
-        url:        "UNKNOWN" #[@req.connection.remoteAddress,@req.connection.remotePort].join(":")
+        url:        [@sock.remoteAddress,@sock.remotePort].join(":")
         stream_key: @stream_key
         uuid:       @uuid
     

@@ -1,5 +1,6 @@
 _u = require "underscore"
-Ice = require "ice-stack"
+net = require "net"
+express = require "express"
 
 module.exports = class SourceIn extends require("events").EventEmitter
     constructor: (opts) ->
@@ -9,36 +10,57 @@ module.exports = class SourceIn extends require("events").EventEmitter
         @port = opts.port
         
         # create our server
-        @server = new Ice.Server.createServer (req,res) => @_incoming(req,res)     
+        
+        @server = net.createServer (c) => @_connection(c)
+        
         @server.listen @port
-    
-    #----------
         
-    _incoming: (req,res) ->
-        headers = "X-Powered-By":"StreamMachine"
+    _connection: (sock) => 
+        # -- incoming data -- #
         
-        # make sure the method is one we support...
-        if req.method == "SOURCE"
-            # source request... is the endpoint one that we recognize?
-            if m = ///^\/(#{_u(@core.streams).keys().join("|")})///.exec req.path
-                stream = @core.streams[ m[1] ]
+        parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
+        parser.socket = sock
+        parser.incoming = null
+        
+        sock.ondata = (d,start,end) =>
+            parser.execute d, start, end - start
+            
+        parser.on "headersComplete", (headers) =>
+            if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
+                console.log "ICY Request!"
+                @_trySource sock, parser.info
                 
-                # cool, now make sure we have the headers we need
+                # get out of the way
+                sock.ondata = null
                 
-                # first, make sure the authorization header contains the right password
-                if req.headers.authorization && @_authorize(stream,req.headers.authorization)
-                    res.writeHead 200, headers
-                    
-                    # now create a new source
-                    source = new (require "../sources/icecast") stream, req:req,res:res
-                    stream.addSource source
-                else
-                    res.writeHead 401, headers
-                    res.end "Invalid Source or Password."
-                
+                        
+    _trySource: (sock,info) =>
+        # source request... is the endpoint one that we recognize?
+        if m = ///^/(#{_u(@core.streams).keys().join("|")})///.exec info.url
+            stream = @core.streams[ m[1] ]
+
+            # cool, now make sure we have the headers we need
+
+            # first, make sure the authorization header contains the right password
+            if info.headers.authorization && @_authorize(stream,info.headers.authorization)
+                sock.write "HTTP/1.0 200 OK\n\n"
+
+                # now create a new source
+                source = new (require "../sources/icecast") stream, sock, info.headers
+                stream.addSource source
             else
                 res.writeHead 401, headers
                 res.end "Invalid Source or Password."
+
+        else
+            res.writeHead 401, headers
+            res.end "Invalid Source or Password."
+            
+    _tmp: ->
+        if ///^/admin/metadata///.match req.url
+            res.writeHead 200, headers
+            res.end "OK"
+            
         else
             res.writeHead 400, headers
             res.end "Invalid method #{res.method}."
@@ -61,3 +83,80 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 false
         else
             false
+    
+    #----------
+            
+    class @IcyParser extends require("events").EventEmitter
+        constructor: (type) ->
+            @["INIT_"+type]()
+    
+        @REQUEST:    "REQUEST"
+        @RESPONSE:   "RESPONSE" 
+
+        reinitialize: @
+
+        execute: (@chunk,@offset,length) ->
+            @start = @offset
+            @end = @offset + length
+    
+            while @offset < @end
+                @[@state]()
+                @offset++;
+                
+            true
+        
+        INIT_REQUEST: ->
+            console.log "init request"
+            @state = "REQUEST_LINE"
+            @lineState = "DATA"
+            @info = headers:{}
+    
+        consumeLine: ->
+            @captureStart = @offset if !@captureStart?
+    
+            byte = @chunk[@offset]
+            if byte == 0x0d && @lineState == "DATA" # \r
+                @captureEnd = @offset
+                @lineState = "ENDING"
+                return
+        
+            if @lineState == "ENDING"
+                @lineState = "DATA"
+                return if byte != 0x0a
+        
+                line = @chunk.toString "ascii", @captureStart, @captureEnd
+        
+                @captureStart = undefined
+                @captureEnd = undefined
+        
+                return line
+        
+        requestExp: /^([A-Z]+) (.*) (ICE|HTTP)\/(1).(0|1)$/;
+    
+        REQUEST_LINE: ->
+            line = @consumeLine()
+    
+            return if !line?
+        
+            match = @requestExp.exec line
+    
+            [@info.method,@info.url,@info.protocol,@info.versionMajor,@info.versionMinor] = match[1..5]
+            
+            @info.request_offset = @offset
+            @info.request_line = line
+    
+            @state = "HEADER"
+
+        headerExp: /^([^:]+): *(.*)$/
+
+        HEADER: ->
+            line = @consumeLine()
+    
+            return if !line?
+    
+            if line
+                match = @headerExp.exec line
+                @info.headers[match[1].toLowerCase()] = match[2]
+            else
+                @emit "headersComplete", @info.headers
+                @state = "BODY"

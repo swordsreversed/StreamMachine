@@ -1,5 +1,5 @@
-_u = require 'underscore'
-icecast = require("icecast-stack")
+_u      = require 'underscore'
+icecast = require "icecast"
 
 module.exports = class Shoutcast
     constructor: (@stream,@req,@res,@opts) ->
@@ -16,9 +16,9 @@ module.exports = class Shoutcast
             @res.chunkedEncoding = false
             @res.useChunkedEncodingByDefault = false
             
-            # convert this into an icecast response
-            @res = new icecast.IcecastWriteStack @res, @stream.options.meta_interval
-            @res.queueMetadata StreamTitle:@stream.metaTitle, StreamUrl:@stream.metaURL
+
+            @ice = new icecast.Writer @stream.options.meta_interval            
+            @ice.queue StreamTitle:@stream.metaTitle, StreamUrl:@stream.metaURL
         
             headers = 
                 "Content-Type":         "audio/mpeg"
@@ -29,10 +29,12 @@ module.exports = class Shoutcast
             res.writeHead 200, headers
                             
             @metaFunc = (data) =>
-                if data.StreamTitle
-                    @res.queueMetadata data
+                @ice.queue data if data.StreamTitle
 
-            @dataFunc = (chunk) => @res.write(chunk)
+            @dataFunc = (chunk) => 
+                @ice.write(chunk)
+            
+            @ice.pipe(@res)
                 
             # -- send a preroll if we have one -- #
         

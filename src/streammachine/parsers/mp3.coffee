@@ -1,24 +1,25 @@
-Stream = require('stream').Stream
 strtok = require('strtok')
 parseFrame = require("./lib/parse").parseFrameHeader
 
-module.exports = class MP3 extends Stream
+module.exports = class MP3 extends require("stream").Writable
     ID3V1_LENGTH = 128
     ID3V2_HEADER_LENGTH = 10
     MPEG_HEADER_LENGTH = 4
     
     FIRST_BYTE = new strtok.BufferType(1)
     
-    MPEG_HEADER = new strtok.BufferType(MPEG_HEADER_LENGTH)
-    REST_OF_ID3V2_HEADER = new strtok.BufferType(ID3V2_HEADER_LENGTH - MPEG_HEADER_LENGTH)
-    REST_OF_ID3V1 = new strtok.BufferType(ID3V1_LENGTH - MPEG_HEADER_LENGTH)
+    MPEG_HEADER             = new strtok.BufferType(MPEG_HEADER_LENGTH)
+    REST_OF_ID3V2_HEADER    = new strtok.BufferType(ID3V2_HEADER_LENGTH - MPEG_HEADER_LENGTH)
+    REST_OF_ID3V1           = new strtok.BufferType(ID3V1_LENGTH - MPEG_HEADER_LENGTH)
     
     constructor: ->
         super
-        @readable = @writable = true
         
-        @setMaxListeners 0
+        # create an internal stream to pass to strtok
+        @istream = new (require("events").EventEmitter)
         
+        @outbuf = []
+                        
         # set up status
         @frameSize = -1
         @beginning = true
@@ -32,7 +33,10 @@ module.exports = class MP3 extends Stream
         @_id3v2_1 = null
         @_id3v2_2 = null
         
-        strtok.parse @, (v,cb) =>
+        @on "frame", (frame) =>
+            @outbuf.push frame
+        
+        strtok.parse @istream, (v,cb) =>
             # -- initial request -- #
             
             if v == undefined
@@ -177,19 +181,18 @@ module.exports = class MP3 extends Stream
             
             @frameSize = -1
             return MPEG_HEADER
+    
+    #----------
                 
-    
-    write: (chunk) ->
-        @emit "data", chunk
-        true
-    
-    end: (chunk) ->
-        if chunk
-            @emit "data", chunk
+    _write: (chunk,encoding,callback) ->
+        @istream.emit "data", chunk        
+        callback?()
             
-        @emit "end"
-        true
+    #----------
         
+    _flush: (cb) ->
+        console.log "Parser: got flush."
+            
     buffer_concat: (bufs) ->
         buffer = null
         length = 0
