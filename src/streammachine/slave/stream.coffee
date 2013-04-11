@@ -21,8 +21,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         # initialize RewindBuffer
         super()
         
-        @metaTitle  = ""
-        @metaURL    = ""
+        @StreamTitle  = ""
+        @StreamUrl    = ""
         
         
         # remove our max listener count
@@ -37,11 +37,12 @@ module.exports = class Stream extends require('../rewind_buffer')
         #@dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta
 
         @metaFunc = (chunk) => 
-            (l.meta(chunk) if l.meta) for id,l of @_lmeta
+            #(l.meta(chunk) if l.meta) for id,l of @_lmeta
             
-            if chunk.streamTitle?
-                @streamTitle    = chunk.streamTitle
-                @streamURL      = chunk.streamURL
+            @StreamTitle    = chunk.StreamTitle if chunk.StreamTitle
+            @StreamUrl      = chunk.StreamUrl if chunk.StreamUrl
+            
+            console.log "setting meta on slave stream", chunk, @StreamTitle, @StreamUrl
                 
         @on "source", =>
             #@source.on "data", @dataFunc

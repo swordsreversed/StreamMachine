@@ -18,11 +18,12 @@ module.exports = class Shoutcast
             
 
             @ice = new icecast.Writer @stream.options.meta_interval            
-            @ice.queue StreamTitle:@stream.metaTitle, StreamUrl:@stream.metaURL
+            @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
         
             headers = 
                 "Content-Type":         "audio/mpeg"
-                "icy-name":             @stream.options.name
+                "icy-name":             @stream.StreamTitle
+                "icy-url":              @stream.StreamUrl
                 "icy-metaint":          @stream.options.meta_interval
                         
             # write out our headers

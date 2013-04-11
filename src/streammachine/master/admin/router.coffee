@@ -69,6 +69,13 @@ module.exports = class Router
             # get detailed stream information
             res.status(200).end JSON.stringify req.stream.status(true)
             
+        @app.post "/api/streams/:stream/metadata", (req,res) =>
+            req.stream.setMetadata req.query, (err,msg) =>
+                if err
+                    res.status(422).end "Error: #{err}"
+                else
+                    res.status(200).end "OK"
+            
         @app.post "/api/streams/:stream/promote", (req,res) =>
             # promote a stream source to active
             # We'll just pass on the UUID and leave any logic to the stream

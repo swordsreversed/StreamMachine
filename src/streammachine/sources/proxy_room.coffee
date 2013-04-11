@@ -37,8 +37,8 @@ module.exports = class ProxyRoom extends require("./base")
         @_bounces       = 0
         @_bounceInt     = 5
         
-        @metaTitle = @options.metaTitle || null
-        @metaURL = @options.metaURL || null
+        @StreamTitle = @options.StreamTitle || null
+        @StreamUrl = @options.StreamUrl || null
     
     #----------
     
@@ -77,12 +77,12 @@ module.exports = class ProxyRoom extends require("./base")
                     console.log "metadata is ", meta
             
                     if meta.StreamTitle
-                        @metaTitle = meta.StreamTitle
+                        @StreamTitle = meta.StreamTitle
             
                     if meta.StreamUrl
-                        @metaURL = meta.StreamUrl
+                        @StreamUrl = meta.StreamUrl
                 
-                    @emit "metadata", StreamTitle:@metaTitle, StreamUrl:@metaURL
+                    @emit "metadata", StreamTitle:@StreamTitle, StreamUrl:@StreamUrl
 
             # incoming -> Parser
             @icecast.on "data", (chunk) => @parser.write chunk

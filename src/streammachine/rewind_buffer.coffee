@@ -33,9 +33,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             bl = @_rbuffer.length
             for l in @_rlisteners
                 # we'll give them whatever is at length - offset
-                l.data? @_rbuffer[ bl - 1 - l._offset ]
-                
-                # TODO: meta?
+                pos = @_rbuffer[ bl - 1 - l._offset ]
+                l.data? pos.data
+                l.meta? pos.meta if pos.meta
         
         # -- look for stream connections -- #
                 
@@ -71,6 +71,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 
                 # connect our data listener
                 newsource.on "data", @_rdataFunc
+                
                     
                 # keep track of our source
                 @_rsource = newsource
@@ -136,7 +137,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         bl = @_rbuffer.length
         
         pumpLen = 0
-        pumpLen += @_rbuffer[ bl - 1 - (offset - i) ].length for i in [1..length]
+        pumpLen += @_rbuffer[ bl - 1 - (offset - i) ].data.length for i in [1..length]
         
         @log.debug "creating buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
         
@@ -144,7 +145,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         index = 0
         for i in [1..length]
-            buf = @_rbuffer[ bl - 1 - (offset - i) ]
+            buf = @_rbuffer[ bl - 1 - (offset - i) ].data
             buf.copy pumpBuf, index, 0, buf.length
             index += buf.length
             

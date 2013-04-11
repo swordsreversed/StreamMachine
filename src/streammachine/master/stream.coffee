@@ -24,8 +24,16 @@ module.exports = class Stream extends require('events').EventEmitter
         # set up a rewind buffer
         #@rewind = new Rewind @, @opts.rewind
         
-        @metaFunc = (meta) => @emit "metadata", meta
-        @dataFunc = (data) => @emit "data", data
+        @_nextMeta = null
+        
+        @metaFunc = (meta) => 
+            @_nextMeta = meta
+            @emit "meta", meta
+        
+        @dataFunc = (data) => 
+            @emit "data", data:data, meta:@_nextMeta
+            #@_nextMeta = null
+        
         @headFunc = (head) => @emit "header", head
         
         # -- Hardcoded Source -- #
@@ -74,6 +82,13 @@ module.exports = class Stream extends require('events').EventEmitter
             stream:     @key
             listeners:  @listeners()
             sources:    ( s.info() for s in @sources )
+    
+    #----------
+    
+    setMetadata: (opts,cb) ->
+        console.log "Emitting metadata: ", StreamTitle:opts.title, streamUrl:opts.url
+        @metaFunc StreamTitle:opts.title, StreamUrl:opts.url
+        cb? null
     
     #----------
     
