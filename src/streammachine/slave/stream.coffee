@@ -34,11 +34,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         @preroll = null
         @mlog_timer = null
 
-        #@dataFunc = (chunk) => (l.data(chunk) if l.data) for id,l of @_lmeta
-
         @metaFunc = (chunk) => 
-            #(l.meta(chunk) if l.meta) for id,l of @_lmeta
-            
             @StreamTitle    = chunk.StreamTitle if chunk.StreamTitle
             @StreamUrl      = chunk.StreamUrl if chunk.StreamUrl
             

@@ -33,6 +33,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 # get out of the way
                 sock.ondata = null
                 
+            # TODO: Need to add support for the shoutcast metadata admin URL
+                
                         
     _trySource: (sock,info) =>
         # source request... is the endpoint one that we recognize?

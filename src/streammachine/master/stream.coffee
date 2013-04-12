@@ -99,8 +99,8 @@ module.exports = class Stream extends require('events').EventEmitter
         # add a disconnect monitor
         source.once "disconnect", =>
             # remove it from the list
-            @sources = _u(@sources).without @source
-            
+            @sources = _u(@sources).without source
+                        
             # was this our current source?
             if @source == source
                 # yes...  need to promote the next one (if there is one)
@@ -117,7 +117,7 @@ module.exports = class Stream extends require('events').EventEmitter
         # check whether this source should be made active. It should be if 
         # the active source is defined as a fallback
         
-        if !@sources[0] || @sources[0]?.options.fallback
+        if !@sources[0] || @sources[0]?.options?.fallback
             # go to the front
             @log.debug "Promoting new source to replace fallback."
             @useSource source, cb
