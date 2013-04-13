@@ -19,8 +19,6 @@ module.exports = class LiveMP3
             # write out our headers
             res.writeHead 200, headers
         
-            @dataFunc = (chunk) => @res.write(chunk)
-                                    
             # -- send a preroll if we have one -- #
         
             if @stream.preroll && !@req.param("preskip")
@@ -46,4 +44,6 @@ module.exports = class LiveMP3
     
     connectToStream: ->
         unless @req.connection.destroyed
-            @source = @stream.listen @, offset:@offset, pump:true, on_data:@dataFunc
+            @source = @stream.listen @, offset:@offset, pump:true
+            @source.pipe @res
+            

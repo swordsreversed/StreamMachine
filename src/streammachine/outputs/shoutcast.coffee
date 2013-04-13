@@ -32,9 +32,6 @@ module.exports = class Shoutcast
             @metaFunc = (data) =>
                 @ice.queue data if data.StreamTitle
 
-            @dataFunc = (chunk) => 
-                @ice.write(chunk)
-            
             @ice.pipe(@res)
                 
             # -- send a preroll if we have one -- #
@@ -65,7 +62,10 @@ module.exports = class Shoutcast
     
     connectToStream: ->
         unless @req.connection.destroyed
-            @source = @stream.listen @, offset:@offset, pump:true, on_data:@dataFunc, on_meta:@metaFunc
+            @source = @stream.listen @, offset:@offset, pump:true
+            
+            @source.pipe @ice
+            @source.on "meta", @metaFunc
         
     #----------
             

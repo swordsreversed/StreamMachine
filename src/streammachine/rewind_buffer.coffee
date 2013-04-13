@@ -33,9 +33,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             bl = @_rbuffer.length
             for l in @_rlisteners
                 # we'll give them whatever is at length - offset
-                pos = @_rbuffer[ bl - 1 - l._offset ]
-                l.data? pos.data
-                l.meta? pos.meta if pos.meta
+                l._insert @_rbuffer[ bl - 1 - l._offset ]
         
         # -- look for stream connections -- #
                 
@@ -149,7 +147,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             buf.copy pumpBuf, index, 0, buf.length
             index += buf.length
             
-        return pumpBuf
+        return data:pumpBuf
         
     #----------
     
@@ -160,7 +158,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         bl = @_rbuffer.length
         
         burst = if offset > @_rburst then @_rburst else offset
-        obj.data? @pumpFrom offset, burst
+        obj._insert @pumpFrom offset, burst
         
         if offset > @_rburst
             return offset - @_rburst
@@ -171,7 +169,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
     _raddListener: (obj) ->
         console.log "addListener request"
-        if obj._offset? && obj._offset >= 0 && obj.data
+        if obj._offset? && obj._offset >= 0
             console.log "Pushing to _rlisteners"
             @_rlisteners.push obj
             return true
@@ -188,27 +186,67 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
     #----------
     
-    class @Rewinder
+    class @Rewinder extends require("stream").Readable
         constructor: (@rewind,@conn_id,opts={}) ->
+            super highWaterMark:512*1024
+            
             @_offset = -1
             @_offset = @rewind.checkOffset opts.offset || 0
             
             console.log "Rewinder: creation with ", opts:opts
             
-            @data = opts.on_data
-            @meta = opts.on_meta
+            #@data = opts.on_data
+            #@meta = opts.on_meta
+            
+            @_queue = []
+            @_reading = false
                         
             if opts?.pump
                 if @_offset == 0
                     # pump some data before we start regular listening
                     @rewind.log.debug "Rewinder: Pumping #{@rewind.options.burst} seconds."
-                    @data @rewind.pumpSeconds(@rewind.options.burst)
+                    @_queue.push @rewind.pumpSeconds(@rewind.options.burst)
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
                     @_offset = @rewind.burstFrom @_offset, @
             
             # that's it... now RewindBuffer will call our @data directly
+            @emit "readable"
+            
+        _read: (size) =>
+            if @_reading
+                return false
+                
+            if @_queue.length == 0
+                @push ''
+                return false
+                
+            # -- push anything queued up to size -- #
+            
+            @_reading = true
+
+            sent = 0
+            
+            _pushQueue = =>
+                next_buf = @_queue.shift()
+                
+                @emit "meta", next_buf.meta if next_buf.meta
+                
+                if @push next_buf.data
+                    sent += next_buf.data.length
+                    
+                    if sent < size && @_queue.length > 0
+                        _pushQueue()
+                    else
+                        @push ''
+                        @_reading = false
+
+            _pushQueue()
+            
+        _insert: (b) =>
+            @_queue.push b            
+            @emit "readable" if !@_reading
                         
         setOffset: (offset) ->
             @_offset = @rewind.checkOffset offset
