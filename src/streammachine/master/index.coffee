@@ -30,26 +30,34 @@ module.exports = class Master extends require("events").EventEmitter
 
         if @options.streams?            
             process.nextTick =>
-                @emit "config", @options.streams
+                @emit "config", @options
                 @configureStreams @options.streams
 
         # -- load our streams configuration from redis -- #
         
         if @options.redis?
+            _slaveUpdate = =>
+                # pass config on to any connected slaves
+                for sock in @slaves
+                    sock.emit "streams", streams:@options.streams
+            
             @log.debug "initializing redis config"
             @redis = new Redis @options.redis
-            @redis.on "config", (streams) =>
+            @redis.on "config", (config) =>
                 # stash the configuration
-                @options.streams = streams
-            
-                @emit "config", streams
+                @options = _u.defaults config||{}, @options
+                @emit "config", @options
 
                 # (re-)configure our master stream objects
-                @configureStreams streams
+                @configureStreams @options.streams
                 
-                # and then pass it on to any connected slaves
-                for sock in @slaves
-                    sock.emit "config", streams:streams
+                _slaveUpdate()
+            
+            # save changed configuration to Redis        
+            console.log "Registering config_update listener"
+            @on "config_update", =>
+                console.log "Redis got config_update: ", @config()
+                @redis._update @config()
                 
         # -- create a server to provide the admin -- #
         
@@ -110,6 +118,15 @@ module.exports = class Master extends require("events").EventEmitter
             
     #----------
     
+    config: ->
+        config = streams:{}
+        
+        config.streams[k] = s.config() for k,s of @streams
+        
+        return config
+    
+    #----------
+    
     _recordListeners: (slave,obj) ->
         @log.debug "slave #{slave} sent #{obj.total} listeners"
         @listeners.slaves[ slave ] = obj.total
@@ -128,7 +145,7 @@ module.exports = class Master extends require("events").EventEmitter
         for k,obj of @streams
             @log.debug "calling destroy on ", k
             obj.destroy() unless options?[k]
-            @streams.delete k
+            delete @streams[ k ]
         
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers
@@ -140,11 +157,45 @@ module.exports = class Master extends require("events").EventEmitter
                 @streams[key].configure opts
             else
                 @log.debug "Starting up master stream: #{key}", opts:opts
-                @streams[key] = new Stream @, key, @log.child(stream:key), opts 
-                
-        @_initIOProxies()
+                @_startStream key, opts
                 
         @emit "streams", @streams
+        
+    #----------
+    
+    _startStream: (key,opts) ->
+        stream = new Stream @, key, @log.child(stream:key), opts
+        
+        if stream
+            @streams[ key ] = stream
+            @_attachIOProxy stream
+            return stream
+        else
+            return false
+    
+    #----------
+    
+    createStream: (opts,cb) ->
+        @log.debug "createStream called with ", opts
+        
+        # -- make sure the stream key is present and unique -- #
+        
+        if !opts.key
+            cb? "Cannot create stream without key."
+            return false
+            
+        if @streams[ opts.key ]
+            cb? "Stream key must be unique."
+            return false
+            
+        # -- create the stream -- #
+        
+        if stream = @_startStream opts.key, opts
+            @emit "config_update"
+            @emit "streams"
+            cb? null, stream.status()
+        else
+            cb? "Stream failed to start."
         
     #----------
     
@@ -153,17 +204,19 @@ module.exports = class Master extends require("events").EventEmitter
     
     #----------
     
-    _initIOProxies: ->
+    _attachIOProxy: (stream) ->
         return false if !@io
         
-        # any to add?
-        for k,obj of @streams
-            @proxies[k] = new Master.StreamProxy key:k, stream:obj, master:@
-            
-        # any to remove?
-        for k,obj of @proxies
-            @proxies[k].destroy if !@streams[k]
+        if @proxies[ stream.key ]
+            return false
         
+        # create a new proxy    
+        @proxies[ stream.key ] = new Master.StreamProxy key:stream.key, stream:stream, master:@
+        
+        # and attach a listener to destroy it if the stream is removed
+        stream.once "destroy", =>
+            @proxies[ stream.key ]?.destroy()
+    
     #----------
         
     class @StreamProxy extends require("events").EventEmitter

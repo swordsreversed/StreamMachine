@@ -41,9 +41,9 @@ module.exports = class Stream extends require('events').EventEmitter
         # This is an initial source like a proxy that should be connected from 
         # our end, rather than waiting for an incoming connection
         
-        if opts.source?
+        if @opts.source?
             console.log "Connecting initial source"
-            newsource = new Proxy @, opts.source
+            newsource = new Proxy @, @opts.source
             newsource.connect()
             @addSource newsource, (result) =>
                 if result
@@ -71,6 +71,13 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
     
+    # Return our configuration
+    
+    config: ->
+        @opts
+    
+    #----------
+    
     status: (detailed=false)->
         if detailed
             stream:             @key
@@ -88,7 +95,7 @@ module.exports = class Stream extends require('events').EventEmitter
     setMetadata: (opts,cb) ->
         console.log "Emitting metadata: ", StreamTitle:opts.title, streamUrl:opts.url
         @metaFunc StreamTitle:opts.title, StreamUrl:opts.url
-        cb? null
+        cb? null, @_nextMeta
     
     #----------
     
@@ -225,5 +232,6 @@ module.exports = class Stream extends require('events').EventEmitter
     destroy: ->
         # shut down our sources and go away
         s.disconnect() for s in @sources
+        @emit "destroy"
         true
         

@@ -44,3 +44,5 @@ else
         streams:        nconf.get("streams")
         source_port:    nconf.get("source_port")
         admin_port:     nconf.get("admin_port")
+        redis:          nconf.get("redis")
+        

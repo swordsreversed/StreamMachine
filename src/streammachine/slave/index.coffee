@@ -132,8 +132,8 @@ module.exports = class Slave extends require("events").EventEmitter
             else
                 console.log "got connection error of ", err
             
-        @master.on "config", (config) =>
-            console.log "got config of ", config
+        @master.on "streams", (config) =>
+            console.log "got streams config of ", config
             @configureStreams config
                 
         @master.on "disconnect", =>

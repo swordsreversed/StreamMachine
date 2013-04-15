@@ -16,31 +16,39 @@ module.exports = class RedisConfig extends EventEmitter
         @client = Redis.createClient info.port, info.hostname
         
         @client.on "connect", =>
-            # see if there's a config to load
-            console.log "Querying config from Redis"
-            @client.get "#{@options.key}:streams", (err, reply) =>
-                if reply
-                    streams = JSON.parse(reply.toString())
-                    console.log "Got redis config of ", streams
-                    @emit "config", streams
+            @_connected = true
+            @emit "connected"
             
-                # now go into PUB/SUB mode and subscribe for config updates
-                @client.on "message", (channel,message) => 
-                    if message
-                        streams = JSON.parse(message.toString())
-                        console.log "Got redis config of ", streams
-                        @emit "config", streams
-                    
-                @client.subscribe @options.key
+            # see if there's a config to load
+            @_config()
+                            
+    #----------
+    
+    once_connected: (cb) ->
+        if @_connected
+            cb?()
+        else
+            @once "connected", cb
+    
+    #----------
             
     _config: ->
         console.log "Querying config from Redis"
-        @client.get "#{@options.key}:streams", (err, reply) =>
+        @client.get "#{@options.key}:config", (err, reply) =>
             if reply
-                streams = JSON.parse(reply.toString())
-                console.log "Got redis config of ", streams
-                @emit "config", streams
-                    
+                config = JSON.parse(reply.toString())
+                console.log "Got redis config of ", config
+                @emit "config", config
             
-        
+     #----------
+ 
+     _update: (config) ->
+         @once_connected =>
+             console.log "Saving configuration to Redis"
+     
+             @client.set "#{@options.key}:config", JSON.stringify(config), (err,reply) =>
+                if err
+                    console.log "Redis: Failed to save updated config: #{err}"
+                else
+                    console.log "Set config to #{@options.key}:streams", config, reply
     

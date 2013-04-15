@@ -1,5 +1,6 @@
 _u = require("underscore")
 express = require "express"
+api = require "express-api-helper"
 path = require "path"
 hamlc = require "haml-coffee"
 Assets = require "connect-assets"
@@ -56,57 +57,62 @@ module.exports = class Router
             
         # -- Routing -- #
                 
+        # list streams
         @app.get "/api/streams", (req,res) =>
             # return JSON version of the status for all streams
-            res.status(200).end JSON.stringify @core.streamsInfo()
+            api.ok req, res, @core.streamsInfo()
+
+        # list streams
+        @app.get "/api/config", (req,res) =>
+            # return JSON version of the status for all streams
+            api.ok req, res, @core.config()
             
-        @app.post "/api/streams", (req,res) =>
+        # create a stream
+        @app.post "/api/streams", express.bodyParser(), (req,res) =>
             # add a new stream
-            
-            # TODO... this needs to trigger an update that writes into Redis
-            
+            @core.createStream req.body, (err,stream) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, stream
+        
+        # get stream details    
         @app.get "/api/streams/:stream", (req,res) =>
             # get detailed stream information
-            res.status(200).end JSON.stringify req.stream.status(true)
-            
+            api.ok req, res, req.stream.status(true)
+        
+        # update stream metadata    
         @app.post "/api/streams/:stream/metadata", (req,res) =>
-            req.stream.setMetadata req.query, (err,msg) =>
+            req.stream.setMetadata req.query, (err,meta) =>
                 if err
-                    res.status(422).end "Error: #{err}"
+                    api.invalid req, res, err
                 else
-                    res.status(200).end "OK"
-            
+                    api.ok req, req, meta
+        
+        # Promote a source to live    
         @app.post "/api/streams/:stream/promote", (req,res) =>
             # promote a stream source to active
             # We'll just pass on the UUID and leave any logic to the stream
             req.stream.promoteSource req.query.uuid, (err,msg) =>
                 if err
-                    res.status(200).end JSON.stringify error:err
+                    api.invalid req, res, err
                 else
-                    res.status(200).end JSON.stringify msg
-            
+                    api.ok req, res, msg
+        
+        # Drop a source    
         @app.post "/api/streams/:stream/drop", (req,res) =>
             # drop a stream source
-            
+        
+        # Delete a stream    
         @app.delete "/api/streams/:stream", (req,res) =>
             # delete a stream
-            
+        
+        # Get the web UI    
         @app.get /.*/, (req,res) =>
             res.render "layout", 
                 core:       @core
                 server:     "http://#{req.headers.host}/api"
                 streams:    JSON.stringify(@core.streamsInfo())
             
-        @server = @app.listen @port
-###
-API:
-
-/streams
--- Get stream information (is source connected, etc)
-
-/streams/(stream)
--- Get detailed information on one stream
-
-/streams/(stream)/promote
-###                
+        @server = @app.listen @port      
         
