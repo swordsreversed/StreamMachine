@@ -2,19 +2,20 @@
 
 %h2 Stream Key
 
-%input(type="text",name="key")
+%input(type="text" name="key")
 
 %h2 Hostname
 
-%input(type="text",name="host")
+%input(type="text" name="host")
 
 %h2 Source Password
 
-%input(type="text",name="source_pass")
+%input(type="text" name="source_password")
 
 %h2 Fallback Source?
 
 %p This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
 
-%input(type="text",name="fallback")
+%input(type="text" name="fallback")
 
+%button.btn.save Save

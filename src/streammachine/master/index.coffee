@@ -30,7 +30,6 @@ module.exports = class Master extends require("events").EventEmitter
 
         if @options.streams?            
             process.nextTick =>
-                @emit "config", @options
                 @configureStreams @options.streams
 
         # -- load our streams configuration from redis -- #
@@ -39,14 +38,13 @@ module.exports = class Master extends require("events").EventEmitter
             _slaveUpdate = =>
                 # pass config on to any connected slaves
                 for sock in @slaves
-                    sock.emit "streams", streams:@options.streams
+                    sock.emit "streams", @config()
             
             @log.debug "initializing redis config"
             @redis = new Redis @options.redis
             @redis.on "config", (config) =>
                 # stash the configuration
                 @options = _u.defaults config||{}, @options
-                @emit "config", @options
 
                 # (re-)configure our master stream objects
                 @configureStreams @options.streams
@@ -167,6 +165,9 @@ module.exports = class Master extends require("events").EventEmitter
         stream = new Stream @, key, @log.child(stream:key), opts
         
         if stream
+            # attach a listener for configs
+            stream.on "config", => @emit "config_update"; @emit "streams", @streams
+            
             @streams[ key ] = stream
             @_attachIOProxy stream
             return stream
@@ -196,6 +197,22 @@ module.exports = class Master extends require("events").EventEmitter
             cb? null, stream.status()
         else
             cb? "Stream failed to start."
+            
+    #----------
+    
+    updateStream: (stream,opts,cb) ->
+        @log.debug "updateStream called for ", key:stream.key, opts:opts
+        
+        # -- if they want to rename, the key must be unique -- #
+        
+        if stream.key != opts.key
+            if @streams[ opts.key ]
+                cb? "Stream key must be unique."
+                return false
+                
+        # -- if we're good, ask the stream to configure -- #
+        
+        stream.configure opts, cb
         
     #----------
     

@@ -79,7 +79,7 @@ module.exports = class Router
         # get stream details    
         @app.get "/api/streams/:stream", (req,res) =>
             # get detailed stream information
-            api.ok req, res, req.stream.status(true)
+            api.ok req, res, req.stream.status()
         
         # update stream metadata    
         @app.post "/api/streams/:stream/metadata", (req,res) =>
@@ -102,6 +102,14 @@ module.exports = class Router
         # Drop a source    
         @app.post "/api/streams/:stream/drop", (req,res) =>
             # drop a stream source
+            
+        # Update a stream's configuration
+        @app.put "/api/streams/:stream", express.bodyParser(), (req,res) =>
+            @core.updateStream req.stream, req.body, (err,obj) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, obj
         
         # Delete a stream    
         @app.delete "/api/streams/:stream", (req,res) =>

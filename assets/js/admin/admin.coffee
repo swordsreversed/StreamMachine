@@ -4,10 +4,11 @@ class streammachine.Admin extends Backbone.Router
     routes: 
         "":                  "streams"
         "streams/:stream":   "stream"
+        "streams":           "streams"
         "slaves/:slave":     "slave"
         "slaves":            "slaves"
     
-    initialize: (opts) ->
+    initialize: (@opts) ->
         @server = opts.server
         
         console.log "Admin init"
@@ -15,10 +16,10 @@ class streammachine.Admin extends Backbone.Router
         @$el = $("#cbody")
         
         # -- set up streams models and views -- #
-        
-        @streams = new Admin.Streams opts.streams
-        
-        @sv = new Admin.StreamsView collection:@streams
+                
+        @streams = new Admin.Streams @opts.streams
+                
+        @sv = new Admin.StreamsView collection:@streams, persisted:@opts.persisted
         
         @_sInt = setInterval =>
             @streams.fetch update:true
@@ -31,7 +32,7 @@ class streammachine.Admin extends Backbone.Router
             
         @on "route:stream", (key) =>
             # make sure it's a valid stream
-            if stream = @streams.find((s) -> s.get("stream") == key)
+            if stream = @streams.find((s) -> s.get("key") == key)
                 console.log "successful route to ", stream
                 @_showStreamPage stream
                 
@@ -64,6 +65,7 @@ class streammachine.Admin extends Backbone.Router
     #----------
         
     class @Stream extends Backbone.Model
+        idAttribute: "key"
         
     class @Streams extends Backbone.Collection
         model: Admin.Stream
@@ -75,10 +77,17 @@ class streammachine.Admin extends Backbone.Router
         className: "modal stream_edit"
         template: HAML.stream_edit
         
+        events:
+            "click .btn.save": "_save"
+        
         initialize: ->
             @modelBinder = new Backbone.ModelBinder()
             
+        _save: (evt) ->
+            @trigger "save", @model
+            
         render: ->
+            console.log "edit modal with ", @model.toJSON()
             @$el.html @template @model.toJSON()
             
             @modelBinder.bind @model, @el
@@ -90,16 +99,32 @@ class streammachine.Admin extends Backbone.Router
     class @StreamPage extends Backbone.View
         template: HAML.stream_page
         
+        events:
+          "click .edit_stream":     "_edit_stream"
+          "click .destroy_stream":  "_destroy_stream"
+        
         initialize: ->
             @model.on "change", => @render()
         
         render: ->
             @$el.html @template @model.toJSON()
             @
+            
+        _edit_stream: (evt) ->
+          modal = new Admin.StreamEditModal model:@model
+          $(modal.render().el).modal show:true
+          
+          modal.on "save", =>
+            console.log "modal called save."
+            @model.save success:(model,resp) =>
+                console.log "Successful save."
+                
+            , error:(model,resp) =>
+                console.log "Got an error: ", resp, model
+          
+        _destroy_stream: (evt) ->
     
     #----------
-    
-    class @StreamView extends Backbone.View
     
     class @StreamsView extends Backbone.View
         template: HAML.streams
@@ -108,7 +133,7 @@ class streammachine.Admin extends Backbone.Router
             "click .stream": "_stream"
             "click .btn-add-stream": "_add_stream"
         
-        initialize: ->
+        initialize: (@opts) ->
             @collection.on "add remove change reset", => @render()
             
         _stream: (evt) ->
@@ -121,11 +146,12 @@ class streammachine.Admin extends Backbone.Router
             modal = new Admin.StreamEditModal model:stream
             $(modal.render().el).modal show:true
             
-            modal.on "submit", =>
-                console.log "ready to submit ", stream
+            modal.on "new_stream", =>
+                
         
         render: ->
-            @$el.html @template streams:@collection.toJSON()
+            console.log "streams collection is ", @collection.toJSON()
+            @$el.html @template persisted:@opts.persisted, streams:@collection.toJSON()
             @
         
         

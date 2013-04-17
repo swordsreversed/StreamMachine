@@ -5,17 +5,8 @@ Rewind = require "../rewind_buffer"
 
 # Streams are the endpoints that listeners connect to. 
 
-module.exports = class Stream extends require('../rewind_buffer')
-    DefaultOptions:
-        meta_interval:  32768
-        max_buffer:     4194304 # 4 megabits (64 seconds of 64k audio)
-        name:           ""
-        seconds:        (60*60*4) # 4 hours
-        burst:          30
-        
-    constructor: (@core,@key,@log,opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
-        
+module.exports = class Stream extends require('../rewind_buffer')        
+    constructor: (@core,@key,@log,@opts) ->        
         @STATUS = "Initializing"
 
         # initialize RewindBuffer
@@ -57,7 +48,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         status:         @STATUS
         sources:        []
         listeners:      @listeners()
-        options:        @options
+        options:        @opts
         bufferedSecs:   @bufferedSecs()
         
     #----------
@@ -107,7 +98,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         # We disconnect clients that have fallen too far behind on their 
         # buffers. Buffer size can be configured via the "max_buffer" setting, 
         # which takes bits
-        console.log "max buffer size is ", @options.max_buffer
+        console.log "max buffer size is ", @opts.max_buffer
         @buf_timer = setInterval =>
             all_buf = 0
             for id,l of @_lmeta
@@ -115,7 +106,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                 
                 all_buf += conn?.bufferSize||0
                 
-                if (conn?.bufferSize||0) > @options.max_buffer
+                if (conn?.bufferSize||0) > @opts.max_buffer
                     @log.debug "Connection exceeded max buffer size.", req:l.obj.req, bufferSize:conn.bufferSize
                     l.obj.disconnect(true)
 

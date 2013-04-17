@@ -13,7 +13,18 @@ Proxy = require('../sources/proxy_room')
 #   this was the live source. `count` integer indicates remaining sources
 
 module.exports = class Stream extends require('events').EventEmitter
-    constructor: (@core,@key,@log,@opts)->
+    DefaultOptions:
+        meta_interval:      32768
+        max_buffer:         4194304 # 4 megabits (64 seconds of 64k audio)
+        key:                null
+        seconds:            (60*60*4) # 4 hours
+        burst:              30
+        source_password:    null
+        host:               null
+    
+    constructor: (@core,@key,@log,opts)->
+        @opts = _u.defaults opts||{}, @DefaultOptions
+                
         @sources = []
         @source = null
         
@@ -78,17 +89,11 @@ module.exports = class Stream extends require('events').EventEmitter
     
     #----------
     
-    status: (detailed=false)->
-        if detailed
-            stream:             @key
+    status: ->
+        _u.defaults 
             sources:            ( s.info() for s in @sources )
             listeners:          @listeners()
-            listeners_by_slave: @listenersBySlave()            
-            
-        else
-            stream:     @key
-            listeners:  @listeners()
-            sources:    ( s.info() for s in @sources )
+        , @opts 
     
     #----------
     
@@ -205,8 +210,14 @@ module.exports = class Stream extends require('events').EventEmitter
     
     #----------
     
-    configure: (opts) ->
-        # there's not currently any configuration done here on the master side
+    configure: (new_opts,cb) ->
+        # allow updates, but only to keys that are present in @DefaultOptions.
+        for k,v of @DefaultOptions
+            @opts[k] = new_opts[k] if new_opts[k]?
+            
+        @emit "config"
+        
+        cb? null, @status()
         
     #----------
     

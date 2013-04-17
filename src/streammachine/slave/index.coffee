@@ -196,7 +196,7 @@ module.exports = class Slave extends require("events").EventEmitter
                 
                 slog = @log.child stream:key
                 @streams[key] = new Stream @, key, slog, opts
-                
+                                
                 if @master
                     source = new Slave.SocketSource master:@master, key:key, log:slog
                     @streams[key].useSource(source)

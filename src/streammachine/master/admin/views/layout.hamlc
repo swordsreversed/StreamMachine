@@ -21,10 +21,7 @@
     .container
       .content
         .row
-          #cbody.span9
-            %h1 Loading...
-          .span3
-            #sidebar.well.sidebar-nav
+          #cbody
       
       %p/        
       %footer
@@ -35,7 +32,7 @@
       window.SM = new streammachine.Admin({
         streams:      #{@streams},
         server:       "#{@server}",
-        redis_config: #{ if @core.redis? then true else false }
+        persisted: #{ if @core.redis? then true else false }
       })    
     })
     
