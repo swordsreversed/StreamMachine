@@ -21,6 +21,7 @@ module.exports = class Stream extends require('events').EventEmitter
         burst:              30
         source_password:    null
         host:               null
+        fallback:           null
     
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
@@ -52,9 +53,9 @@ module.exports = class Stream extends require('events').EventEmitter
         # This is an initial source like a proxy that should be connected from 
         # our end, rather than waiting for an incoming connection
         
-        if @opts.source?
+        if @opts.fallback?
             console.log "Connecting initial source"
-            newsource = new Proxy @, @opts.source
+            newsource = new Proxy @, @opts.fallback
             newsource.connect()
             @addSource newsource, (result) =>
                 if result

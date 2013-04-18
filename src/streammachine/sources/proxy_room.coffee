@@ -12,12 +12,9 @@ module.exports = class ProxyRoom extends require("./base")
     #----------
     
     TYPE: -> "Proxy (#{@url})"
-    constructor: (@stream,options) ->
-        @options = _u.defaults options||{}, @DefaultOptions
-        
+    constructor: (@stream,@url) ->
         super()
         
-        @url            = @options.url
         @connected      = false
         @framesPerSec   = null
         
@@ -37,8 +34,8 @@ module.exports = class ProxyRoom extends require("./base")
         @_bounces       = 0
         @_bounceInt     = 5
         
-        @StreamTitle = @options.StreamTitle || null
-        @StreamUrl = @options.StreamUrl || null
+        @StreamTitle    = null
+        @StreamUrl      = null
     
     #----------
     
