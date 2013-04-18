@@ -13,10 +13,10 @@
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
-          %a.brand(href="/") StreamMachine
+          %a.brand(href="#{@path}/") StreamMachine
           %ul.nav
             %li
-              %a{href:"/"} Streams
+              %a{href:"#{@path}/"} Streams
 
     .container
       .content

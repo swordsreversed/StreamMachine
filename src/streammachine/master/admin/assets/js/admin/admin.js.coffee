@@ -121,8 +121,9 @@ class streammachine.Admin extends Backbone.Router
           
           modal.on "save", =>
             console.log "modal called save."
-            @model.save success:(model,resp) =>
+            @model.save {}, success:(model,resp) =>
                 console.log "Successful save."
+                $(modal.render().el).modal "hide"
                 
             , error:(model,resp) =>
                 console.log "Got an error: ", resp, model
@@ -148,11 +149,21 @@ class streammachine.Admin extends Backbone.Router
         _add_stream: (evt) ->
             # create an empty stream object
             stream = new Admin.Stream
+            stream.url = @collection.url()
+            stream.isNew = -> true
             modal = new Admin.StreamEditModal model:stream
             $(modal.render().el).modal show:true
             
-            modal.on "new_stream", =>
-                
+            modal.on "save", =>
+                console.log "save called on ", stream
+                # try saving the new stream to the server
+                stream.save {}, success:(model,res) ->
+                    console.log "got success", res
+                    @collection.add model
+                    $(modal.render().el).modal "hide"
+                    
+                , error:(res) ->
+                    console.log "got error: ", res
         
         render: ->
             console.log "streams collection is ", @collection.toJSON()
