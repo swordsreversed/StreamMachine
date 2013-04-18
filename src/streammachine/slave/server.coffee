@@ -48,51 +48,47 @@ module.exports = class Server extends require('events').EventEmitter
         # -- Utility Routes -- #
         
         @app.get "/index.html", (req,res) =>
-            res.writeHead 200,
-                "content-type": "text/html"
-                "connection": "close"
-        
-            res.end """
-                    <html>
-                        <head><title>StreamMachine</title></head>
-                        <body>
-                            <h1>OK</h1>
-                        </body>
-                    </html>
-                    """
+            res.set "content-type", "text/html"
+            res.set "connection", "close"
+            
+            res.status(200).end """
+                <html>
+                    <head><title>StreamMachine</title></head>
+                    <body>
+                        <h1>OK</h1>
+                    </body>
+                </html>
+            """
                     
         @app.get "/crossdomain.xml", (req,res) =>
-            res.writeHead 200, 
-                "content-type": "text/xml"
-                "connection": "close"
+            res.set "content-type", "text/xml"
+            res.set "connection", "close"
             
-            res.end """
-                    <?xml version="1.0"?>
-                    <!DOCTYPE cross-domain-policy SYSTEM "http://www.macromedia.com/xml/dtds/cross-domain-policy.dtd">
-                    <cross-domain-policy>
-                    <allow-access-from domain="*" />
-                    </cross-domain-policy>
-                    """
+            res.status(200).end """
+                <?xml version="1.0"?>
+                <!DOCTYPE cross-domain-policy SYSTEM "http://www.macromedia.com/xml/dtds/cross-domain-policy.dtd">
+                <cross-domain-policy>
+                <allow-access-from domain="*" />
+                </cross-domain-policy>
+            """
         # -- Stream Routes -- #
         
+        # playlist file
         @app.get "/:stream.pls", (req,res) =>
             res.set "X-Powered-By", "StreamMachine"
+            res.set "content-type", "audio/x-scpls"
+            res.set "connection", "close"
 
             host = req.headers?.host || req.stream.options.host
         
-            res.writeHead 200,
-                "content-type": "audio/x-scpls"
-                "connection":   "close"
-                                
-            res.end("[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{req.stream.key}/\n")
-            
+            res.status(200).end "[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{req.stream.key}/\n"
+        
+        # head request    
         @app.head "/:stream", (req,res) =>
-            res.writeHead 200, 
-                "content-type": "audio/mpeg"
-                "connection":   "close"
-            
-            res.end()
+            res.set "content-type", "audio/mpeg"            
+            res.status(200).end()
 
+        # listen to the stream
         @app.get "/:stream", (req,res) =>
             res.set "X-Powered-By", "StreamMachine"
             
@@ -117,8 +113,7 @@ module.exports = class Server extends require('events').EventEmitter
                 else
                     # -- straight mp3 listener -- #
                     new @core.Outputs.mp3 req.stream, req, res
-            
-        
+    
     #----------
     
     listen: (port) ->
@@ -133,47 +128,4 @@ module.exports = class Server extends require('events').EventEmitter
     stopListening: ->
         console.log "stopListening"
         @hserver?.close => console.log "listening stopped."
-    
-    #----------
-    
-    streamRouter: (req,res,next) ->
-            
-        # -- utility routes -- #
-            
-        # crossdomain.xml
-        if req.url == "/crossdomain.xml"
         
-            return true
-        
-        # -- Stream Routing -- #
-        
-        # does the request match one of our streams?
-        if m = ///^\/(#{_u(@core.streams).keys().join("|")})(?:\.(mp3|pls))?///.exec req.url     
-            res.header("","StreamMachine")
-        
-            console.log "match is ", m
-            stream = @core.streams[ m[1] ]
-        
-            # fend off any HEAD requests
-            if req.method == "HEAD"
-                return true
-        
-            # -- Handle playlist request -- #
-            
-            console.log "format is ", m[2]
-        
-            if m[2] && m[2] == "pls"
-                host = req.headers?.host || stream.options.host
-            
-                res.writeHead 200,
-                    "content-type": "audio/x-scpls"
-                    "connection":   "close"
-                                    
-                res.end("[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{stream.key}/\n")
-                return true
-        
-
-            
-        else
-            @core.log.debug "Not Found", req:req
-            next()

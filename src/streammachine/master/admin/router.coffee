@@ -3,33 +3,22 @@ express = require "express"
 api = require "express-api-helper"
 path = require "path"
 hamlc = require "haml-coffee"
-Assets = require "connect-assets"
+Mincer = require "mincer"
 
 module.exports = class Router
     constructor: (opts) ->
         @core = opts?.core
-        @port = opts?.port
-        
-        #if !@port
-        #    throw "Admin requires a port"
-            
-        #@core.log.debug "Admin is listening on #{@port}"
         
         @app = express()
         @app.set "views", __dirname + "/views"
         @app.set "view engine", "hamlc"
         @app.engine '.hamlc', hamlc.__express
         
-        #@app.use require('connect-assets')()
-        
-        Assets.jsCompilers.hamlc =
-          match: /\.js$/
-          compileSync: (sourcePath, source) ->
-             assetName = path.basename(sourcePath, '.hamlc')
-             compiled = hamlc.template(source, assetName)
-             compiled
-             
-        @app.use Assets()
+        mincer = new Mincer.Environment()
+        mincer.appendPath __dirname + "/assets/js"
+        mincer.appendPath __dirname + "/assets/css"
+                        
+        @app.use('/assets', Mincer.createServer(mincer))
         
         # -- Param Handlers -- #
         
@@ -119,8 +108,9 @@ module.exports = class Router
         @app.get /.*/, (req,res) =>
             res.render "layout", 
                 core:       @core
-                server:     "http://#{req.headers.host}/api"
+                server:     "http://#{req.headers.host}#{@app.path()}/api"
                 streams:    JSON.stringify(@core.streamsInfo())
+                path:       @app.path()
             
         #@server = @app.listen @port      
         

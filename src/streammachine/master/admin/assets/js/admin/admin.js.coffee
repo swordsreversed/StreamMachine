@@ -17,7 +17,8 @@ class streammachine.Admin extends Backbone.Router
         
         # -- set up streams models and views -- #
                 
-        @streams = new Admin.Streams @opts.streams
+        console.log "Opening streams from ", @opts.server
+        @streams = new Admin.Streams @opts.streams, server:@opts.server
                 
         @sv = new Admin.StreamsView collection:@streams, persisted:@opts.persisted
         
@@ -51,7 +52,7 @@ class streammachine.Admin extends Backbone.Router
         
         # -- start -- #
         
-        Backbone.history.start({pushState: true})
+        Backbone.history.start pushState:true, root:@opts.path
 
     #----------
     
@@ -69,13 +70,17 @@ class streammachine.Admin extends Backbone.Router
         
     class @Streams extends Backbone.Collection
         model: Admin.Stream
-        url: "/api/streams"
+        
+        initialize: (models,opts) ->
+            @server = opts.server
+        
+        url: -> "#{@server}/streams"
         
     #----------
     
     class @StreamEditModal extends Backbone.View
         className: "modal stream_edit"
-        template: HAML.stream_edit
+        template: JST["admin/templates/stream_edit"]
         
         events:
             "click .btn.save": "_save"
@@ -97,7 +102,7 @@ class streammachine.Admin extends Backbone.Router
     #----------
     
     class @StreamPage extends Backbone.View
-        template: HAML.stream_page
+        template: JST["admin/templates/stream_page"]
         
         events:
           "click .edit_stream":     "_edit_stream"
@@ -127,7 +132,7 @@ class streammachine.Admin extends Backbone.Router
     #----------
     
     class @StreamsView extends Backbone.View
-        template: HAML.streams
+        template: JST["admin/templates/streams"]
         
         events:
             "click .stream": "_stream"

@@ -6,8 +6,8 @@
     %meta(name="viewport" content="width=device-width, initial-scale=1.0")
     %title= if @TITLE? then "#{@TITLE} : StreamMachine" else "StreamMachine Admin"
     
-    != css("admin")
-    != js("admin")
+    %link{ href:"#{@path}/assets/admin.css", media:"all", rel:"stylesheet", type:"text/css" }/
+    %script{ type:"text/javascript", src:"#{@path}/assets/admin.js" }
 
   %body
     .navbar.navbar-fixed-top
@@ -32,7 +32,8 @@
       window.SM = new streammachine.Admin({
         streams:      #{@streams},
         server:       "#{@server}",
-        persisted: #{ if @core.redis? then true else false }
+        persisted: #{ if @core.redis? then true else false },
+        path:         "#{@path}"
       })    
     })
     
