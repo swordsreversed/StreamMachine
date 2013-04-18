@@ -23,6 +23,7 @@
 	"haml-coffee": 			"1.4.1",
 	"less-middleware": 		"0.1.4",
 	"mincer": 				"~0.4.5",
-	"express-api-helper":	"~0.0.1"
+	"express-api-helper":	"~0.0.1",
+	"node-uuid":			"~1.4.0"
   }
 }
