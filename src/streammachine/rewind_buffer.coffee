@@ -62,8 +62,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                         
                     # compute new frame numbers
                     @_rsecsPerChunk   = newsource.emit_duration
-                    @_rmax            = Math.round @options.seconds / @_rsecsPerChunk
-                    @_rburst          = Math.round @options.burst / @_rsecsPerChunk
+                    @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
+                    @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
         
                     @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk
                 
@@ -204,8 +204,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if opts?.pump
                 if @_offset == 0
                     # pump some data before we start regular listening
-                    @rewind.log.debug "Rewinder: Pumping #{@rewind.options.burst} seconds."
-                    @_queue.push @rewind.pumpSeconds(@rewind.options.burst)
+                    @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                    @_queue.push @rewind.pumpSeconds(@rewind.opts.burst)
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live

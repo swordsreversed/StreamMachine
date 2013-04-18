@@ -17,14 +17,14 @@ module.exports = class Shoutcast
             @res.useChunkedEncodingByDefault = false
             
 
-            @ice = new icecast.Writer @stream.options.meta_interval            
+            @ice = new icecast.Writer @stream.opts.meta_interval            
             @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
         
             headers = 
                 "Content-Type":         "audio/mpeg"
                 "icy-name":             @stream.StreamTitle
                 "icy-url":              @stream.StreamUrl
-                "icy-metaint":          @stream.options.meta_interval
+                "icy-metaint":          @stream.opts.meta_interval
                         
             # write out our headers
             res.writeHead 200, headers
