@@ -59,60 +59,61 @@ module.exports = class Master extends require("events").EventEmitter
                 
         # -- create a server to provide the admin -- #
         
-        @server = new Admin core:@, port:( @options.master?.port || @options.admin_port )
+        @admin = new Admin core:@, port:( @options.master?.port || @options.admin_port )
         
         # -- start the source listener -- #
             
         @sourcein = new SourceIn core:@, port:opts.source_port
             
         # -- set up the socket connection for slaves -- #
-            
-        if @options.master?.port && @options.master?.password
-            @log.debug "Master listening to port ", port:@options.master.port
-            # fire up a socket listener on our slave port
-            @io = require("socket.io").listen @server?.server || @options.master.port
-            
-            @_initIOProxies()
-                        
-            # FIXME: disconnect from our port on SIGTERM
-            # process.on "SIGTERM", => @io.close()
-            
-            # add our authentication
-            @io.configure =>
-                # don't bombard us with stream data
-                @io.disable "log"
-                
-                @io.set "authorization", (data,cb) =>
-                    @log.debug "In authorization for slave connection."
-                    # look for password                    
-                    if @options.master.password == data.query?.password
-                        cb null, true
-                    else
-                        cb "Invalid slave password.", false
-            
-            # look for slave connections    
-            @io.on "connection", (sock) =>
-                @log.debug "slave connection is #{sock.id}"
-                
-                if @options.streams
-                    # emit our configuration
-                    sock.emit "config", streams:@options.streams
+        
+    #----------
+    
+    listenForSlaves: (server) ->
+        # fire up a socket listener on our slave port
+        @io = require("socket.io").listen server
+        
+        @_initIOProxies()
                     
-                @slaves.push sock
+        # FIXME: disconnect from our port on SIGTERM
+        # process.on "SIGTERM", => @io.close()
+        
+        # add our authentication
+        @io.configure =>
+            # don't bombard us with stream data
+            @io.disable "log"
+            
+            @io.set "authorization", (data,cb) =>
+                @log.debug "In authorization for slave connection."
+                # look for password                    
+                if @options.master.password == data.query?.password
+                    cb null, true
+                else
+                    cb "Invalid slave password.", false
+        
+        # look for slave connections    
+        @io.on "connection", (sock) =>
+            @log.debug "slave connection is #{sock.id}"
+            
+            if @options.streams
+                # emit our configuration
+                sock.emit "config", streams:@options.streams
                 
-                # attach event handler for log reporting
-                socklogger = @log.child slave:sock.handshake.address.address
-                sock.on "log", (obj = {}) => 
-                    socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
-                    
-                # look for listener counts
-                sock.on "listeners", (obj = {}) =>
-                    @_recordListeners sock.id, obj
+            @slaves.push sock
+            
+            # attach event handler for log reporting
+            socklogger = @log.child slave:sock.handshake.address.address
+            sock.on "log", (obj = {}) => 
+                socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
                 
-            # attach disconnect handler
-            @io.on "disconnect", (sock) =>
-                @log.debug "slave disconnect from #{sock.id}"
-                @slaves = _u(@slaves).without sock
+            # look for listener counts
+            sock.on "listeners", (obj = {}) =>
+                @_recordListeners sock.id, obj
+            
+        # attach disconnect handler
+        @io.on "disconnect", (sock) =>
+            @log.debug "slave disconnect from #{sock.id}"
+            @slaves = _u(@slaves).without sock
             
     #----------
     

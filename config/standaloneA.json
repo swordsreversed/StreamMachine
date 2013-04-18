@@ -1,0 +1,10 @@
+{
+	"port":			8015,
+	"source_port":	8016,
+	"log": {
+		"stdout": true
+	},
+	"redis": {
+		"server": "redis://localhost:6379/3"
+	}
+}

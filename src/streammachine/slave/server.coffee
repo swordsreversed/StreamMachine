@@ -15,17 +15,115 @@ module.exports = class Server extends require('events').EventEmitter
         
         @core = @opts.core
         
-        @server = express()
-        @server.httpAllowHalfOpen = true
-        @server.useChunkedEncodingByDefault = false
+        @app = express()
+        @app.httpAllowHalfOpen = true
+        @app.useChunkedEncodingByDefault = false
+        
+        # -- Stream Finder -- #
+        
+        @app.param "stream", (req,res,next,key) =>
+            # make sure it's a valid stream key
+            if key? && s = @core.streams[ key ]
+                req.stream = s
+                next()
+            else
+                res.status(404).end "Invalid stream.\n"
                                     
-        @server.use (req,res,next) => @streamRouter(req,res,next)
+        #@server.use (req,res,next) => @streamRouter(req,res,next)
+        
+        # -- Funky URL Rewriters -- #
+        
+        @app.use (req,res,next) =>
+            if @core.root_route
+                if req.url == '/' || req.url == "/;stream.nsv" || req.url == "/;"
+                    req.url = "/#{@core.root_route}"
+                    next()
+                else if req.url == "/listen.pls"
+                    req.url = "/#{@core.root_route}.pls"
+                else
+                    next()
+            else
+                next()
+        
+        # -- Utility Routes -- #
+        
+        @app.get "/index.html", (req,res) =>
+            res.writeHead 200,
+                "content-type": "text/html"
+                "connection": "close"
+        
+            res.end """
+                    <html>
+                        <head><title>StreamMachine</title></head>
+                        <body>
+                            <h1>OK</h1>
+                        </body>
+                    </html>
+                    """
+                    
+        @app.get "/crossdomain.xml", (req,res) =>
+            res.writeHead 200, 
+                "content-type": "text/xml"
+                "connection": "close"
+            
+            res.end """
+                    <?xml version="1.0"?>
+                    <!DOCTYPE cross-domain-policy SYSTEM "http://www.macromedia.com/xml/dtds/cross-domain-policy.dtd">
+                    <cross-domain-policy>
+                    <allow-access-from domain="*" />
+                    </cross-domain-policy>
+                    """
+        # -- Stream Routes -- #
+        
+        @app.get "/:stream.pls", (req,res) =>
+            res.set "X-Powered-By", "StreamMachine"
+
+            host = req.headers?.host || req.stream.options.host
+        
+            res.writeHead 200,
+                "content-type": "audio/x-scpls"
+                "connection":   "close"
+                                
+            res.end("[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{req.stream.key}/\n")
+            
+        @app.head "/:stream", (req,res) =>
+            res.writeHead 200, 
+                "content-type": "audio/mpeg"
+                "connection":   "close"
+            
+            res.end()
+
+        @app.get "/:stream", (req,res) =>
+            res.set "X-Powered-By", "StreamMachine"
+            
+            console.log "stream is ", req.stream.key
+            console.log "format is ", req.param[0]
+            
+            # -- Stream match! -- #
+        
+            if req.param("socket")
+                # socket listener
+                @core.sockets.addListener req.stream,req,res
+                
+            else if req.param("pump")
+                # pump listener pushes from the buffer as fast as possible
+                new @core.Outputs.pumper req.stream, req, res
+                
+            else
+                # normal live stream (with or without shoutcast)
+                if req.headers['icy-metadata']
+                    # -- shoutcast listener -- #
+                    new @core.Outputs.shoutcast req.stream, req, res
+                else
+                    # -- straight mp3 listener -- #
+                    new @core.Outputs.mp3 req.stream, req, res
+            
         
     #----------
     
     listen: (port) ->
         console.log "Start listening"
-        @hserver = @server.listen port
+        @hserver = @app.listen port
         @io = require("socket.io").listen @hserver
         @emit "io_connected", @io
         @hserver
@@ -39,51 +137,11 @@ module.exports = class Server extends require('events').EventEmitter
     #----------
     
     streamRouter: (req,res,next) ->
-        res.removeHeader("X-Powered-By");
-    
-        # -- default routes -- #
-                    
-        # default URL (and also a mapping for weird stream.nsv route)
-        if @core.root_route && (req.url == '/' || req.url == "/;stream.nsv" || req.url == "/;")
-            # pretend the request came in on the default stream
-            req.url = "/#{@core.root_route}"
-        
-        # default playlist
-        if @core.root_route && req.url == "/listen.pls"
-            req.url = "/#{@core.root_route}.pls"
-        
+            
         # -- utility routes -- #
-    
-        # index.html
-        if req.url == "/index.html"
-            res.writeHead 200,
-                "content-type": "text/html"
-                "connection": "close"
-        
-            res.end """
-                    <html>
-                        <head><title>StreamMachine</title></head>
-                        <body>
-                            <h1>OK</h1>
-                        </body>
-                    </html>
-                    """
-        
-            return true
-        
+            
         # crossdomain.xml
         if req.url == "/crossdomain.xml"
-            res.writeHead 200, 
-                "content-type": "text/xml"
-                "connection": "close"
-            
-            res.end """
-                    <?xml version="1.0"?>
-                    <!DOCTYPE cross-domain-policy SYSTEM "http://www.macromedia.com/xml/dtds/cross-domain-policy.dtd">
-                    <cross-domain-policy>
-                    <allow-access-from domain="*" />
-                    </cross-domain-policy>
-                    """
         
             return true
         
@@ -91,18 +149,13 @@ module.exports = class Server extends require('events').EventEmitter
         
         # does the request match one of our streams?
         if m = ///^\/(#{_u(@core.streams).keys().join("|")})(?:\.(mp3|pls))?///.exec req.url     
-            res.header("X-Powered-By","StreamMachine")
+            res.header("","StreamMachine")
         
             console.log "match is ", m
             stream = @core.streams[ m[1] ]
         
             # fend off any HEAD requests
             if req.method == "HEAD"
-                res.writeHead 200, 
-                    "content-type": "audio/mpeg"
-                    "connection":   "close"
-                
-                res.end()
                 return true
         
             # -- Handle playlist request -- #
@@ -119,24 +172,7 @@ module.exports = class Server extends require('events').EventEmitter
                 res.end("[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{stream.key}/\n")
                 return true
         
-            # -- Stream match! -- #
-        
-            if req.param("socket")
-                # socket listener
-                @core.sockets.addListener stream,req,res
-                
-            else if req.param("pump")
-                # pump listener pushes from the buffer as fast as possible
-                new @core.Outputs.pumper stream, req, res
-                
-            else
-                # normal live stream (with or without shoutcast)
-                if req.headers['icy-metadata']
-                    # -- shoutcast listener -- #
-                    new @core.Outputs.shoutcast stream, req, res
-                else
-                    # -- straight mp3 listener -- #
-                    new @core.Outputs.mp3 stream, req, res
+
             
         else
             @core.log.debug "Not Found", req:req

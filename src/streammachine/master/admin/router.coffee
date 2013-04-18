@@ -10,10 +10,10 @@ module.exports = class Router
         @core = opts?.core
         @port = opts?.port
         
-        if !@port
-            throw "Admin requires a port"
+        #if !@port
+        #    throw "Admin requires a port"
             
-        @core.log.debug "Admin is listening on #{@port}"
+        #@core.log.debug "Admin is listening on #{@port}"
         
         @app = express()
         @app.set "views", __dirname + "/views"
@@ -122,5 +122,5 @@ module.exports = class Router
                 server:     "http://#{req.headers.host}/api"
                 streams:    JSON.stringify(@core.streamsInfo())
             
-        @server = @app.listen @port      
+        #@server = @app.listen @port      
         

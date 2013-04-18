@@ -42,14 +42,21 @@ module.exports = class Core
             
             @log = new Logger @options.log
             @log.debug("Instance initialized")
-            
+                        
             # set up a master
             @master = new Master _u.extend opts, logger:@log.child(mode:"master")
             @slave  = new Slave _u.extend opts, logger:@log.child(mode:"slave")
+            
+            # -- Set up combined server -- #
+            
+            @server = express()
+            @server.use "/admin", @master.admin.app
+            @server.use @slave.server.app
+            @server.listen opts.listen
                         
             # proxy data events from master -> slave
             @master.on "streams", (streams) =>
-                @slave.configureStreams @master.config().streams
+                @slave.configureStreams @master.config().streams                
                 @slave._onConnect()
                 
                 #console.log "in standalone streams", streams
@@ -90,6 +97,12 @@ module.exports = class Core
             
             # create a master
             @master = new Master _u.extend opts, logger:@log
+            
+            # Listen on the master port
+            @server = @master.admin.listen opts.master.port
+            
+            # Also attach sockets for slaves
+            @master.listenForSlaves(@server)
 
     #----------
     
@@ -109,3 +122,5 @@ module.exports = class Core
             
             # create a slave
             @slave = new Slave _u.extend opts, logger:@log
+            
+            @slave.server.app.listen opts.port

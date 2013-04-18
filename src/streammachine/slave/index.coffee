@@ -156,7 +156,7 @@ module.exports = class Slave extends require("events").EventEmitter
             @log.proxyToMaster @master
         
         # start listening
-        @server.listen @options.listen
+        #@server.listen @options.listen
         
         true
         

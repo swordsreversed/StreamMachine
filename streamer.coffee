@@ -27,7 +27,6 @@ if nconf.get("master")
         redis:          nconf.get("redis")
         source_port:    nconf.get("source_port")
         streams:        nconf.get("streams")
-        admin_port:     nconf.get("admin_port")
         
 else if nconf.get("slave")
     # run as a slave
@@ -43,6 +42,5 @@ else
         log:            nconf.get("log")
         streams:        nconf.get("streams")
         source_port:    nconf.get("source_port")
-        admin_port:     nconf.get("admin_port")
         redis:          nconf.get("redis")
         
