@@ -28,7 +28,16 @@
           = s.stream_key
         %td
           Options...
-                              
+          
+    - if @sources.length == 0
+      %tr.error
+        %td No Source Connected
+        %td —
+        %td —
+        %td —
+        
+  %hr/
+                                
 .span3
   .well.sidebar-nav
     %h2 Options
