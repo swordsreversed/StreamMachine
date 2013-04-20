@@ -88,12 +88,17 @@ class streammachine.Admin extends Backbone.Router
         initialize: ->
             @modelBinder = new Backbone.ModelBinder()
             
+            if @model.isNew()
+                @title = "Add a Stream"
+            else
+                @title = "Edit Stream: #{@model.get("key")}"
+            
         _save: (evt) ->
             @trigger "save", @model
             
         render: ->
             console.log "edit modal with ", @model.toJSON()
-            @$el.html @template @model.toJSON()
+            @$el.html @template _.extend @model.toJSON(), title:@title
             
             @modelBinder.bind @model, @el
             
@@ -129,6 +134,10 @@ class streammachine.Admin extends Backbone.Router
                 console.log "Got an error: ", resp, model
           
         _destroy_stream: (evt) ->
+            # ask for confirmation
+            if window.confirm "Really delete the stream #{@model.get("key")}?"
+                @model.destroy()
+                # navigate...
     
     #----------
     

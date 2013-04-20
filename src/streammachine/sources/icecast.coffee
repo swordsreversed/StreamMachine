@@ -61,7 +61,6 @@ module.exports = class IcecastSource extends require("./base")
                 
                     # emit new buffer
                     @emit "data", buf
-                    #@emit "data", { data:buf, ts:buf_ts }
         
         # we need to grab one frame to compute framesPerSec
         @parser.on "header", (data,header) =>

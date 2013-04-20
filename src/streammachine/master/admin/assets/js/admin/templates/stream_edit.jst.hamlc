@@ -1,21 +1,38 @@
-%h1= @title
+.modal-header
+  %button.close{ :type => "button", :data => { :dismiss => "modal" }, "aria-hidden" => "true" } &times;
+  %h3= @title
 
-%h2 Stream Key
+.modal-body
+  %h2 Stream Key
+  
+  %p Unique identifier for this stream.
 
-%input(type="text" name="key")
+  %input(type="text" name="key")
+  
+  %h2 Stream Format
+  
+  %select(name="format")
+    %option(value="") Select One
+    %option(value="mp3") MP3
+    %option(value="aac") AAC
 
-%h2 Hostname
+  %h2 Hostname
+  
+  %p Used in giving out playlist information.
 
-%input(type="text" name="host")
+  %input(type="text" name="host")
 
-%h2 Source Password
+  %h2 Source Password
+  
+  %p Required to allow Icecast clients to connect as sources.
 
-%input(type="text" name="source_password")
+  %input(type="text" name="source_password")
 
-%h2 Fallback Source?
+  %h2 Fallback Source?
 
-%p This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
+  %p This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
 
-%input(type="text" name="fallback")
+  %input(type="text" name="fallback")
 
-%button.btn.save Save
+.modal-footer
+  %button.btn.btn-primary.save Save
