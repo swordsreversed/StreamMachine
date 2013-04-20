@@ -1,45 +1,76 @@
-# StreamMachine
+---
+     ______  ______ ______  ______  ______  __    __  __    __  ______  ______  __  __  __  __   __  ______    
+    /\  ___\/\__  _/\  == \/\  ___\/\  __ \/\ "-./  \/\ "-./  \/\  __ \/\  ___\/\ \_\ \/\ \/\ "-.\ \/\  ___\   
+    \ \___  \/_/\ \\ \  __<\ \  __\\ \  __ \ \ \-./\ \ \ \-./\ \ \  __ \ \ \___\ \  __ \ \ \ \ \-.  \ \  __\   
+     \/\_____\ \ \_\\ \_\ \_\ \_____\ \_\ \_\ \_\ \ \_\ \_\ \ \_\ \_\ \_\ \_____\ \_\ \_\ \_\ \_\\"\_\ \_____\ 
+      \/_____/  \/_/ \/_/ /_/\/_____/\/_/\/_/\/_/  \/_/\/_/  \/_/\/_/\/_/\/_____/\/_/\/_/\/_/\/_/ \/_/\/_____/ 
+                                                                                                           
+---
 
-A spare-time experiment in audio streaming, with an eye toward our aging 
-shoutcast daemons.
+StreamMachine is an open-source streaming audio server aimed at pushing 
+innovation for radio stations that have spent too many years running old 
+technology like Shoutcast and Icecast.
 
-## Currently
+The project has two goals: emulating the traditional streaming experience and 
+building support for new features that push the radio listening experience 
+forward.
 
-__streamer.coffee__ connects to KPCC's live stream and MPR's The Current 
-and serves them up at http://localhost:8000/kpcclive.mp3 and 
-http://localhost:8000/thecurrent.mp3.
+## The Rewind Buffer
 
-Four outputs are currently supported:
+StreamMachine's big idea is keeping a big buffer of audio data in memory, 
+allowing clients to connect to "nearly-live" radio. Because audio data is 
+relatively small, a station can easily keep hours of audio in memory.  For 
+instance, a 64k MP3 stream will store 8 hours of audio data in just a little 
+over 200MB of memory.
 
-* If the client first connects a backchannel via socket.io and then passes 
-?sock=xxxxx to the stream, we return a stream that is bound to the socket 
-connection, allowing the socket to pass offset messages and seek through 
-our __RewindBuffer__ while listening to one continuous stream.
+Using the Rewind Buffer, players can add support for concepts like "Play 
+the current program from its start", or "Play the 9am broadcast." Unlike 
+podcasts, these functions are available immediately and keep the user connected 
+to the station's live stream.
 
-* If there is an ?off=x parameter (like ?off=30), we return a 
-__Core.RewindBuffer.Listener__ stream that is x seconds behind the live 
-broadcast.
+## Architecture
 
-* If the player passes the icy-metadata header, we return a Shoutcast-compatible 
-stream that includes regular metadata through __Core.Caster.Shoutcast__.
+StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on one server, or in a 
+master-slave configuration for load-balancing. StreamMachine is designed for Node 0.10.
 
-* If not, we return a raw mp3 stream through __Core.Caster.LiveMP3__.
+#### Configuration
 
-## In the future?
+Static configuration can be done via a JSON configuration file.  Configuration 
+changes will not be written back to the file. 
 
-Look for a demo of the seek-friendly web UI to be checked in shortly.
+For a dynamic configuration, StreamMachine can store its stream information on 
+a [Redis](http://redis.io) server.
 
-AAC support (including live transcoding from an MP3 input) would be nice, and is 
-on the todo list.
+#### Incoming Audio
 
-A smarter shell script with a configuration file and support for command line 
-arguments would be good.
+Two modes are supported for incoming audio:
 
-Logging support needs to be written.
+* __Icecast Source:__ The `SourceIn` module emulates the Icecast server's 
+	source handling, allowing source clients to connect to a mount point and 
+	provide a source password.
+	
+* __Proxy:__ The `ProxyRoom` module can connect to an existing Icecast server 
+	and proxy its stream through the StreamMachine infrastructure.  
 
-Generally everything needs to be beaten about and tested for edge cases that 
-could cause it to crash.
+#### Supported Formats
+
+Currently, MP3 and AAC streams are supported. 
+
+## Outputs
+
+#### Traditional
+
+The `LiveMP3` and `Shoutcast` outputs provide traditional output streams.
+
+#### New
+
+The `Pumper` output allows a chunk of audio to be downloaded as quick as 
+possible.
+
+The `Sockets` output creates an audio stream that can seek through the Rewind
+Buffer without having to reconnect.
 
 ## Who?
 
-You can blame Eric Richardson <erichardson@scpr.org>.
+StreamMachine was developed by [Eric Richardson](http://ewr.is) (e@ewr.is) 
+while at [Southern California Public Radio](http://scpr.org).
