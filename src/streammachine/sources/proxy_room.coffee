@@ -1,6 +1,5 @@
 Icecast = require 'icecast'
 _u      = require 'underscore'
-Parser  = require "../parsers/mp3"
 
 util    = require 'util'
 url     = require 'url'
@@ -52,7 +51,7 @@ module.exports = class ProxyRoom extends require("./base")
         @log.debug "connecting to #{@url}"
         
         # attach mp3 parser for rewind buffer
-        @parser = new Parser()
+        @parser = @_new_parser()
         
         url_opts = url.parse @url        
         url_opts.headers = "user-agent":"StreamMachine 0.1.0"

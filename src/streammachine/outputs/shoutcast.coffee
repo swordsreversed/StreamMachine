@@ -21,7 +21,10 @@ module.exports = class Shoutcast
             @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
         
             headers = 
-                "Content-Type":         "audio/mpeg"
+                "Content-Type":         
+                    if @stream.opts.format == "mp3"         then "audio/mpeg"
+                    else if @stream.opts.format == "aac"    then "audio/aacp"
+                    else "unknown"
                 "icy-name":             @stream.StreamTitle
                 "icy-url":              @stream.StreamUrl
                 "icy-metaint":          @stream.opts.meta_interval

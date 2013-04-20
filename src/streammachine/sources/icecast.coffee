@@ -1,5 +1,4 @@
 _u = require "underscore"
-Parser = require("../parsers/mp3")
 
 module.exports = class IcecastSource extends require("./base")    
     TYPE: -> "Icecast (#{[@sock.remoteAddress,@sock.remotePort].join(":")})"
@@ -16,7 +15,7 @@ module.exports = class IcecastSource extends require("./base")
         
         console.log "New Icecast source!"
         
-        @parser = new Parser()
+        @parser = @_new_parser()
                 
         @_chunk_queue = []
         @_chunk_queue_ts = null
@@ -68,14 +67,19 @@ module.exports = class IcecastSource extends require("./base")
         @parser.on "header", (data,header) =>
             if !@framesPerSec || !@stream_key
                 # -- compute frames per second -- #
-                
-                @framesPerSec = header.samplingRateHz / header.samplesPerFrame
-                @log.debug "setting framesPerSec to ", frames:@framesPerSec
-                @log.debug "first header is ", header
-                
                 # -- compute stream key -- #
                 
-                @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
+                if @stream.opts.format == 'mp3'
+                    @framesPerSec = header.samplingRateHz / header.samplesPerFrame                    
+                    @stream_key = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
+                else if @stream.opts.format == 'aac'
+                    # each AAC frame is 1024 samples
+                    @framesPerSec = header.sample_freq * 1000 / 1024
+                    @stream_key = ['aac',header.sample_freq,header.profile,header.channels].join("-")
+                    
+                @log.debug "setting framesPerSec to ", frames:@framesPerSec
+                @log.debug "first header is ", header
+                    
                 
             @last_header = data
             @emit "header", data, header

@@ -7,6 +7,11 @@ module.exports = class Source extends require("events").EventEmitter
     constructor: ->
         @uuid = null
         @stream_key = null
+            
+    #----------
+    
+    _new_parser: ->
+        new (require "../parsers/#{@stream.opts.format}")
     
     #----------
     

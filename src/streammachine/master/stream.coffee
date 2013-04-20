@@ -22,6 +22,7 @@ module.exports = class Stream extends require('events').EventEmitter
         source_password:    null
         host:               null
         fallback:           null
+        format:             "mp3"
     
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
