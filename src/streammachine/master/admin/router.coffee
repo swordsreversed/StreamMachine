@@ -118,6 +118,34 @@ module.exports = class Router
         # Delete a stream    
         @app.delete "/api/streams/:stream", (req,res) =>
             # delete a stream
+            
+        # -- User Management -- #
+        
+        # get a list of users
+        @app.get "/api/users", (req,res) =>
+            @users.list (err,users) =>
+                if err
+                    api.serverError req, res, err
+                else
+                    api.ok req, res, users
+            
+        # create / update a user
+        @app.post "/api/users", express.bodyParser(), (req,res) =>
+            @users.store req.body.user, req.body.password, (err,status) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, ok:true
+        
+        # delete a user
+        @app.delete "/api/users/:user", (req,res) =>
+            @users.store req.params.user, null, (err,status) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, ok:true
+        
+        # -- Serve the UI -- #
         
         # Get the web UI    
         @app.get /.*/, (req,res) =>

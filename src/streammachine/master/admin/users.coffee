@@ -7,6 +7,12 @@ module.exports = class Users
 
         @_user_store = (user,password,cb) =>
             cb? "Cannot store users without a valid store loaded."
+            
+        @_user_list = (cb) =>
+            cb? "Cannot list users without a valid store loaded."
+
+    list: (cb) ->
+        @_user_list cb
         
     validate: (user,password,cb) ->
         @_user_lookup user, password, cb
@@ -22,7 +28,11 @@ module.exports = class Users
             
             if @admin.core.redis?
                 # we're using redis for users
-                #@admin.core.redis.once_connected
+
+                @_user_list = (cb) =>
+                    @admin.core.redis.once_connected (redis) =>
+                        redis.hkeys "users", cb
+
                 @_user_lookup = (user,password,cb) =>
                     @admin.core.redis.once_connected (redis) =>
                         redis.hget "users", user, (err,val) =>
@@ -40,25 +50,42 @@ module.exports = class Users
                                 
                 @_user_store = (user,password,cb) =>
                     @admin.core.redis.once_connected (redis) =>
-                        hashed = PasswordHash.generate password
+                        console.log "in user_store for ", user, password
+                        if password
+                            # store the user
+                            hashed = PasswordHash.generate password
+                            
+                            console.log "hashed pass is ", hashed
                         
-                        redis.hset "users", user, (err) =>
-                            if err
-                                cb? err
-                                return false
+                            redis.hset "users", user, hashed, (err,result) =>
+                                if err
+                                    cb? err
+                                    return false
                                 
-                            cb? null, true
+                                cb? null, true
+                                
+                        else
+                            # delete the user
+                            redis.hdel "users", user, (err) =>
+                                if err
+                                    cb? err
+                                    return false
+                                
+                                cb? null, true
                 
             else
                 # we need to pull users out of the config file
                 nconf = require "nconf"
+                
+                @_user_list = (cb) =>
+                    users = nconf.get("users")
+                    cb? null, Object.keys(users)
                 
                 @_user_lookup = (user,password,cb) =>
                     if hash = nconf.get("users:#{user}")
                         cb? null, PasswordHash.verify(password,hash)
                     else
                         cb? "User not found."
-                
             
                 @_user_store = (user,password,cb) =>
                     cb? "Cannot store passwords when not using Redis."
