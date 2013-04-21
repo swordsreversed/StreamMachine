@@ -17,7 +17,7 @@ module.exports = class RedisConfig extends EventEmitter
         
         @client.on "connect", =>
             @_connected = true
-            @emit "connected"
+            @emit "connected", @client
             
             # see if there's a config to load
             @_config()
@@ -26,7 +26,7 @@ module.exports = class RedisConfig extends EventEmitter
     
     once_connected: (cb) ->
         if @_connected
-            cb?()
+            cb?(@client)
         else
             @once "connected", cb
     

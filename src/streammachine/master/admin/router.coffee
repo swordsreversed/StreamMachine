@@ -1,9 +1,13 @@
-_u = require("underscore")
-express = require "express"
-api = require "express-api-helper"
-path = require "path"
-hamlc = require "haml-coffee"
-Mincer = require "mincer"
+_u              = require("underscore")
+express         = require "express"
+api             = require "express-api-helper"
+path            = require "path"
+hamlc           = require "haml-coffee"
+Mincer          = require "mincer"
+passport        = require "passport"
+BasicStrategy   = (require "passport-http").BasicStrategy
+
+Users = require "./users"
 
 module.exports = class Router
     constructor: (opts) ->
@@ -19,6 +23,17 @@ module.exports = class Router
         mincer.appendPath __dirname + "/assets/css"
                         
         @app.use('/assets', Mincer.createServer(mincer))
+        
+        # -- set up authentication -- #
+        
+        @users = new Users.Local @
+        
+        passport.use new BasicStrategy (user,passwd,done) =>
+            @users.validate user, passwd, done
+        
+        @app.use passport.initialize()
+        
+        @app.use passport.authenticate('basic', { session: false })
         
         # -- Param Handlers -- #
         
