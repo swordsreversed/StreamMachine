@@ -2,7 +2,7 @@ _u = require("underscore")
 url = require('url')
 http = require "http"
 express = require "express"
-Logger = require "./log_controller"
+Logger = require "./logger"
 
 Master  = require "./master"
 Slave   = require "./slave"

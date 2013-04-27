@@ -34,6 +34,8 @@ module.exports = class Stream extends require('events').EventEmitter
         
         @STATUS = "Initializing"
         
+        @log.event "Stream is initializing."
+        
         # set up a rewind buffer
         #@rewind = new Rewind @, @opts.rewind
         
@@ -60,9 +62,9 @@ module.exports = class Stream extends require('events').EventEmitter
             newsource.connect()
             @addSource newsource, (result) =>
                 if result
-                    @log.debug "Source connected."
+                    @log.event "Fallback source connected."
                 else
-                    @log.error "Source connection failed."
+                    @log.error "Connection to fallback source failed."
                     
         # -- Listener Tracking -- #
         
@@ -122,10 +124,11 @@ module.exports = class Stream extends require('events').EventEmitter
                     @useSource @sources[0]                    
                     @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
-                    @log.debug "Source disconnected. None remaining."
+                    @log.alert "Source disconnected. No sources remaining."
                     @emit "disconnect", active:true, count:0, source:@source
             else
                 # no... just remove it from the list
+                @log.event "Inactive source disconnected."
                 @emit "disconnect", active:false, count:@sources.length, source:@source
         
         # check whether this source should be made active. It should be if 
@@ -133,11 +136,11 @@ module.exports = class Stream extends require('events').EventEmitter
         
         if !@sources[0] || @sources[0]?.options?.fallback
             # go to the front
-            @log.debug "Promoting new source to replace fallback."
+            @log.event "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
             @useSource source, cb
         else
             # add the source to the end of our list
-            @log.debug "Sticking new source on the end of the list."
+            @log.event "Source connected.", source:(source.TYPE?() ? source.TYPE)
             @sources.push source
         
             # and emit our source event
@@ -153,7 +156,10 @@ module.exports = class Stream extends require('events').EventEmitter
 
         # set a five second timeout for the switchover
         alarm = setTimeout =>
-            @log.debug "Failed to get source switchover in five seconds"
+            @log.error "useSource failed to get switchover within five seconds.", 
+                new_source: (newsource.TYPE?() ? newsource.TYPE)
+                old_source: (old_source?.TYPE?() ? old_source?.TYPE)
+                
             cb?(false)
         , 5000
         
@@ -177,7 +183,10 @@ module.exports = class Stream extends require('events').EventEmitter
                 
             # note that we've got a new source
             process.nextTick =>
-                console.log "emit source event"
+                @log.event "New source is active.", 
+                    new_source: (newsource.TYPE?() ? newsource.TYPE)
+                    old_source: (old_source?.TYPE?() ? old_source?.TYPE)
+                    
                 @emit "source", newsource
 
             # jump our new source to the front of the list (and remove it from

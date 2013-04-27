@@ -1,6 +1,5 @@
 _u = require "underscore"
 
-Logger  = require "../log_controller"
 Redis   = require "../redis_config"
 Admin   = require "./admin/router"
 Stream  = require "./stream"
@@ -202,7 +201,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
     
     updateStream: (stream,opts,cb) ->
-        @log.debug "updateStream called for ", key:stream.key, opts:opts
+        @log.info "updateStream called for ", key:stream.key, opts:opts
         
         # -- if they want to rename, the key must be unique -- #
         
@@ -214,6 +213,18 @@ module.exports = class Master extends require("events").EventEmitter
         # -- if we're good, ask the stream to configure -- #
         
         stream.configure opts, cb
+        
+    #----------
+    
+    removeStream: (stream,cb) ->
+        @log.info "removeStream called for ", key:stream.key
+        
+        delete @streams[ stream.key ]
+        stream.destroy()
+        
+        @emit "config_update"
+        
+        cb? null, "OK"
         
     #----------
     

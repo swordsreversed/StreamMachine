@@ -1,6 +1,5 @@
 _u = require "underscore"
 
-Logger = require "../log_controller"
 Stream = require "./stream"
 Server = require "./server"
 

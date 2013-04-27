@@ -4,12 +4,14 @@ fs = require "fs"
 path = require "path"
 strftime = require("prettydate").strftime
 
+Alerts = require "./alerts"
+
 module.exports = class LogController
-    DefaultOptions:
-        foo: 'bar'
-        
     CustomLevels:
-        error:          50
+        error:          80
+        alert:          75
+        event:          70
+        info:           60
         request:        40
         interaction:    30
         minute:         30
@@ -54,6 +56,12 @@ module.exports = class LogController
                 server:     config.cube.server
                 event:      config.cube.event
                 level:      "minute"
+                
+        # -- Alerts -- #
+        
+        if config.alerts?
+            transports.push new Alerts
+                config:     config.alerts
         
         # -- Remote -- #
         
@@ -102,7 +110,7 @@ module.exports = class LogController
                     
                     @parent[k].apply @, args
                     
-            @child = (opts={}) -> new LogController.Child(@parent,_u.extend(@opts,opts))
+            @child = (opts={}) -> new LogController.Child(@parent,_u.extend({},@opts,opts))
                     
     #----------
     

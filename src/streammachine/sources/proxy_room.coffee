@@ -143,7 +143,7 @@ module.exports = class ProxyRoom extends require("./base")
         @parser.removeAllListeners()
         @removeAllListeners()
         
-        @icecast.destroy()        
+        @icecast.end()        
         
         @parser = null
         @icecast = null
