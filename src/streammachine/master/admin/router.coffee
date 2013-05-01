@@ -118,6 +118,11 @@ module.exports = class Router
         # Delete a stream    
         @app.delete "/api/streams/:stream", (req,res) =>
             # delete a stream
+            @core.removeStream req.stream, (err,obj) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, obj
             
         # -- User Management -- #
         
@@ -127,7 +132,11 @@ module.exports = class Router
                 if err
                     api.serverError req, res, err
                 else
-                    api.ok req, res, users
+                    obj = []
+                    
+                    obj.push { user:u, id:u } for u in users
+                    
+                    api.ok req, res, obj
             
         # create / update a user
         @app.post "/api/users", express.bodyParser(), (req,res) =>

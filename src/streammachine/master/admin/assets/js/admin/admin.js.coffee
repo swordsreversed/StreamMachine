@@ -7,6 +7,7 @@ class streammachine.Admin extends Backbone.Router
         "streams":           "streams"
         "slaves/:slave":     "slave"
         "slaves":            "slaves"
+        "users":             "users"
     
     initialize: (@opts) ->
         @server = opts.server
@@ -26,6 +27,11 @@ class streammachine.Admin extends Backbone.Router
             @streams.fetch update:true
         , 10000
         
+        # -- set up user models / views -- #
+    
+        @users = new Admin.Users [], server:@opts.server
+        @uv = new Admin.UsersView collection:@users
+        
         # -- set up navigation -- #
         
         @on "route:streams", =>
@@ -41,15 +47,15 @@ class streammachine.Admin extends Backbone.Router
                 console.log "failed to look up stream for ", key
                 # jump them back to the homepage
                 @navigate "/", trigger:true, replace:true
+                
+        @on "route:users", =>
+            @$el.html @uv.render().el
 
         # -- wire up button listeners -- #
                 
         @sv.on "stream", (stream) =>
             @navigate "/streams/#{stream}", trigger:true
-            
-        @sv.on "add", =>
-            # pop up an empty stream dialog
-        
+                
         # -- start -- #
         
         Backbone.history.start pushState:true, root:@opts.path
@@ -66,7 +72,6 @@ class streammachine.Admin extends Backbone.Router
     #----------
         
     class @Stream extends Backbone.Model
-        idAttribute: "key"
         
     class @Streams extends Backbone.Collection
         model: Admin.Stream
@@ -179,4 +184,68 @@ class streammachine.Admin extends Backbone.Router
             @$el.html @template persisted:@opts.persisted, streams:@collection.toJSON()
             @
         
+    #----------
+    
+    class @User extends Backbone.Model
         
+    class @Users extends Backbone.Collection
+        model: Admin.User
+        
+        initialize: (models,opts) ->
+            @server = opts.server
+        
+        url: -> "#{@server}/users"
+        
+    class @UsersView extends Backbone.View
+        template: JST["admin/templates/users"]
+        
+        events: ->
+            "click .btn-update":    "_update"
+            "click .btn-add":       "_add"
+            "click .btn-delete":    "_remove"
+        
+        initialize: ->
+            
+        _update: (evt) ->
+            
+        _add: (evt) ->
+            user = @$("[name=new_user]").val()
+            pass = @$("[name=new_pass]").val()
+            
+            if @collection.get(user)
+                alert("There is already a user with that name.")
+            else
+                obj = new Admin.User user:user, password:pass
+                obj.urlRoot = @collection.url()
+                
+                obj.save {}, success:=>
+                    @collection.add obj
+                    @render()
+                , error:(model,xhr) =>
+                    err = JSON.parse(xhr.responseText)
+                    alert "Error creating user: #{err?.error}"
+            
+        _remove: (evt) ->
+            user = $(evt.target).data("user")
+            obj = @collection.get(user)
+            
+            obj.destroy success:=>
+                @collection.remove obj
+                @render()
+            , error:(model,xhr) =>
+                err = JSON.parse(xhr.responseText)
+                alert "Error deleting user: #{err?.error}"
+            
+        render: ->
+            _rFunc = =>
+                console.log "rendering users from ", @collection.toJSON()
+                @$el.html @template users:@collection.toJSON()
+            
+            if @collection.length == 0
+                # we haven't loaded yet
+                @collection.fetch success:_rFunc
+            else
+                _rFunc()    
+                
+            @
+            

@@ -17,6 +17,8 @@
           %ul.nav
             %li
               %a{href:"#{@path}/"} Streams
+            %li
+              %a{href:"#{@path}/users"} Users
 
     .container
       .content
