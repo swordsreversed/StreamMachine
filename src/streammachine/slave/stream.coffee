@@ -99,6 +99,11 @@ module.exports = class Stream extends require('../rewind_buffer')
         # buffers. Buffer size can be configured via the "max_buffer" setting, 
         # which takes bits
         console.log "max buffer size is ", @opts.max_buffer
+        
+        if @buf_timer
+            clearInterval @buf_timer
+            @buf_timer = null
+        
         @buf_timer = setInterval =>
             all_buf = 0
             for id,l of @_lmeta
