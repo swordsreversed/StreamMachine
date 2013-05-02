@@ -68,6 +68,9 @@ class streammachine.Admin extends Backbone.Router
         @$el.html view.render().el
 
         # add navigation
+        view.on "update", (key) =>
+            @navigate "/streams/#{key}", trigger:true
+            
         
     #----------
         
@@ -131,9 +134,12 @@ class streammachine.Admin extends Backbone.Router
           
           modal.on "save", =>
             console.log "modal called save."
+            o_key = @model.get("id")
             @model.save {}, success:(model,resp) =>
-                console.log "Successful save."
+                console.log "Successful save.", model, o_key
                 $(modal.render().el).modal "hide"
+                
+                @trigger "update", model.get("key")
                 
             , error:(model,resp) =>
                 console.log "Got an error: ", resp, model

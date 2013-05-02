@@ -202,7 +202,7 @@ module.exports = class Master extends require("events").EventEmitter
     
     updateStream: (stream,opts,cb) ->
         @log.info "updateStream called for ", key:stream.key, opts:opts
-        
+                
         # -- if they want to rename, the key must be unique -- #
         
         if stream.key != opts.key
@@ -210,9 +210,18 @@ module.exports = class Master extends require("events").EventEmitter
                 cb? "Stream key must be unique."
                 return false
                 
+            @streams[ opts.key ] = stream
+            delete @streams[ stream.key ]
+                
         # -- if we're good, ask the stream to configure -- #
         
-        stream.configure opts, cb
+        stream.configure opts, (err,config) =>
+            if err
+                cb? err
+                return false
+                
+                
+            cb? null, config
         
     #----------
     

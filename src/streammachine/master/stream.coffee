@@ -95,8 +95,9 @@ module.exports = class Stream extends require('events').EventEmitter
     
     status: ->
         _u.defaults 
-            sources:            ( s.info() for s in @sources )
-            listeners:          @listeners()
+            id:         @key
+            sources:    ( s.info() for s in @sources )
+            listeners:  @listeners()
         , @opts 
     
     #----------
@@ -225,6 +226,9 @@ module.exports = class Stream extends require('events').EventEmitter
         # allow updates, but only to keys that are present in @DefaultOptions.
         for k,v of @DefaultOptions
             @opts[k] = new_opts[k] if new_opts[k]?
+            
+        if @key != @opts.key
+            @key = @opts.key
             
         @emit "config"
         
