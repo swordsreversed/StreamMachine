@@ -1,7 +1,7 @@
 _u = require "underscore"
 uuid = require "node-uuid"
 
-#Rewind = require('../rewind_buffer')
+Rewind = require('../rewind_buffer')
 Proxy = require('../sources/proxy_room')
 
 # Master streams are about source management. 
@@ -36,8 +36,22 @@ module.exports = class Stream extends require('events').EventEmitter
         
         @log.event "Stream is initializing."
         
-        # set up a rewind buffer
-        #@rewind = new Rewind @, @opts.rewind
+        # -- Initialize Master Rewinder -- #
+        
+        # set up a rewind buffer, for use in bringing new slaves up to speed 
+        # or to transfer to a new master when restarting
+        @log.info "Initializing RewindBuffer for master stream."
+        @rewind = new Rewind
+        @rewind.opts = @opts
+        @rewind.log = @log.child module:"rewind"
+        
+        # Rewind listens to us, not to our source
+        @rewind.emit "source", @
+        
+        # Pass along buffer loads
+        @rewind.on "buffer", (c) => @emit "buffer", c
+        
+        # -- Set up data functions -- #
         
         @_nextMeta = null
         
@@ -46,7 +60,7 @@ module.exports = class Stream extends require('events').EventEmitter
             @emit "meta", meta
         
         @dataFunc = (data) => 
-            @emit "data", data:data, meta:@_nextMeta
+            @emit "data", data:data, meta:@_nextMeta, ts:Number(new Date)
             #@_nextMeta = null
         
         @headFunc = (head) => @emit "header", head
@@ -98,6 +112,7 @@ module.exports = class Stream extends require('events').EventEmitter
             id:         @key
             sources:    ( s.info() for s in @sources )
             listeners:  @listeners()
+            rewind:     @rewind.bufferedSecs()
         , @opts 
     
     #----------

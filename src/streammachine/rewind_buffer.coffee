@@ -1,7 +1,22 @@
 _u = require 'underscore'
 
+Concentrate = require "concentrate"
+Dissolve    = require "dissolve"
+
 # RewindBuffer supports play from an arbitrary position in the last X hours 
 # of our stream. 
+
+# Buffer is an array of objects. Each object should have:
+# * ts:     Timestamp for when chunk was emitted from master stream
+# * data:   Chunk of audio data (in either MP3 or AAC)
+# * meta:   Metadata that should be running as of this chunk
+
+# When the buffer is dumped, it will be in the form of a loop of binary 
+# packets.  Each will contain:
+# * uint8: metadata length
+# * Buffer: metadata, stringified into JSON and stuck in a buffer (obj is ts and meta)
+# * uint16: data length
+# * Buffer: data chunk 
 
 module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: ->
@@ -90,7 +105,84 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     
     bufferedSecs: ->
         # convert buffer length to seconds
-        Math.round @_rbuffer.length / @_rsecsPerChunk 
+        Math.round @_rbuffer.length * @_rsecsPerChunk 
+    
+    #----------
+    
+    # Insert a chunk into the RewindBuffer. Inserts can only go backward, so 
+    # the timestamp must be less than @_rbuffer[0].ts for a valid chunk
+    _insertBuffer: (chunk) ->
+        if chunk?.ts < @_rbuffer[0]?.ts||Infinity
+            @_rbuffer.unshift chunk
+    
+    #----------
+    
+    # Load a RewindBuffer.  Buffer should arrive newest first, which means 
+    # that we can simply shift() it into place and don't have to lock out 
+    # any incoming data.
+    
+    loadBuffer: (stream,cb) ->
+        console.log "In loadBuffer with stream."
+        rbuf = @_rbuffer
+        
+        parser = Dissolve().loop (end) ->
+            @uint8("meta_length")
+                .tap ->
+                    @buffer("meta",@vars.meta_length)
+                        .uint16le("data_length")
+                        .tap ->
+                            @buffer("data",@vars.data_length)
+                                .tap ->
+                                    meta = JSON.parse @vars.meta.toString()
+                                    @push ts:meta.ts, meta:meta.meta, data:@vars.data
+                                    @vars = {}
+
+        stream.pipe(parser)
+        
+        parser.on "readable", =>
+            while c = parser.read()
+                @_insertBuffer(c)
+                @emit "buffer", c
+        
+        parser.on "end", => 
+            console.log "RewindBuffer is now at ", @bufferedSecs(), @_rbuffer.length
+            cb?()
+    
+    #----------
+    
+    # Dump the rewindbuffer. We want to dump the newest data first, so that 
+    # means running back from the end of the array to the front.  
+    
+    dumpBuffer: (stream) ->
+        # taking a copy of the array should effectively freeze us in place
+        rbuf_copy = @_rbuffer.slice(0)
+        
+        c = Concentrate()
+        c.pipe(stream)
+        
+        for i in [(rbuf_copy.length-1)..0]
+            chunk = rbuf_copy[ i ]
+            
+            #console.log "chunk is ", chunk
+            
+            meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta
+            
+            # 1) metadata length
+            c.uint8 meta_buf.length
+            
+            # 2) metadata json
+            c.buffer meta_buf
+            
+            # 3) data chunk length
+            c.uint16le chunk.data.length
+            
+            # 4) data chunk
+            c.buffer chunk.data
+            
+            # Flush!
+            c.flush()
+            
+        c.end()
         
     #----------
     
@@ -255,3 +347,4 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @rewind._rremoveListener @
             
     #----------
+    

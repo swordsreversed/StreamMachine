@@ -84,6 +84,15 @@ module.exports = class Router
         @app.get "/api/streams/:stream", (req,res) =>
             # get detailed stream information
             api.ok req, res, req.stream.status()
+            
+        @app.get "/api/streams/:stream/dump_rewind", (req,res) =>
+            res.status(200).write ''
+            
+            req.stream.rewind.dumpBuffer res
+            
+        @app.post "/api/streams/:stream/load_rewind", (req,res) =>
+            req.stream.rewind.loadBuffer req, =>
+                res.status(200).end "OK"
         
         # update stream metadata    
         @app.post "/api/streams/:stream/metadata", (req,res) =>
