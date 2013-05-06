@@ -70,24 +70,30 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                     @log.debug "Rewind buffer validated new source.  Reusing buffer."
                 
                 else
-                    if @_rsecsPerChunk
-                        # we're reconnecting, but didn't match rate...  we 
-                        # should wipe out the old buffer
-                        @_rbuffer = []
-                        
-                    # compute new frame numbers
-                    @_rsecsPerChunk   = newsource.emit_duration
-                    @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
-                    @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
-        
-                    @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk
+                    @_rChunkLength newsource.emit_duration        
                 
                 # connect our data listener
                 newsource.on "data", @_rdataFunc
-                
                     
                 # keep track of our source
                 @_rsource = newsource
+
+    #----------
+    
+    _rChunkLength: (secs) ->
+        if @_rsecsPerChunk != secs
+            if @_rsecsPerChunk != Infinity
+                # we're reconnecting, but didn't match rate...  we 
+                # should wipe out the old buffer
+                @log.debug "Invalid existing rewind buffer. Reset.", old_duration:@_rsecsPerChunk, new_duration:secs
+                @_rbuffer = []
+                
+            # compute new frame numbers
+            @_rsecsPerChunk   = secs
+            @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
+            @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
+            
+            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk
 
     #----------
     
@@ -112,6 +118,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # Insert a chunk into the RewindBuffer. Inserts can only go backward, so 
     # the timestamp must be less than @_rbuffer[0].ts for a valid chunk
     _insertBuffer: (chunk) ->
+        #console.log "Checking _insertBuffer: #{chunk.ts} vs #{ @_rbuffer[0]?.ts||Infinity }"
         if chunk?.ts < @_rbuffer[0]?.ts||Infinity
             @_rbuffer.unshift chunk
     
@@ -122,9 +129,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # any incoming data.
     
     loadBuffer: (stream,cb) ->
-        console.log "In loadBuffer with stream."
-        rbuf = @_rbuffer
-        
         parser = Dissolve().loop (end) ->
             @uint8("meta_length")
                 .tap ->
@@ -138,33 +142,35 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                                     @vars = {}
 
         stream.pipe(parser)
-        
+                
         parser.on "readable", =>
             while c = parser.read()
                 @_insertBuffer(c)
                 @emit "buffer", c
         
         parser.on "end", => 
-            console.log "RewindBuffer is now at ", @bufferedSecs(), @_rbuffer.length
-            cb?()
+            @log.info "RewindBuffer is now at ", seconds:@bufferedSecs(), length:@_rbuffer.length
+            cb? null
     
     #----------
     
     # Dump the rewindbuffer. We want to dump the newest data first, so that 
     # means running back from the end of the array to the front.  
     
-    dumpBuffer: (stream) ->
+    dumpBuffer: (stream,cb) ->
         # taking a copy of the array should effectively freeze us in place
         rbuf_copy = @_rbuffer.slice(0)
         
         c = Concentrate()
-        c.pipe(stream)
+        
+        # Pipe concentrated buffer to the stream object
+        c.pipe stream
+        
+        slices = 0
         
         for i in [(rbuf_copy.length-1)..0]
             chunk = rbuf_copy[ i ]
-            
-            #console.log "chunk is ", chunk
-            
+                        
             meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta
             
             # 1) metadata length
@@ -179,10 +185,17 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             # 4) data chunk
             c.buffer chunk.data
             
-            # Flush!
             c.flush()
             
-        c.end()
+            slices += 1
+            
+            if i == 0
+                c.end()        
+                @log.info "Dumped rewind buffer. Sent #{slices} slices."
+                cb? null
+                
+            
+        #console.log "Dump socket is ", stream
         
     #----------
     

@@ -1,5 +1,5 @@
-StreamMachine = require("./src/streammachine/core")
-nconf = require("nconf")
+StreamMachine   = require "./src/streammachine/core"
+nconf           = require "nconf"
 
 # -- do we have a config file to open? -- #
 

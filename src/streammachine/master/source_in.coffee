@@ -13,7 +13,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
         
         @server = net.createServer (c) => @_connection(c)
         
-        @server.listen @port
+    listen: (spec=@port) ->
+        @server.listen spec
         
     _connection: (sock) => 
         # -- incoming data -- #

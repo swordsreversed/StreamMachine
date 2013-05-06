@@ -7,7 +7,6 @@ Socket = require "socket.io-client"
 
 module.exports = class Slave extends require("events").EventEmitter
     DefaultOptions:
-        foo: "bar"
         max_zombie_life:    1000 * 60 * 60
         
     Outputs:
@@ -82,6 +81,7 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # attach a USR2 handler that causes us to stop listening. this is 
         # used to allow a new server to start up
+
         process.on "SIGTERM", =>
             @log.debug "Got SIGTERM in core...  Starting shutdown"
             
@@ -203,6 +203,29 @@ module.exports = class Slave extends require("events").EventEmitter
             # should this stream accept requests to /?
             if opts.root_route
                 @root_route = key
+    
+    #----------
+    
+    sendHandoffData: (translator,cb) ->
+        # need to transfer listeners and their offsets to the new process
+        
+        # FIXME: This is more complicated than transferring servers or sources, 
+        # since we have to be a lot more worried about internal state. For the 
+        # moment, we just won't handle them.
+        
+        sFunc = (stream) =>
+            for id,l in stream._lmeta
+                translator.send "stream_listener", 
+                    stream:     stream.key
+                    id:         id
+                    startTime:  l.startTime
+                    minuteTime: l.minuteTime
+                    
+        
+        @log.info "Bypassing slave handoff.  Not yet implemented."
+        cb? null
+    
+    loadHandoffData: (translator,cb) ->
     
     #----------
     
