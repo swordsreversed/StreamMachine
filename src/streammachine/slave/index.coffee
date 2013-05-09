@@ -10,10 +10,10 @@ module.exports = class Slave extends require("events").EventEmitter
         max_zombie_life:    1000 * 60 * 60
         
     Outputs:
-        pumper:     require("../outputs/pumper")
-        shoutcast:  require("../outputs/shoutcast")
-        mp3:        require("../outputs/livemp3")
-        sockets:    require("../outputs/sockets")
+        pumper:     require "../outputs/pumper"
+        shoutcast:  require "../outputs/shoutcast"
+        raw:        require "../outputs/raw_audio"
+        sockets:    require "../outputs/sockets"
         
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
@@ -210,8 +210,7 @@ module.exports = class Slave extends require("events").EventEmitter
         # need to transfer listeners and their offsets to the new process
         
         # FIXME: This is more complicated than transferring servers or sources, 
-        # since we have to be a lot more worried about internal state. For the 
-        # moment, we just won't handle them.
+        # since we have to be a lot more worried about internal state. 
         
         sFunc = (stream) =>
             for id,l in stream._lmeta

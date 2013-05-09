@@ -1,16 +1,10 @@
-_u      = require 'underscore'
-icecast = require "icecast"
+_u = require 'underscore'
 
-module.exports = class Shoutcast
+module.exports = class RawAudio
     constructor: (@stream,@opts) ->
         @id = null
-        @socket = null
-        
-        @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
         if @opts.req && @opts.res
-            # -- startup mode...  sending headers -- #
-            
             @reqIP      = @opts.req.connection.remoteAddress
             @reqPath    = @opts.req.url
             @reqUA      = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
@@ -19,36 +13,39 @@ module.exports = class Shoutcast
             @opts.res.chunkedEncoding = false
             @opts.res.useChunkedEncodingByDefault = false
             
-            @headers = 
+            headers = 
                 "Content-Type":         
                     if @stream.opts.format == "mp3"         then "audio/mpeg"
                     else if @stream.opts.format == "aac"    then "audio/aacp"
                     else "unknown"
-                "icy-name":             @stream.StreamTitle
-                "icy-url":              @stream.StreamUrl
-                "icy-metaint":          @stream.opts.meta_interval
-                        
+            
             # write out our headers
-            @opts.res.writeHead 200, @headers
+            @opts.res.writeHead 200, headers
             @opts.res._send ''
             
             @socket = @opts.req.connection
             
-            process.nextTick =>     
+            process.nextTick =>
+        
                 # -- send a preroll if we have one -- #
         
                 if @stream.preroll && !@req.param("preskip")
-                    @stream.log.debug "making preroll request"
-                    @stream.preroll.pump @socket, => @connectToStream()
+                    @stream.log.debug "making preroll request", stream:@stream.key
+                    @stream.preroll.pump @res, => @connectToStream()
                 else
-                    @connectToStream()       
+                    @connectToStream()
+            
             
         else if @opts.socket
-            # -- socket mode... just data -- #
+            # -- just the data -- #
             
             @socket = @opts.socket
             process.nextTick => @connectToStream()
-        
+            
+        else
+            # fail
+            @stream.log.error "Listener passed without connection handles or socket."
+            
         # register our various means of disconnection
         @socket.on "end",   => @disconnect()
         @socket.on "close", => @disconnect()
@@ -58,28 +55,11 @@ module.exports = class Shoutcast
     disconnect: (force=false) ->
         if force || @socket.destroyed
             @source?.disconnect()            
-            @socket?.end() unless (@socket?.destroyed)
+            @socket?.end() unless (@socket.destroyed)
     
     #----------
     
     connectToStream: ->
         unless @socket.destroyed
             @source = @stream.listen @, offset:@offset, pump:true
-            
-            # -- create an Icecast creator to inject metadata -- #
-            
-            @ice = new icecast.Writer @stream.opts.meta_interval            
-            @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
-        
-            @metaFunc = (data) =>
-                @ice.queue data if data.StreamTitle
-
-            @ice.pipe(@socket)
-            
-            # -- pipe source audio to icecast -- #
-            
-            @source.pipe @ice
-            @source.on "meta", @metaFunc
-        
-    #----------
-            
+            @source.pipe @socket
