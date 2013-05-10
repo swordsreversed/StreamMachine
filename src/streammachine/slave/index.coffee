@@ -209,22 +209,34 @@ module.exports = class Slave extends require("events").EventEmitter
     sendHandoffData: (translator,cb) ->
         # need to transfer listeners and their offsets to the new process
         
-        # FIXME: This is more complicated than transferring servers or sources, 
-        # since we have to be a lot more worried about internal state. 
+        @log.info "Sending slave handoff data."
+        
+        fFunc = _u.after Object.keys(@streams).length, =>
+            @log.info "Listeners sent."
+            cb? null
         
         sFunc = (stream) =>
-            for id,l in stream._lmeta
+            @log.info "Sending #{ Object.keys(stream._lmeta).length } listeners for #{ stream.key }."
+            for id,l of stream._lmeta
                 translator.send "stream_listener", 
                     stream:     stream.key
                     id:         id
                     startTime:  l.startTime
                     minuteTime: l.minuteTime
-                    
+                    client:     l.obj.client
+                , l.obj.socket
+                
+            fFunc()
         
-        @log.info "Bypassing slave handoff.  Not yet implemented."
-        cb? null
+        sFunc(s) for k,s of @streams
     
     loadHandoffData: (translator,cb) ->
+        
+        # -- look for transferred listeners -- #
+        
+        translator.on "stream_listener", (obj,socket) =>
+            # create an output and attach it to the proper stream
+            output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], socket:socket, client:obj.client
     
     #----------
     

@@ -4,11 +4,14 @@ module.exports = class RawAudio
     constructor: (@stream,@opts) ->
         @id = null
         
+        @client = output:"raw"
+        @pump = true
+        
         if @opts.req && @opts.res
-            @reqIP      = @opts.req.connection.remoteAddress
-            @reqPath    = @opts.req.url
-            @reqUA      = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-            @offset     = @opts.req.param("offset") || -1
+            @client.ip      = @opts.req.connection.remoteAddress
+            @client.path    = @opts.req.url
+            @client.ua      = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+            @client.offset  = @opts.req.param("offset") || -1
             
             @opts.res.chunkedEncoding = false
             @opts.res.useChunkedEncodingByDefault = false
@@ -35,11 +38,12 @@ module.exports = class RawAudio
                 else
                     @connectToStream()
             
-            
         else if @opts.socket
             # -- just the data -- #
             
+            @client = @opts.client
             @socket = @opts.socket
+            @pump = false
             process.nextTick => @connectToStream()
             
         else
@@ -61,5 +65,9 @@ module.exports = class RawAudio
     
     connectToStream: ->
         unless @socket.destroyed
-            @source = @stream.listen @, offset:@offset, pump:true
+            @source = @stream.listen @, offset:@client.offset, pump:@pump
+            
+            # update our offset now that it's been checked for availability
+            @client.offset = @source.offset()
+            
             @source.pipe @socket

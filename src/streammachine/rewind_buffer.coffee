@@ -336,6 +336,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             _pushQueue = =>
                 next_buf = @_queue.shift()
                 
+                if !next_buf
+                    @rewind.log.error "Shifted queue but got null", length:@_queue.length
+                
                 @emit "meta", next_buf.meta if next_buf.meta
                 
                 if @push next_buf.data
@@ -355,6 +358,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                         
         setOffset: (offset) ->
             @_offset = @rewind.checkOffset offset
+            
+        offset: ->
+            @_offset
             
         disconnect: ->
             @rewind._rremoveListener @

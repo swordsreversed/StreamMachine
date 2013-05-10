@@ -99,6 +99,7 @@ module.exports = class Core
                 @_runHandoff()
             
             else
+                @log.info "Attaching listeners."
                 @master.sourcein.listen()
                 @handle = @server.listen opts.listen
                         
@@ -154,24 +155,22 @@ module.exports = class Core
                         
                         translator.once "standalone_socket_up", =>
                             @log.info "Got standalone socket confirmation. Closing listener."
-                            @handle.close =>
-                                @log.info "Standalone socket is closed."
+                            @handle.unref()
                                 
-                                # Hand over the source port
-                                @log.info "Hand off source socket."
-                                translator.send "source_socket", {}, @master.sourcein.server
-                        
-                                translator.once "source_socket_up", =>
-                                    @log.info "Got source socket confirmation. Closing listener."
-                                    @master.sourcein.server.close =>
-                                        @log.info "Source socket is closed."
-                             
-                                        # Send slave data
-                                        @slave.sendHandoffData translator, (err) =>
-                                            @log.event "Sent slave data to new process. Exiting."
+                            # Hand over the source port
+                            @log.info "Hand off source socket."
+                            translator.send "source_socket", {}, @master.sourcein.server
+                    
+                            translator.once "source_socket_up", =>
+                                @log.info "Got source socket confirmation. Closing listener."
+                                @master.sourcein.server.unref()
+                     
+                                # Send slave data
+                                @slave.sendHandoffData translator, (err) =>
+                                    @log.event "Sent slave data to new process. Exiting."
 
-                                            # Exit
-                                            process.exit()
+                                    # Exit
+                                    process.exit()
         
         #----------
                         
@@ -261,12 +260,12 @@ module.exports = class Core
     class @HandoffTranslator extends require("events").EventEmitter
         constructor: (@p) ->
             @p.on "message", (msg,handle) =>
-                console.log "TRANSLATE GOT #{msg.key}", handle?
+                console.log "TRANSLATE GOT #{msg.key}", msg, handle?
                 if msg?.key
                     msg.data = {} if !msg.data
                     @emit msg.key, msg.data, handle
             
         send: (key,data,handle=null) ->
-            console.log "TRANSLATE #{key}", handle?
+            console.log "TRANSLATE #{key}", data, handle?
             @p.send { key:key, data:data }, handle
         

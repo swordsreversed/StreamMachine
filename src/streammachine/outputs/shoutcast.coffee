@@ -8,13 +8,17 @@ module.exports = class Shoutcast
         
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
         
+        @client = output:"shoutcast"
+        @pump = true
+        
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #
             
-            @reqIP      = @opts.req.connection.remoteAddress
-            @reqPath    = @opts.req.url
-            @reqUA      = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-            @offset     = @opts.req.param("offset") || -1
+            @client.ip          = @opts.req.connection.remoteAddress
+            @client.path        = @opts.req.url
+            @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+            @client.offset      = @opts.req.param("offset") || -1
+            @client.meta_int    = @stream.opts.meta_interval
             
             @opts.res.chunkedEncoding = false
             @opts.res.useChunkedEncodingByDefault = false
@@ -26,7 +30,7 @@ module.exports = class Shoutcast
                     else "unknown"
                 "icy-name":             @stream.StreamTitle
                 "icy-url":              @stream.StreamUrl
-                "icy-metaint":          @stream.opts.meta_interval
+                "icy-metaint":          @client.meta_int
                         
             # write out our headers
             @opts.res.writeHead 200, @headers
@@ -46,7 +50,9 @@ module.exports = class Shoutcast
         else if @opts.socket
             # -- socket mode... just data -- #
             
+            @client = @opts.client
             @socket = @opts.socket
+            @pump = false
             process.nextTick => @connectToStream()
         
         # register our various means of disconnection
@@ -64,11 +70,14 @@ module.exports = class Shoutcast
     
     connectToStream: ->
         unless @socket.destroyed
-            @source = @stream.listen @, offset:@offset, pump:true
+            @source = @stream.listen @, offset:@client.offset, pump:@pump
+            
+            # update our offset now that it's been checked for availability
+            @client.offset = @source.offset()
             
             # -- create an Icecast creator to inject metadata -- #
             
-            @ice = new icecast.Writer @stream.opts.meta_interval            
+            @ice = new icecast.Writer @client.meta_int            
             @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
         
             @metaFunc = (data) =>

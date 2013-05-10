@@ -173,14 +173,14 @@ module.exports = class Stream extends require('../rewind_buffer')
             seconds = (endTime.getTime() - lmeta.startTime.getTime()) / 1000
                     
             # log the connection end
-            @log.debug "Connection end", id:id, req:lmeta.obj.req, listeners:_u(@_lmeta).keys().length, bytes:lmeta.obj.req?.connection?.bytesWritten, seconds:seconds
+            @log.debug "Connection end", id:id, listeners:_u(@_lmeta).keys().length, bytes:lmeta.obj.socket?.bytesWritten, seconds:seconds
         
             @log.request "", 
-                path:       lmeta.obj.reqPath
-                ip:         lmeta.obj.reqIP
-                bytes:      lmeta.obj.req?.connection?.bytesWritten
+                path:       lmeta.obj.client.path
+                ip:         lmeta.obj.client.ip
+                ua:         lmeta.obj.client.ua
+                bytes:      lmeta.obj.socket?.bytesWritten
                 seconds:    seconds
                 time:       endTime
-                ua:         lmeta.obj.reqUA
         
             true

@@ -281,7 +281,7 @@ module.exports = class Master extends require("events").EventEmitter
             
                 sock.on "listening", => 
                     # pass the socket to the new child and wait for acknowledgement
-                    translator.send "master_rewind", { stream:s.key, path:spath, rsecsPerChunk:stream.rewind._rsecsPerChunk }
+                    translator.send "master_rewind", { stream:stream.key, path:spath, rsecsPerChunk:stream.rewind._rsecsPerChunk }
             
                 # OK!
             else
@@ -289,8 +289,8 @@ module.exports = class Master extends require("events").EventEmitter
                 
             # -- send source connections -- #
                 
-            for source in s.sources
-                translator.send "stream_source", { stream:s.key, headers:source.headers }, source.sock
+            for source in stream.sources
+                translator.send "stream_source", { stream:stream.key, headers:source.headers }, source.sock
         
         # run 'em    
         lFunc(s) for k,s of @streams
