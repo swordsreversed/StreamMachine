@@ -67,6 +67,16 @@ module.exports = class Shoutcast
             @socket?.end() unless (@socket?.destroyed)
     
     #----------
+            
+    prepForHandoff: (cb) ->
+        # we need to know where we are in relation to the icecast metaint 
+        # boundary so that we can set up our new stream and keep everything 
+        # in sync
+        
+        @client.bytesToNextMeta = @ice._parserBytesLeft
+        cb?()
+    
+    #----------
     
     connectToStream: ->
         unless @socket.destroyed
@@ -77,7 +87,7 @@ module.exports = class Shoutcast
             
             # -- create an Icecast creator to inject metadata -- #
             
-            @ice = new icecast.Writer @client.meta_int            
+            @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
             @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
         
             @metaFunc = (data) =>

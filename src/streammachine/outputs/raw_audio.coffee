@@ -63,6 +63,11 @@ module.exports = class RawAudio
     
     #----------
     
+    prepForHandoff: (cb) ->
+        cb?()
+    
+    #----------
+    
     connectToStream: ->
         unless @socket.destroyed
             @source = @stream.listen @, offset:@client.offset, pump:@pump

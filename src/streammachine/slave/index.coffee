@@ -217,16 +217,21 @@ module.exports = class Slave extends require("events").EventEmitter
         
         sFunc = (stream) =>
             @log.info "Sending #{ Object.keys(stream._lmeta).length } listeners for #{ stream.key }."
-            for id,l of stream._lmeta
-                translator.send "stream_listener", 
-                    stream:     stream.key
-                    id:         id
-                    startTime:  l.startTime
-                    minuteTime: l.minuteTime
-                    client:     l.obj.client
-                , l.obj.socket
+            
+            sfFunc = _u.after Object.keys(stream._lmeta).length, =>
+                fFunc()
                 
-            fFunc()
+            for id,l of stream._lmeta
+                l.obj.prepForHandoff =>
+                    translator.send "stream_listener",
+                        stream:     stream.key
+                        id:         id
+                        startTime:  l.startTime
+                        minuteTime: l.minuteTime
+                        client:     l.obj.client
+                    , l.obj.socket
+                    
+                    sfFunc()
         
         sFunc(s) for k,s of @streams
     

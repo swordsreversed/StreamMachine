@@ -10,7 +10,7 @@
   "dependencies": {
     "coffee-script": 		"~1.4.0",
     "express": 				"~3.0",
-    "icecast": 				"1.2.0",
+    "icecast": 				"git://github.com/StreamMachine/node-icecast.git",
     "nconf": 				"0.5.1",
     "prettydate": 			"0.0.1",
 	"redis": 				"0.8.3",
