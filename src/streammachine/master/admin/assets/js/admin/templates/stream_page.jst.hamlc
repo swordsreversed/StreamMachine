@@ -25,7 +25,8 @@
         %td
           = if s.connected then "Yes" else "No"
         %td
-          = s.streamKey        %td
+          = s.streamKey        
+        %td
           Options...
           
     - if @sources.length == 0

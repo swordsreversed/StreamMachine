@@ -125,6 +125,10 @@ module.exports = class Master extends require("events").EventEmitter
             @log.debug "slave disconnect from #{sock.id}"
             delete @slaves[sock.id]
             
+        @on "config_update", =>
+            config = @config()
+            s.emit "config", config for id,s of @slaves
+            
     #----------
     
     config: ->
