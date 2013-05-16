@@ -1,3 +1,10 @@
+_u = require "underscore"
+express = require "express"
+nconf = require "nconf"
+
+Logger  = require "../logger"
+Master  = require "../master"
+
 # Master Server
 # 
 # Masters don't take client connections directly. They take incoming 
@@ -12,10 +19,23 @@ module.exports = class MasterMode extends require("./base")
         @log.debug("Master Instance initialized")
         
         # create a master
-        @master = new Master _u.extend opts, logger:@log
+        @master = new Master _u.extend {}, opts, logger:@log
         
-        # Listen on the master port
-        @server = @master.admin.listen opts.master.port
+        # Set up a server for our admin
+        @server = express()
+        @server.use "/", @master.admin.app
         
-        # Also attach sockets for slaves
-        @master.listenForSlaves(@server)
+        if nconf.get("handoff")
+            @_acceptHandoff()
+            
+        else
+            @log.info "Listening."
+            @handle = @server.listen opts.master.port
+            @master.listenForSlaves(@handle)
+            @master.sourcein.listen()
+
+    #----------
+    
+    _sendHandoff: ->
+    
+    _acceptHandoff: ->

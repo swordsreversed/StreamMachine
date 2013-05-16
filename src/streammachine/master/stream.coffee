@@ -104,6 +104,18 @@ module.exports = class Stream extends require('events').EventEmitter
     
     config: ->
         @opts
+        
+    _vitals: (cb) ->
+        _vFunc = =>
+            console.log "Emit vital info", secsPerChunk:@emit_duration
+            cb? null, secsPerChunk:@emit_duration
+                        
+        if @emit_duration
+            console.log "Sending vitals now."
+            _vFunc()
+        else
+            console.log "Waiting for headers to send vitals"
+            @once "header", => _vFunc()
     
     #----------
     

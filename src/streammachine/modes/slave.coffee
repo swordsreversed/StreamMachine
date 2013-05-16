@@ -1,3 +1,9 @@
+_u = require "underscore"
+nconf = require "nconf"
+
+Logger  = require "../logger"
+Slave   = require "../slave"
+
 # Slave Server
 #
 # Slaves are born only knowing how to connect to their master. The master 
@@ -15,4 +21,15 @@ module.exports = class SlaveMode extends require("./base")
         # create a slave
         @slave = new Slave _u.extend opts, logger:@log
         
-        @slave.server.app.listen opts.port
+        if nconf.get("handoff")
+            @_acceptHandoff()
+            
+        else
+            @log.info "Slave listening."
+            @slave.server.listen opts.listen
+    
+    #----------
+    
+    _sendHandoff: ->
+            
+    _acceptHandoff: ->

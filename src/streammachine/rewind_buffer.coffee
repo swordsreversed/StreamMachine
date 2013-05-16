@@ -63,19 +63,25 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             # -- compute initial stats -- #
                         
             newsource.once "header", (data,header) =>
-                console.log "in rewind once header listener", @_rsecsPerChunk, newsource.emit_duration
                 if @_rsecsPerChunk && @_rsecsPerChunk == newsource.emit_duration
                     # reconnecting, but rate matches so we can keep using 
                     # our existing buffer.
                     @log.debug "Rewind buffer validated new source.  Reusing buffer."
                 
                 else
-                    @_rChunkLength newsource.emit_duration        
+                    @_rChunkLength newsource.emit_duration
                 
                 # connect our data listener
                 newsource.on "data", @_rdataFunc
                     
                 # keep track of our source
+                @_rsource = newsource
+                
+            # -- alternate path for slaves -- #
+            
+            newsource.once "vitals", (v) =>
+                @_rChunkLength v.secsPerChunk
+                newsource.on "data", @_rdataFunc
                 @_rsource = newsource
 
     #----------
@@ -93,7 +99,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
             @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
             
-            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk
+            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:secs
 
     #----------
     
@@ -298,7 +304,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_offset = -1
             @_offset = @rewind.checkOffset opts.offset || 0
             
-            console.log "Rewinder: creation with ", opts:opts
+            @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
             
             #@data = opts.on_data
             #@meta = opts.on_meta

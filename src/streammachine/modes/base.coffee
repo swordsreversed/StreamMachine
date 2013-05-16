@@ -1,3 +1,7 @@
+_u = require "underscore"
+
+#----------
+
 module.exports = class Core
     DefaultOptions:
         # after a new deployment, allow a one hour grace period for 
@@ -29,7 +33,7 @@ module.exports = class Core
         
         console.log "argv is ", process.argv, process.execPath
         console.log "Spawning ", opts.$0, new_args
-        newp = cp.fork process.argv[1], new_args
+        newp = cp.fork process.argv[1], new_args, stdio:"inherit"
 
         newp.on "error", (err) =>
             @log.error "Spawned child gave error: #{err}", error:err
@@ -48,3 +52,17 @@ module.exports = class Core
                     cb? null, translator
             else
                 @log.error "Invalid first message from handoff.", message:m
+    
+    #----------
+                
+    class @HandoffTranslator extends require("events").EventEmitter
+        constructor: (@p) ->
+            @p.on "message", (msg,handle) =>
+                console.log "TRANSLATE GOT #{msg.key}", msg, handle?
+                if msg?.key
+                    msg.data = {} if !msg.data
+                    @emit msg.key, msg.data, handle
+        
+        send: (key,data,handle=null) ->
+            console.log "TRANSLATE #{key}", data, handle?
+            @p.send { key:key, data:data }, handle

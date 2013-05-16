@@ -34,9 +34,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         @on "source", =>
             #@source.on "data", @dataFunc
             @source.on "meta", @metaFunc
-            
             @source.on "buffer", (c) => @_insertBuffer(c)
-        
+                    
         # now run configure...
         process.nextTick => @configure(opts)
                                     

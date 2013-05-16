@@ -2,7 +2,6 @@ _u = require "underscore"
 express = require "express"
 nconf   = require "nconf"
 
-
 Logger  = require "../logger"
 Master  = require "../master"
 Slave   = require "../slave"
@@ -22,8 +21,8 @@ module.exports = class StandaloneMode extends require("./base")
                     
         # -- Set up master and slave -- #
         
-        @master = new Master _u.extend opts, logger:@log.child(mode:"master")
-        @slave  = new Slave _u.extend opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
+        @master = new Master _u.extend {}, opts, logger:@log.child(mode:"master")
+        @slave  = new Slave _u.extend {}, opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
         
         # -- Set up combined server -- #
         
@@ -123,7 +122,7 @@ module.exports = class StandaloneMode extends require("./base")
         process.send "HANDOFF_GO"
         
         # set up our translator
-        translator = new Core.HandoffTranslator process
+        translator = new StandaloneMode.HandoffTranslator process
         
         # watch for streams
         @master.once "streams", =>

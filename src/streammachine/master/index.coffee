@@ -40,7 +40,7 @@ module.exports = class Master extends require("events").EventEmitter
             _slaveUpdate = =>
                 # pass config on to any connected slaves
                 for sock in @slaves
-                    sock.emit "streams", @config()
+                    sock.emit "config", @config()
             
             @log.debug "initializing redis config"
             @redis = new Redis @options.redis
@@ -75,7 +75,9 @@ module.exports = class Master extends require("events").EventEmitter
         # fire up a socket listener on our slave port
         @io = require("socket.io").listen server
         
-        @_initIOProxies()
+        # attach proxies for any streams that are already up
+        @_attachIOProxy(s) for s in @streams
+            
                     
         # FIXME: disconnect from our port on SIGTERM
         # process.on "SIGTERM", => @io.close()
@@ -99,7 +101,8 @@ module.exports = class Master extends require("events").EventEmitter
             
             if @options.streams
                 # emit our configuration
-                sock.emit "config", streams:@options.streams
+                @log.debug "Sending config information to slave."
+                sock.emit "config", @config()
                 
             @slaves.push sock
             
@@ -111,6 +114,10 @@ module.exports = class Master extends require("events").EventEmitter
             # look for listener counts
             sock.on "listeners", (obj = {}) =>
                 @_recordListeners sock.id, obj
+                
+            sock.on "stream_stats", (key, cb) =>
+                # respond with the stream's vitals
+                @streams[key]._vitals cb
             
         # attach disconnect handler
         @io.on "disconnect", (sock) =>
@@ -330,6 +337,7 @@ module.exports = class Master extends require("events").EventEmitter
             return false
         
         # create a new proxy    
+        @log.debug "Creating StreamProxy for #{stream.key}"
         @proxies[ stream.key ] = new Master.StreamProxy key:stream.key, stream:stream, master:@
         
         # and attach a listener to destroy it if the stream is removed
@@ -348,13 +356,7 @@ module.exports = class Master extends require("events").EventEmitter
                 for s in @master.slaves
                     s.emit "streamdata:#{@key}", chunk
                     
-            @metaFunc = (chunk) =>
-                for s in @master.slaves
-                    s.emit "streammeta:#{@key}", chunk
-            
             @stream.on "data", @dataFunc
-            @stream.on "metadata", @metaFunc
             
         destroy: ->
             @stream.removeListener "data", @dataFunc
-            @stream.removeListener "metadata", @dataFunc

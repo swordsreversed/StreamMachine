@@ -48,7 +48,6 @@ module.exports = class Slave extends require("events").EventEmitter
             
         # init our server
         @server = new Server core:@
-        #@server.listen @options.listen
             
         @log.debug "Slave is listening on port #{@options.listen}"
         
@@ -131,9 +130,9 @@ module.exports = class Slave extends require("events").EventEmitter
             else
                 console.log "got connection error of ", err
             
-        @master.on "streams", (config) =>
-            console.log "got streams config of ", config
-            @configureStreams config
+        @master.on "config", (config) =>
+            console.log "got config of ", config
+            @configureStreams config.streams
                 
         @master.on "disconnect", =>
             @_onDisconnect()
@@ -153,9 +152,6 @@ module.exports = class Slave extends require("events").EventEmitter
             # connect up our logging proxy
             @log.debug "Connected to master."
             @log.proxyToMaster @master
-        
-        # start listening
-        #@server.listen @options.listen
         
         true
         
@@ -257,8 +253,13 @@ module.exports = class Slave extends require("events").EventEmitter
             
             @log.debug "created SocketSource for #{@key}"
             
-            @master.on "streamdata:#{@key}",    (chunk) => @emit "data", chunk
-            @master.on "streammeta:#{@key}",    (chunk) => @emit 'metadata', chunk
+            @master.on "streamdata:#{@key}",    (chunk) => 
+                chunk.data = new Buffer(chunk.data)
+                @emit "data", chunk
+            
+            @master.emit "stream_stats", @key, (err,obj) =>
+                console.log "header got ", obj
+                @emit "vitals", obj
             
         disconnect: ->
             console.log "SocketSource disconnect for #{key} called"
