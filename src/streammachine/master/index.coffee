@@ -2,6 +2,7 @@ _u      = require "underscore"
 temp    = require "temp"
 net     = require "net"
 fs      = require "fs"
+express = require "express"
 
 Redis       = require "../redis_config"
 Admin       = require "./admin/router"
@@ -17,9 +18,9 @@ module.exports = class Master extends require("events").EventEmitter
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
         
-        @slaves = []
-        @streams = {}
-        @proxies = {}
+        @slaves     = {}
+        @streams    = {}
+        @proxies    = {}
         
         @listeners = slaves:{}, streams:{}, total:0
         
@@ -39,7 +40,7 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.redis?
             _slaveUpdate = =>
                 # pass config on to any connected slaves
-                for sock in @slaves
+                for id,sock of @slaves
                     sock.emit "config", @config()
             
             @log.debug "initializing redis config"
@@ -62,7 +63,7 @@ module.exports = class Master extends require("events").EventEmitter
         # -- create a server to provide the admin -- #
         
         @admin = new Admin core:@, port:( @options.master?.port || @options.admin_port )
-        
+                
         # -- start the source listener -- #
         
         @sourcein = new SourceIn core:@, port:opts.source_port
@@ -104,7 +105,7 @@ module.exports = class Master extends require("events").EventEmitter
                 @log.debug "Sending config information to slave."
                 sock.emit "config", @config()
                 
-            @slaves.push sock
+            @slaves[sock.id] = sock
             
             # attach event handler for log reporting
             socklogger = @log.child slave:sock.handshake.address.address
@@ -117,12 +118,12 @@ module.exports = class Master extends require("events").EventEmitter
                 
             sock.on "stream_stats", (key, cb) =>
                 # respond with the stream's vitals
-                @streams[key]._vitals cb
+                @streams[key].vitals cb
             
         # attach disconnect handler
         @io.on "disconnect", (sock) =>
             @log.debug "slave disconnect from #{sock.id}"
-            @slaves = _u(@slaves).without sock
+            delete @slaves[sock.id]
             
     #----------
     
@@ -352,11 +353,13 @@ module.exports = class Master extends require("events").EventEmitter
             @stream = opts.stream
             @master = opts.master
                         
-            @dataFunc = (chunk) => 
-                for s in @master.slaves
+            @dataFunc = (chunk) =>
+                for id,s of @master.slaves
                     s.emit "streamdata:#{@key}", chunk
                     
             @stream.on "data", @dataFunc
             
         destroy: ->
             @stream.removeListener "data", @dataFunc
+            
+    #----------

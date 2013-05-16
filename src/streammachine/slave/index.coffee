@@ -75,6 +75,16 @@ module.exports = class Slave extends require("events").EventEmitter
             @master?.emit "listeners", counts:counts, total:total
 
         , 30 * 1000
+        
+        # -- Buffer Stats -- #
+        
+        @_buffer_interval = setInterval =>
+            return if !@connected?
+            
+            for k,s of @streams
+                @log.debug "Rewind buffer for #{ s.key } is #{ s._rbuffer?.length } chunks."
+            
+        , 5 * 1000
                             
         # -- Graceful Shutdown -- #
         
@@ -254,11 +264,12 @@ module.exports = class Slave extends require("events").EventEmitter
             @log.debug "created SocketSource for #{@key}"
             
             @master.on "streamdata:#{@key}",    (chunk) => 
+                # our data gets converted into an octet array to go over the 
+                # socket. convert it back before insertion
                 chunk.data = new Buffer(chunk.data)
                 @emit "data", chunk
             
             @master.emit "stream_stats", @key, (err,obj) =>
-                console.log "header got ", obj
                 @emit "vitals", obj
             
         disconnect: ->

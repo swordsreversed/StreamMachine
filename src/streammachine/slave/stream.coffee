@@ -5,6 +5,10 @@ Rewind = require "../rewind_buffer"
 
 # Streams are the endpoints that listeners connect to. 
 
+# On startup, a slave stream should connect to the master and start serving 
+# live audio as quickly as possible. It should then try to load in any 
+# Rewind buffer info available on the master. 
+
 module.exports = class Stream extends require('../rewind_buffer')        
     constructor: (@core,@key,@log,@opts) ->        
         @STATUS = "Initializing"

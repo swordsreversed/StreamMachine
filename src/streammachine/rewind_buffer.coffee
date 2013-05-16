@@ -62,44 +62,38 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             # -- compute initial stats -- #
                         
-            newsource.once "header", (data,header) =>
-                if @_rsecsPerChunk && @_rsecsPerChunk == newsource.emit_duration
+            newsource.once "vitals", (vitals) =>
+                if @_rstreamKey && @_rstreamKey == vitals.streamKey
                     # reconnecting, but rate matches so we can keep using 
                     # our existing buffer.
                     @log.debug "Rewind buffer validated new source.  Reusing buffer."
                 
                 else
-                    @_rChunkLength newsource.emit_duration
+                    @_rChunkLength vitals
                 
                 # connect our data listener
                 newsource.on "data", @_rdataFunc
                     
                 # keep track of our source
                 @_rsource = newsource
-                
-            # -- alternate path for slaves -- #
-            
-            newsource.once "vitals", (v) =>
-                @_rChunkLength v.secsPerChunk
-                newsource.on "data", @_rdataFunc
-                @_rsource = newsource
 
     #----------
     
-    _rChunkLength: (secs) ->
-        if @_rsecsPerChunk != secs
-            if @_rsecsPerChunk != Infinity
+    _rChunkLength: (vitals) ->
+        console.log "_rChunkLength with ", vitals
+        if @_rstreamKey != vitals.streamKey
+            if @_rstreamKey
                 # we're reconnecting, but didn't match rate...  we 
                 # should wipe out the old buffer
-                @log.debug "Invalid existing rewind buffer. Reset.", old_duration:@_rsecsPerChunk, new_duration:secs
+                @log.debug "Invalid existing rewind buffer. Reset."
                 @_rbuffer = []
                 
             # compute new frame numbers
-            @_rsecsPerChunk   = secs
+            @_rsecsPerChunk   = vitals.emitDuration
             @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
             @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
             
-            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:secs
+            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
 
     #----------
     

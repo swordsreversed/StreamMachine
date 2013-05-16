@@ -167,11 +167,12 @@ module.exports = class Router
         
         # Get the web UI    
         @app.get /.*/, (req,res) =>
+            path = if @app.path() == "/" then "" else @app.path()
             res.render "layout", 
                 core:       @core
-                server:     "http://#{req.headers.host}#{@app.path()}/api"
+                server:     "http://#{req.headers.host}#{path}/api"
                 streams:    JSON.stringify(@core.streamsInfo())
-                path:       @app.path()
+                path:       path
             
         #@server = @app.listen @port      
         
