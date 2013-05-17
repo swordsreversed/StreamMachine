@@ -62,7 +62,11 @@ module.exports = class Master extends require("events").EventEmitter
                 
         # -- create a server to provide the admin -- #
         
-        @admin = new Admin core:@, port:( @options.master?.port || @options.admin_port )
+        @admin = new Admin @
+        
+        # -- create a backend server for stream requests -- #
+        
+        @transport = new Master.StreamTransport @
                 
         # -- start the source listener -- #
         
@@ -118,7 +122,7 @@ module.exports = class Master extends require("events").EventEmitter
                 
             sock.on "stream_stats", (key, cb) =>
                 # respond with the stream's vitals
-                @streams[key].vitals cb
+                @streams[key].vitals cb                
             
         # attach disconnect handler
         @io.on "disconnect", (sock) =>
@@ -348,6 +352,41 @@ module.exports = class Master extends require("events").EventEmitter
         # and attach a listener to destroy it if the stream is removed
         stream.once "destroy", =>
             @proxies[ stream.key ]?.destroy()
+    
+    #----------
+    
+    class @StreamTransport
+        constructor: (@master) ->
+            @app = express()
+            
+            # -- Param Handlers -- #
+        
+            @app.param "stream", (req,res,next,key) =>
+                # make sure it's a valid stream key
+                if key? && s = @master.streams[ key ]
+                    req.stream = s
+                    next()
+                else
+                    res.status(404).end "Invalid stream.\n"
+                    
+            # -- Validate slave id -- #
+            
+            @app.use (req,res,next) =>
+                sock_id = req.get 'stream-slave-id'
+                if sock_id && @master.slaves[ sock_id ]
+                    req.slave_socket = @master.slaves[ sock_id ]
+                    next()
+                
+                else
+                    @master.log.debug "Rejecting StreamTransport request with missing or invalid socket ID.", sock_id:sock_id
+                    res.status(401).end "Missing or invalid socket ID.\n"
+                    
+            # -- Routes -- #
+            
+            @app.get "/:stream/rewind", (req,res) =>
+                @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
+                res.status(200).write ''
+                req.stream.rewind.dumpBuffer res
     
     #----------
         

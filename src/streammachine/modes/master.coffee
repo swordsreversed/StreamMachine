@@ -23,6 +23,7 @@ module.exports = class MasterMode extends require("./base")
         
         # Set up a server for our admin
         @server = express()
+        @server.use "/s", @master.transport.app
         @server.use @master.admin.app
         
         if nconf.get("handoff")

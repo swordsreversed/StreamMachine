@@ -39,6 +39,10 @@ module.exports = class Stream extends require('../rewind_buffer')
             #@source.on "data", @dataFunc
             @source.on "meta", @metaFunc
             @source.on "buffer", (c) => @_insertBuffer(c)
+            
+            @source.once "rewind", (stream) => 
+                @log.info "Slave stream is loading Rewind Buffer."
+                @loadBuffer stream
                     
         # now run configure...
         process.nextTick => @configure(opts)

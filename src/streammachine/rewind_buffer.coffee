@@ -161,6 +161,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # taking a copy of the array should effectively freeze us in place
         rbuf_copy = @_rbuffer.slice(0)
         
+        # make sure there's something to send
+        if rbuf_copy.length == 0
+            stream.end()
+            @log.debug "No rewind buffer to dump."
+            cb? null
+            return false
+        
         c = Concentrate()
         
         # Pipe concentrated buffer to the stream object
@@ -171,7 +178,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         for i in [(rbuf_copy.length-1)..0]
             chunk = rbuf_copy[ i ]
                         
-            meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta
+            meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta, duration:chunk.duration
             
             # 1) metadata length
             c.uint8 meta_buf.length

@@ -5,6 +5,9 @@ Server = require "./server"
 
 Socket = require "socket.io-client"
 
+URL = require "url"
+HTTP = require "http"
+
 module.exports = class Slave extends require("events").EventEmitter
     DefaultOptions:
         max_zombie_life:    1000 * 60 * 60
@@ -271,6 +274,37 @@ module.exports = class Slave extends require("events").EventEmitter
             
             @master.emit "stream_stats", @key, (err,obj) =>
                 @emit "vitals", obj
+            
+            @_requestRewindBuffer()
+
+        #----------
+        
+        _requestRewindBuffer: ->
+            # connect to the master's StreamTransport and ask for any rewind 
+            # buffer that is available
+
+            # connect to: @master.options.host:@master.options.port
+            
+            # GET request for rewind buffer
+            @log.debug "Making Rewind Buffer request for #{@key}", sock_id:@master.socket.sessionid
+            req = HTTP.request 
+                hostname:   @master.socket.options.host
+                port:       @master.socket.options.port
+                path:       "/s/#{@key}/rewind"
+                headers:   
+                    'stream-slave-id':    @master.socket.sessionid
+            , (res) =>
+                @log.debug "Got Rewind response with status code of #{ res.statusCode }"
+                if res.statusCode == 200
+                    # emit a 'rewind' event with a callback to get the response 
+                    @emit "rewind", res
+
+            req.on "error", (err) =>
+                @log.debug "Rewind request got error: #{err}", error:err
+
+            req.end()
+            
+        #----------
             
         disconnect: ->
             console.log "SocketSource disconnect for #{key} called"
