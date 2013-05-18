@@ -18,6 +18,8 @@ module.exports = class MasterMode extends require("./base")
         @log = new Logger opts.log
         @log.debug("Master Instance initialized")
         
+        process.title = "StreamM:master"
+        
         # create a master
         @master = new Master _u.extend {}, opts, logger:@log
         

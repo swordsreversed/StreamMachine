@@ -10,14 +10,15 @@ module.exports = class StandaloneMode extends require("./base")
     MODE: "StandAlone"
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
-                    
-        @streams = {}
         
         # -- Set up logging -- #
         
         @log = (new Logger @options.log).child pid:process.pid
+        @log.debug("StreamMachine standalone initialized.")
         
-        @log.debug("Instance initialized")
+        process.title = "StreamMachine"
+        
+        @streams = {}
                     
         # -- Set up master and slave -- #
         

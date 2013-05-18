@@ -84,8 +84,11 @@ module.exports = class Slave extends require("events").EventEmitter
         @_buffer_interval = setInterval =>
             return if !@connected?
             
+            counts = []
             for k,s of @streams
-                @log.debug "Rewind buffer for #{ s.key } is #{ s._rbuffer?.length } chunks."
+                counts.push [s.key,s._rbuffer?.length].join(":")
+                
+            @log.debug "Rewind buffers: " + counts.join(" -- ")
             
         , 5 * 1000
                             

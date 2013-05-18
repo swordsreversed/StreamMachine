@@ -18,6 +18,8 @@ module.exports = class SlaveMode extends require("./base")
         @log = new Logger opts.log
         @log.debug("Slave Instance initialized")
         
+        process.title = "StreamM:slave"
+        
         # create a slave
         @slave = new Slave _u.extend opts, logger:@log
         
