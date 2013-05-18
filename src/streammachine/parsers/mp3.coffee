@@ -1,5 +1,5 @@
 strtok = require('strtok')
-parseFrame = require("./lib/parse").parseFrameHeader
+assert = require("assert")
 
 module.exports = class MP3 extends require("stream").Writable
     ID3V1_LENGTH = 128
@@ -8,9 +8,41 @@ module.exports = class MP3 extends require("stream").Writable
     
     FIRST_BYTE = new strtok.BufferType(1)
     
+    # Mp3 parsing logic borrowed from node-lame: https://github.com/TooTallNate/node-lame
+    
     MPEG_HEADER             = new strtok.BufferType(MPEG_HEADER_LENGTH)
     REST_OF_ID3V2_HEADER    = new strtok.BufferType(ID3V2_HEADER_LENGTH - MPEG_HEADER_LENGTH)
     REST_OF_ID3V1           = new strtok.BufferType(ID3V1_LENGTH - MPEG_HEADER_LENGTH)
+    
+    LAYER1_ID              = 3
+    LAYER2_ID              = 2
+    LAYER3_ID              = 1
+    MPEG1_ID               = 3
+    MPEG2_ID               = 2
+    MPEG25_ID              = 0
+    MODE_MONO              = 3
+    MODE_DUAL              = 2
+    MODE_JOINT             = 1
+    MODE_STEREO            = 0
+    
+    MPEG_NAME              = [ "MPEG2.5", null, "MPEG2", "MPEG1" ]
+    LAYER_NAME             = [ null, "Layer3", "Layer2", "Layer1" ]
+    MODE_NAME              = [ "Stereo", "J-Stereo", "Dual", "Mono" ]
+    
+    SAMPLING_RATES         = [ 44100, 48000, 32000, 0 ]
+    
+    BITRATE_MPEG1_LAYER1   = [ 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448 ]
+    BITRATE_MPEG1_LAYER2   = [ 0, 32, 48, 56, 64,  80, 96,   112, 128, 160, 192, 224, 256, 320, 384 ]
+    BITRATE_MPEG1_LAYER3   = [ 0, 32, 40, 48, 56,  64, 80,   96, 112, 128, 160, 192, 224, 256, 320 ]
+    BITRATE_MPEG2_LAYER1   = [ 0, 32, 48, 56, 64,  80, 96,   112, 128, 144, 160, 176, 192, 224, 256 ]
+    BITRATE_MPEG2_LAYER2A3 = [ 0, 8,  16, 24, 32,  40, 48,   56, 64, 80, 96, 112, 128, 144, 160 ]
+    
+    BITRATE_MAP = [
+        [ null, BITRATE_MPEG2_LAYER2A3, BITRATE_MPEG2_LAYER2A3, BITRATE_MPEG2_LAYER1 ], # MPEG2.5
+        null,
+        [ null, BITRATE_MPEG2_LAYER2A3, BITRATE_MPEG2_LAYER2A3, BITRATE_MPEG2_LAYER1 ], # MPEG2
+        [ null, BITRATE_MPEG1_LAYER3, BITRATE_MPEG1_LAYER2, BITRATE_MPEG1_LAYER1 ]
+    ]
     
     constructor: ->
         super
@@ -28,10 +60,13 @@ module.exports = class MP3 extends require("stream").Writable
         @frameHeader = null
         
         @id3v2 = null
+        @_parsingId3v1 = false
         @_parsingId3v2 = false
         @_finishingId3v2 = false
         @_id3v2_1 = null
         @_id3v2_2 = null
+
+        @_id3v1_1 = null
         
         @on "frame", (frame) =>
             @outbuf.push frame
@@ -42,6 +77,24 @@ module.exports = class MP3 extends require("stream").Writable
             if v == undefined
                 # we need to examine each byte until we get a FF
                 return FIRST_BYTE
+                
+            # -- ID3v1 tag -- #
+            
+            if @_parsingId3v1
+                # our first byte is in @_id3v1_1
+                
+                id3v1 = Buffer.concat([@_id3v1_1,v])
+                
+                # title: 30 bytes
+                # artist: 30 bytes
+                # album: 30 bytes
+                # year: 4 bytes
+                # comment: 30 bytes (track num could be 30, but we don't care)
+                # genre: 1 byte
+                
+                console.log "ID3V1 is ", id3v1, id3v1.toString()
+                
+                return MPEG_HEADER
                 
             # -- ID3v2 tag -- #
             
@@ -73,7 +126,7 @@ module.exports = class MP3 extends require("stream").Writable
                 
             if @_finishingId3v2
                 # step 3 in the ID3v2 parse... 
-                b = @buffer_concat(@_id3v2_1, @_id3v2_2, v)
+                b = Buffer.concat([@_id3v2_1, @_id3v2_2, v])
                 @emit 'id3v2', b
 
                 @_finishingId3v2 = false
@@ -88,7 +141,7 @@ module.exports = class MP3 extends require("stream").Writable
                 tag = v.toString 'ascii', 0, 3
                                 
                 if tag == 'ID3'
-                    # parse ID3 tag
+                    # parse ID3v2 tag
                     console.log "got an ID3"
                     @_parsingId3v2 = true
                     @id3v2 = versionMajor:v[3]
@@ -97,13 +150,17 @@ module.exports = class MP3 extends require("stream").Writable
                     return REST_OF_ID3V2_HEADER
 
                 else if tag == 'TAG'
-                    # parse ID3v2 tag
+                    # parse ID3v1 tag
                     console.log "got a TAG"
-                    process.exit(1)
-                
+                    
+                    @_id3v1_1 = v
+                    @_parsingId3v1 = true
+                    
+                    # grab 125 bytes
+                    return REST_OF_ID3V1
                 else
                     try
-                        h = parseFrame(v)
+                        h = @parseFrame(v)
                     catch e
                         # uh oh...  bad news
                         console.log "invalid header... ", v, tag, @frameHeader
@@ -131,14 +188,15 @@ module.exports = class MP3 extends require("stream").Writable
                 buf[3] = v[1]
                 
                 try
-                    h = parseFrame(buf)
+                    h = @parseFrame(buf)
+                    
                 catch e
                     # invalid header...  chuck everything and try again
                     console.log "chucking invalid try at header: ", buf
                     @gotFF = false
                     @byteTwo = null
                     return FIRST_BYTE
-                    
+                                        
                 # valid header...  we're on schedule now
                 @gotFF = false
                 @byteTwo = null                    
@@ -193,21 +251,66 @@ module.exports = class MP3 extends require("stream").Writable
     _flush: (cb) ->
         console.log "Parser: got flush."
             
-    buffer_concat: (bufs) ->
-        buffer = null
-        length = 0
-        index = 0
-
-        if !Array.isArray(bufs)
-            bufs = Array.prototype.slice.call(arguments);
+    #----------
+    
+    parseFrame: (b) ->
+        assert.ok Buffer.isBuffer(b)
         
-        for buf in bufs
-            length += buf.length
+        # -- first twelve bits must be FF[EF] -- #
+    
+        assert.ok ( b[0] == 0xFF && (b[1] >> 4) >= 0xE ), "Buffer does not start with FF[EF]"
+        
+        console.log "buffer is ", b
+        
+        header32 = b.readUInt32BE(0)
+        
+        # -- mpeg id -- #
+        
+        r = {}
+        
+        r.mpegID            = (header32 >> 19) & 3
+        r.layerID           = (header32 >> 17) & 3
+        r.crc16used         = (header32 & 0x00010000) == 0
+        r.bitrateIndex      = (header32 >> 12) & 0xF
+        r.samplingRateIndex = (header32 >> 10) & 3
+        r.samplingRateHz    = SAMPLING_RATES[r.samplingRateIndex]
+        
+        r.padding           = (header32 & 0x00000200) != 0
+        r.privateBitSet     = (header32 & 0x00000100) != 0
+        r.mode              = (header32 >> 6) & 3
+        r.modeExtension     = (header32 >> 4) & 3
+        r.copyrighted       = (header32 & 0x00000008) != 0
+        r.original          = (header32 & 0x00000004) == 0
+        r.emphasis          = header32 & 3
+        
+        if r.mpegID == MPEG2_ID
+          r.samplingRateHz  >>= 1 # 16,22,48 kHz
+        else if r.mpegID == MPEG25_ID
+          r.samplingRateHz  >>= 2 # 8,11,24 kHz
+        
+        r.channels          = if r.mode == MODE_MONO then 1 else 2
+        r.bitrateKBPS       = BITRATE_MAP[ r.mpegID ][ r.layerID ][ r.bitrateIndex ]
+        r.mpegName          = MPEG_NAME[ r.mpegID ]
+        r.layerName         = LAYER_NAME[ r.layerID ]
+        r.modeName          = MODE_NAME[ r.mode ]
+        
+        if r.layerID == LAYER1_ID
+            # layer 1: always 384 samples/frame and 4byte-slots
+            r.samplesPerFrame   = 384;
+            r.bytesPerSlot      = 4;
+            r.frameSizeRaw      = (12 * (r.bitrateKBPS*1000) / (r.samplingRateHz*10) + (r.padding ? 1 : 0)) * 4;
             
-        buffer = new Buffer length
+        else
+            # layer 2: always 1152 samples/frame
+            # layer 3: MPEG1: 1152 samples/frame, MPEG2/2.5: 576 samples/frame
+            r.samplesPerFrame   = if (r.mpegID == MPEG1_ID) || (r.layerID == LAYER2_ID) then 1152 else 576
+            r.bytesPerSlot      = 1
+            r.frameSizeRaw      = 144 * (r.bitrateKBPS*1000) / r.samplingRateHz + (if r.padding then 1 else 0)
+            
+        # Make the frameSize be the proper floor'd byte length
+        r.frameSize = ~~r.frameSizeRaw
         
-        for buf in bufs
-            buf.copy buffer, index, 0, buf.length
-            index += buf.length
-
-        return buffer
+        if (!r.frameSize)
+          throw new Error('bad size: ' + r.frameSize)
+          
+        r
