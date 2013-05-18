@@ -19,7 +19,6 @@ module.exports = class Stream extends require('../rewind_buffer')
         @StreamTitle  = ""
         @StreamUrl    = ""
         
-        
         # remove our max listener count
         @setMaxListeners 0
             
@@ -40,15 +39,17 @@ module.exports = class Stream extends require('../rewind_buffer')
             @source.on "meta", @metaFunc
             @source.on "buffer", (c) => @_insertBuffer(c)
             
-            @source.once "rewind", (stream) => 
-                @log.info "Slave stream is loading Rewind Buffer."
-                @loadBuffer stream
+            @source.once "disconnect", =>
+                # try creating a new one
+                @source = null
+                @_buildSocketSource()
                     
         # now run configure...
         process.nextTick => @configure(opts)
-                                    
-        # set up a rewind buffer
-        @rewind = new Rewind @, opts.rewind        
+
+        # -- configure a source -- #
+        
+        @_buildSocketSource()
             
     #----------
     
@@ -69,7 +70,21 @@ module.exports = class Stream extends require('../rewind_buffer')
     
     #----------
     
+    _buildSocketSource: ->
+        if !@source && @core.master
+            source = @core.socketSource @
+            @useSource source
+            
+            # -- fetch rewind? -- #
+            
+            if @_rbuffer.length == 0
+                source.getRewind (err,stream) =>
+                    @loadBuffer stream if !err
+            
+    #----------
+    
     configure: (opts) ->
+                
         # -- Preroll -- #
         
         @log.debug "Preroll settings are ", preroll:opts.preroll

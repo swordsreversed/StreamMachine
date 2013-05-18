@@ -174,7 +174,7 @@ module.exports = class Slave extends require("events").EventEmitter
         @server?.stopListening()
         
         @log.proxyToMaster()
-        
+                
         true
     
     #----------
@@ -182,8 +182,6 @@ module.exports = class Slave extends require("events").EventEmitter
     configureStreams: (options) ->
         @log.debug "In slave configureStreams with ", options:options
 
-        # -- Sources -- #
-        
         # are any of our current streams missing from the new options? if so, 
         # disconnect them
         for k,obj in @streams
@@ -205,13 +203,14 @@ module.exports = class Slave extends require("events").EventEmitter
                 slog = @log.child stream:key
                 @streams[key] = new Stream @, key, slog, opts
                                 
-                if @master
-                    source = new Slave.SocketSource master:@master, key:key, log:slog
-                    @streams[key].useSource(source)
-                
             # should this stream accept requests to /?
             if opts.root_route
                 @root_route = key
+    
+    #----------
+    
+    socketSource: (stream) ->
+        new Slave.SocketSource @, stream
     
     #----------
     
@@ -257,55 +256,53 @@ module.exports = class Slave extends require("events").EventEmitter
     # emulate a source connection, receiving data via sockets from our master server
                 
     class @SocketSource extends require("events").EventEmitter
-        constructor: (opts) ->
-            @master = opts.master
-            @key = opts.key
-            @log = opts.log
+        constructor: (@slave,@stream) ->
+            @log = @stream.log.child subcomponent:"socket_source"
+
+            @log.debug "created SocketSource for #{@stream.key}"
             
-            #@io = @master.of "stream:#{@key}"
-            
-            @log.debug "created SocketSource for #{@key}"
-            
-            @master.on "streamdata:#{@key}",    (chunk) => 
+            @slave.master.on "streamdata:#{@stream.key}",    (chunk) => 
                 # our data gets converted into an octet array to go over the 
                 # socket. convert it back before insertion
                 chunk.data = new Buffer(chunk.data)
                 @emit "data", chunk
             
-            @master.emit "stream_stats", @key, (err,obj) =>
+            @slave.master.emit "stream_stats", @stream.key, (err,obj) =>
                 @emit "vitals", obj
-            
-            @_requestRewindBuffer()
+                
+            #@slave.master.on "disconnect", =>
+            #    @emit "disconnect"
 
         #----------
         
-        _requestRewindBuffer: ->
+        getRewind: (cb) ->
             # connect to the master's StreamTransport and ask for any rewind 
             # buffer that is available
 
             # connect to: @master.options.host:@master.options.port
             
             # GET request for rewind buffer
-            @log.debug "Making Rewind Buffer request for #{@key}", sock_id:@master.socket.sessionid
+            @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.master.socket.sessionid
             req = HTTP.request 
-                hostname:   @master.socket.options.host
-                port:       @master.socket.options.port
-                path:       "/s/#{@key}/rewind"
+                hostname:   @slave.master.socket.options.host
+                port:       @slave.master.socket.options.port
+                path:       "/s/#{@stream.key}/rewind"
                 headers:   
-                    'stream-slave-id':    @master.socket.sessionid
+                    'stream-slave-id':    @slave.master.socket.sessionid
             , (res) =>
                 @log.debug "Got Rewind response with status code of #{ res.statusCode }"
                 if res.statusCode == 200
                     # emit a 'rewind' event with a callback to get the response 
-                    @emit "rewind", res
+                    cb? null, res
 
             req.on "error", (err) =>
                 @log.debug "Rewind request got error: #{err}", error:err
+                cb? err
 
             req.end()
             
         #----------
             
         disconnect: ->
-            console.log "SocketSource disconnect for #{key} called"
+            console.log "SocketSource disconnect for #{@stream.key} called"
         

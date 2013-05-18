@@ -80,8 +80,10 @@ module.exports = class Master extends require("events").EventEmitter
         # fire up a socket listener on our slave port
         @io = require("socket.io").listen server
         
+        @log.info "Master now listening for slave connections."
+        
         # attach proxies for any streams that are already up
-        @_attachIOProxy(s) for s in @streams
+        @_attachIOProxy(s) for key,s of @streams
             
                     
         # FIXME: disconnect from our port on SIGTERM
@@ -340,6 +342,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
     
     _attachIOProxy: (stream) ->
+        @log.debug "attachIOProxy call for #{stream.key}.", io:@io?, proxy:@proxies[stream.key]?
         return false if !@io
         
         if @proxies[ stream.key ]

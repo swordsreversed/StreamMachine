@@ -57,7 +57,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             # -- disconnect from old source -- #
             
             if @_rsource
-                @_rsource.removeListener "data", @dataFunc 
+                @_rsource.removeListener "data", @_rdataFunc 
                 @log.debug "removed old rewind data listener"
             
             # -- compute initial stats -- #
