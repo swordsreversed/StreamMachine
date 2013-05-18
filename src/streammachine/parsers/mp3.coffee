@@ -82,17 +82,11 @@ module.exports = class MP3 extends require("stream").Writable
             
             if @_parsingId3v1
                 # our first byte is in @_id3v1_1
+                id3 = @parseId3V1(Buffer.concat([@_id3v1_1,v]))                
+                @emit "id3v1", id3
                 
-                id3v1 = Buffer.concat([@_id3v1_1,v])
-                
-                # title: 30 bytes
-                # artist: 30 bytes
-                # album: 30 bytes
-                # year: 4 bytes
-                # comment: 30 bytes (track num could be 30, but we don't care)
-                # genre: 1 byte
-                
-                console.log "ID3V1 is ", id3v1, id3v1.toString()
+                @_id3v1_1 = null
+                @_parsingId3v1 = false
                 
                 return MPEG_HEADER
                 
@@ -253,14 +247,46 @@ module.exports = class MP3 extends require("stream").Writable
             
     #----------
     
+    parseId3V1: (id3v1) ->
+        id3 = {}
+        
+        _stripNull = (buf) ->
+            idx = buf.toJSON().indexOf(0)
+            buf.toString "ascii", 0, if idx == -1 then buf.length else idx
+        
+        # TAG: 3 bytes
+        # title: 30 bytes
+        id3.title = _stripNull id3v1.slice(3,33)
+        
+        # artist: 30 bytes
+        id3.artist = _stripNull id3v1.slice(33,63)
+        
+        # album: 30 bytes
+        id3.album = _stripNull id3v1.slice(63,93)
+        
+        # year: 4 bytes
+        id3.year = _stripNull id3v1.slice(93,97)
+        
+        # comment: 28 - 30 bytes
+        
+        if id3v1[125] == 0
+            id3.comment = _stripNull id3v1.slice(97,125)
+            id3.track = id3v1.readUInt8(126)
+        else
+            id3.track = null
+            id3.comment = _stripNull id3v1.slice(97,127)
+        
+        # genre: 1 byte
+        id3.genre = id3v1.readUInt8(127)
+        
+    #----------
+    
     parseFrame: (b) ->
         assert.ok Buffer.isBuffer(b)
         
         # -- first twelve bits must be FF[EF] -- #
     
         assert.ok ( b[0] == 0xFF && (b[1] >> 4) >= 0xE ), "Buffer does not start with FF[EF]"
-        
-        console.log "buffer is ", b
         
         header32 = b.readUInt32BE(0)
         

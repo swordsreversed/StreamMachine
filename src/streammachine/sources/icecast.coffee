@@ -24,7 +24,7 @@ module.exports = class IcecastSource extends require("./base")
         
         # incoming -> Parser
         @sock.pipe @parser
-        
+                
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
             @emit "frame", frame

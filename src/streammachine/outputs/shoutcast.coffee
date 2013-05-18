@@ -88,9 +88,12 @@ module.exports = class Shoutcast
             # -- create an Icecast creator to inject metadata -- #
             
             @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
-            @ice.queue StreamTitle:@stream.StreamTitle, StreamUrl:@stream.StreamUrl
+            
+            @source.onFirstMeta (err,meta) =>
+                @ice.queue meta
         
             @metaFunc = (data) =>
+                console.log "Queueing metadata: ", data
                 @ice.queue data if data.StreamTitle
 
             @ice.pipe(@socket)

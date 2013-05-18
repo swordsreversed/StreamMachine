@@ -22,6 +22,8 @@ module.exports = class Stream extends require('events').EventEmitter
         source_password:    null
         host:               null
         fallback:           null
+        acceptSourceMeta:   false
+        metaTitle:          ""
         format:             "mp3"
     
     constructor: (@core,@key,@log,opts)->
@@ -56,15 +58,17 @@ module.exports = class Stream extends require('events').EventEmitter
         
         # -- Set up data functions -- #
         
-        @_nextMeta = null
+        @_meta = 
+            StreamTitle:    @opts.metaTitle
+            StreamUrl:      ""
         
-        @metaFunc = (meta) => 
-            @_nextMeta = meta
-            @emit "meta", meta
+        @sourceMetaFunc = (meta) =>
+            if @opts.acceptSourceMeta
+                @setMetadata meta
         
         @dataFunc = (data) => 
             # inject our metadata into the data object
-            @emit "data", _u.extend {}, data, meta:@_nextMeta
+            @emit "data", _u.extend {}, data, meta:@_meta
             
         @vitalsFunc = (vitals) =>
             @_vitals = vitals
@@ -138,8 +142,16 @@ module.exports = class Stream extends require('events').EventEmitter
     
     setMetadata: (opts,cb) ->
         console.log "Emitting metadata: ", StreamTitle:opts.title, streamUrl:opts.url
-        @metaFunc StreamTitle:opts.title, StreamUrl:opts.url
-        cb? null, @_nextMeta
+        
+        if opts.title?
+            @_meta.StreamTitle = opts.title
+            
+        if opts.url?
+            @_meta.StreamUrl = opts.url
+            
+        @emit "meta", @_meta
+        
+        cb? null, @_meta
     
     #----------
     
@@ -202,14 +214,14 @@ module.exports = class Stream extends require('events').EventEmitter
         newsource.vitals (vitals) =>
             if old_source
                 # unhook from the old source's events
-                old_source.removeListener "metadata",   @metaFunc
+                old_source.removeListener "metadata",   @sourceMetaFunc
                 old_source.removeListener "data",       @dataFunc
                 old_source.removeListener "vitals",     @vitalsFunc
                     
             @source = newsource
                     
             # connect to the new source's events
-            newsource.on "metadata",   @metaFunc
+            newsource.on "metadata",   @sourceMetaFunc
             newsource.on "data",       @dataFunc
             newsource.on "vitals",     @vitalsFunc
             
@@ -264,6 +276,10 @@ module.exports = class Stream extends require('events').EventEmitter
             
         if @key != @opts.key
             @key = @opts.key
+            
+        # did they update the metaTitle?
+        if new_opts.metaTitle
+            @setMetadata title:new_opts.metaTitle
             
         @emit "config"
         

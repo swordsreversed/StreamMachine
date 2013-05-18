@@ -174,7 +174,7 @@ module.exports = class Slave extends require("events").EventEmitter
     _onDisconnect: ->
         @connected = false
         @log.debug "Disconnected from master."
-        @server?.stopListening()
+        #@server?.stopListening()
         
         @log.proxyToMaster()
                 

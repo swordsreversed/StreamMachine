@@ -246,20 +246,25 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
         bl = @_rbuffer.length
         
-        pumpLen = 0
-        pumpLen += @_rbuffer[ bl - 1 - (offset - i) ].data.length for i in [1..length]
+        bufs        = []
+        pumpLen     = 0
+        duration    = 0
         
+        meta = null
+        
+        for i in [1..length]
+            b = @_rbuffer[ bl - 1 - (offset - i) ]
+            pumpLen     += b.data.length
+            bufs.push   b.data
+            duration    += b.duration
+            
+            meta = b.meta if !meta
+            
         @log.debug "creating buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
         
-        pumpBuf = new Buffer pumpLen
-
-        index = 0
-        for i in [1..length]
-            buf = @_rbuffer[ bl - 1 - (offset - i) ].data
-            buf.copy pumpBuf, index, 0, buf.length
-            index += buf.length
+        pumpBuf = Buffer.concat bufs, pumpLen
             
-        return data:pumpBuf
+        return data:pumpBuf, meta:meta, duration:duration
         
     #----------
     
@@ -307,9 +312,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
             
-            #@data = opts.on_data
-            #@meta = opts.on_meta
-            
             @_queue = []
             @_reading = false
                         
@@ -325,6 +327,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             # that's it... now RewindBuffer will call our @data directly
             @emit "readable"
+            
+        onFirstMeta: (cb) ->
+            if @_queue.length > 0
+                cb? null, @_queue[0].meta
+            else
+                @once "readable", =>
+                    cb? null, @_queue[0].meta
             
         _read: (size) =>
             if @_reading
@@ -346,7 +355,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 if !next_buf
                     @rewind.log.error "Shifted queue but got null", length:@_queue.length
                 
-                @emit "meta", next_buf.meta if next_buf.meta
+                if next_buf.meta
+                    @emit "meta", next_buf.meta 
                 
                 if @push next_buf.data
                     sent += next_buf.data.length
