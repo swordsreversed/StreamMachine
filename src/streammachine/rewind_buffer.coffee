@@ -104,7 +104,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         rewind = new RewindBuffer.Rewinder @, id, opts
         
         # add it to our list of listeners
-        @_raddListener rewind
+        @_raddListener rewind unless opts.pumpOnly
         
         # and return it
         rewind
@@ -270,19 +270,17 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
     #----------
     
-    burstFrom: (offset,obj) ->
+    burstFrom: (offset,burstSecs) ->
         # we want to send them @burst frames (if available), starting at offset.
-        # return them the new offset position
+        # return them the new offset position and the burst data
         
-        bl = @_rbuffer.length
-        
-        burst = if offset > @_rburst then @_rburst else offset
-        obj._insert @pumpFrom offset, burst
-        
-        if offset > @_rburst
-            return offset - @_rburst
+        # convert burstSecs to frames
+        burst = @checkOffset burstSecs
+
+        if offset > burst
+            return [ offset-burst, @pumpFrom(offset,burst) ]
         else
-            return 0
+            return [ 0, @pumpFrom(offset,offset) ]
     
     #----------
             
@@ -305,6 +303,21 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
     #----------
     
+    # Rewinder is the general-purpose listener stream.
+    # Arguments:
+    # * offset: Number
+    #   - Where to position the playHead relative to now.  Should be a positive 
+    #     number representing the number of seconds behind live
+    # * pump: Boolean||Number
+    #   - If true, burst 30 seconds or so of data as a buffer. If offset is 0, 
+    #     that 30 seconds will effectively put the offset at 30. If offset is 
+    #     greater than 0, burst will go forward from that point.
+    #   - If a number, specifies the number of seconds of data to pump 
+    #     immediately.  
+    # * pumpOnly: Boolean, default false
+    #   - Don't hook the Rewinder up to incoming data. Pump whatever data is 
+    #     requested and then send EOF
+    
     class @Rewinder extends require("stream").Readable
         constructor: (@rewind,@conn_id,opts={}) ->
             super highWaterMark:512*1024
@@ -316,16 +329,31 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             @_queue = []
             @_reading = false
-                        
-            if opts?.pump
+            
+            @_length = 0
+            
+            # -- What are we sending? -- #
+            
+            if opts?.pumpOnly
+                # we're just giving one pump of data, then EOF
+                pumpFrames = @rewind.checkOffset opts.pump || 0
+                @_queue.push @rewind.pumpFrom( pumpFrames, @_offset )
+                            
+            else if opts?.pump
+                pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
+                
                 if @_offset == 0
                     # pump some data before we start regular listening
                     @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                    @_queue.push @rewind.pumpSeconds(@rewind.opts.burst)
+                    @_queue.push @rewind.pumpSeconds( pumpSecs )
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
-                    @_offset = @rewind.burstFrom @_offset, @
+                    [@_offset,data] = @rewind.burstFrom @_offset, pumpSecs
+                    @_queue.push data
+                    
+            @_length += @_queue[0]?.data.length
+            console.log "Initial pump length is ", @_length
             
             # that's it... now RewindBuffer will call our @data directly
             @emit "readable"
@@ -366,13 +394,20 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                     if sent < size && @_queue.length > 0
                         _pushQueue()
                     else
-                        @push ''
-                        @_reading = false
+                        if opts?.pumpOnly && @_queue.length == 0
+                            # this is a listener that is only getting pump data.  Now 
+                            # that we're done pumping we can go ahead and trigger EOF
+                            @push null
+                            @_reading = false
+                            
+                        else                        
+                            @push ''
+                            @_reading = false
 
             _pushQueue()
             
         _insert: (b) =>
-            @_queue.push b            
+            @_queue.push b
             @emit "readable" if !@_reading
                         
         setOffset: (offset) ->

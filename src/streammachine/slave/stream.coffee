@@ -31,8 +31,6 @@ module.exports = class Stream extends require('../rewind_buffer')
         @metaFunc = (chunk) => 
             @StreamTitle    = chunk.StreamTitle if chunk.StreamTitle
             @StreamUrl      = chunk.StreamUrl if chunk.StreamUrl
-            
-            console.log "setting meta on slave stream", chunk, @StreamTitle, @StreamUrl
                 
         @on "source", =>
             #@source.on "data", @dataFunc
@@ -179,8 +177,6 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
             
     disconnectListener: (id) ->
-        console.log "in closeListener for ", id
-        
         lmeta = @_lmeta[id]
         
         if lmeta
@@ -198,6 +194,7 @@ module.exports = class Stream extends require('../rewind_buffer')
             @log.debug "Connection end", id:id, listeners:_u(@_lmeta).keys().length, bytes:lmeta.obj.socket?.bytesWritten, seconds:seconds
         
             @log.request "", 
+                output:     lmeta.obj.client.output
                 path:       lmeta.obj.client.path
                 ip:         lmeta.obj.client.ip
                 ua:         lmeta.obj.client.ua

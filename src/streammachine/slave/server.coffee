@@ -103,7 +103,7 @@ module.exports = class Server extends require('events').EventEmitter
                 
             else if req.param("pump")
                 # pump listener pushes from the buffer as fast as possible
-                new @core.Outputs.pumper req.stream, req, res
+                new @core.Outputs.pumper req.stream, req:req, res:res
                 
             else
                 # normal live stream (with or without shoutcast)
