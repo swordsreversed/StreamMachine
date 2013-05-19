@@ -7,14 +7,16 @@ Dissolve    = require "dissolve"
 # of our stream. 
 
 # Buffer is an array of objects. Each object should have:
-# * ts:     Timestamp for when chunk was emitted from master stream
-# * data:   Chunk of audio data (in either MP3 or AAC)
-# * meta:   Metadata that should be running as of this chunk
+# * ts:         Timestamp for when chunk was emitted from master stream
+# * data:       Chunk of audio data (in either MP3 or AAC)
+# * meta:       Metadata that should be running as of this chunk
+# * duration:   Duration of the audio chunk
 
 # When the buffer is dumped, it will be in the form of a loop of binary 
 # packets.  Each will contain:
 # * uint8: metadata length
-# * Buffer: metadata, stringified into JSON and stuck in a buffer (obj is ts and meta)
+# * Buffer: metadata, stringified into JSON and stuck in a buffer (obj is ts, 
+#   duration and meta)
 # * uint16: data length
 # * Buffer: data chunk 
 

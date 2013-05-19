@@ -16,7 +16,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         # initialize RewindBuffer
         super()
         
-        @StreamTitle  = ""
+        @StreamTitle  = @opts.metaTitle
         @StreamUrl    = ""
         
         # remove our max listener count

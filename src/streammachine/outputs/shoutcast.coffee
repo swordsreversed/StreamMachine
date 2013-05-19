@@ -93,7 +93,6 @@ module.exports = class Shoutcast
                 @ice.queue meta
         
             @metaFunc = (data) =>
-                console.log "Queueing metadata: ", data
                 @ice.queue data if data.StreamTitle
 
             @ice.pipe(@socket)
