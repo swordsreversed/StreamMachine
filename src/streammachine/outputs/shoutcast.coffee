@@ -11,6 +11,8 @@ module.exports = class Shoutcast
         @client = output:"shoutcast"
         @pump = true
         
+        @_lastMeta = null
+        
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #
             
@@ -93,7 +95,9 @@ module.exports = class Shoutcast
                 @ice.queue meta
         
             @metaFunc = (data) =>
-                @ice.queue data if data.StreamTitle
+                unless @_lastMeta && _u(data).isEqual(@_lastMeta)
+                    @ice.queue data
+                    @_lastMeta = data
 
             @ice.pipe(@socket)
             
