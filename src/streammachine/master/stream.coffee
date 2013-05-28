@@ -23,6 +23,7 @@ module.exports = class Stream extends require('events').EventEmitter
         host:               null
         fallback:           null
         acceptSourceMeta:   false
+        monitored:          true
         metaTitle:          ""
         format:             "mp3"
     
@@ -172,7 +173,9 @@ module.exports = class Stream extends require('events').EventEmitter
                     @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
                     @log.alert "Source disconnected. No sources remaining."
-                    @emit "disconnect", active:true, count:0, source:@source
+                    @_disconnectSource @source
+                    @source = null
+                    @emit "disconnect", active:true, count:0, source:null
             else
                 # no... just remove it from the list
                 @log.event "Inactive source disconnected."
@@ -196,6 +199,13 @@ module.exports = class Stream extends require('events').EventEmitter
             cb?()
             
     #----------
+    
+    _disconnectSource: (s) ->
+        s.removeListener "metadata",   @sourceMetaFunc
+        s.removeListener "data",       @dataFunc
+        s.removeListener "vitals",     @vitalsFunc
+
+    #----------
 
     useSource: (newsource,cb=null) ->
         # stash our existing source if we have one
@@ -214,9 +224,7 @@ module.exports = class Stream extends require('events').EventEmitter
         newsource.vitals (vitals) =>
             if old_source
                 # unhook from the old source's events
-                old_source.removeListener "metadata",   @sourceMetaFunc
-                old_source.removeListener "data",       @dataFunc
-                old_source.removeListener "vitals",     @vitalsFunc
+                @_disconnectSource(old_source)
                     
             @source = newsource
                     

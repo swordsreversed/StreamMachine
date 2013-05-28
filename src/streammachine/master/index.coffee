@@ -8,6 +8,7 @@ Redis       = require "../redis_config"
 Admin       = require "./admin/router"
 Stream      = require "./stream"
 SourceIn    = require "./source_in"
+Alerts      = require "../alerts"
 
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
@@ -71,9 +72,17 @@ module.exports = class Master extends require("events").EventEmitter
         # -- start the source listener -- #
         
         @sourcein = new SourceIn core:@, port:opts.source_port
-            
-        # -- set up the socket connection for slaves -- #
         
+        # -- create an alerts object -- #
+        
+        @alerts = new Alerts logger:@log.child(module:"alerts")
+        
+        # set an interval to check monitored streams for sources
+        setInterval =>
+            for k,s of @streams
+                @alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
+        , 5*1000
+                        
     #----------
     
     listenForSlaves: (server) ->

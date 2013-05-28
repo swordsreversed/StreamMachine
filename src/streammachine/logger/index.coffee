@@ -4,8 +4,6 @@ fs = require "fs"
 path = require "path"
 strftime = require("prettydate").strftime
 
-Alerts = require "./alerts"
-
 module.exports = class LogController
     CustomLevels:
         error:          80
@@ -56,12 +54,6 @@ module.exports = class LogController
                 server:     config.cube.server
                 event:      config.cube.event
                 level:      "minute"
-                
-        # -- Alerts -- #
-        
-        if config.alerts?
-            transports.push new Alerts
-                config:     config.alerts
         
         # -- Remote -- #
         
