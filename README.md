@@ -30,8 +30,9 @@ to the station's live stream.
 
 ## Architecture
 
-StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on one server, or in a 
-master-slave configuration for load-balancing. StreamMachine is designed for Node 0.10.
+StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on 
+one server, or in a master-slave configuration for load-balancing. 
+StreamMachine is designed for Node 0.10.
 
 #### Configuration
 
@@ -56,6 +57,19 @@ Two modes are supported for incoming audio:
 
 Currently, MP3 and AAC streams are supported. 
 
+#### Operation Modes
+
+StreamMachine can operate as a single process or in a master-slave configuration.
+
+* __Standalone:__ One process manages both incoming and outgoing audio. For 
+    development and small installations.
+  
+* __Master:__ Master handles source connections and configuration. Provides the 
+    admin UI and centralizes logging from slave processes. Handles no client traffic.
+  
+* __Slave:__ Slave handles all client requests. Stream audio is proxied from the 
+    master over a single socket connection.
+
 ## Outputs
 
 #### Traditional
@@ -65,10 +79,26 @@ The `LiveMP3` and `Shoutcast` outputs provide traditional output streams.
 #### New
 
 The `Pumper` output allows a chunk of audio to be downloaded as quick as 
-possible.
+possible.  
 
 The `Sockets` output creates an audio stream that can seek through the Rewind
 Buffer without having to reconnect.
+
+## Alerts
+
+Alerts are intended to provide a heads-up when something's going wrong in 
+the streaming process. A similar alert will fire when the condition is ended. 
+Where logging is intended to signal an event, alerts are about signalling 
+that a condition exists.
+
+#### Sourceless Stream
+
+Emits 30 seconds after a monitored stream loses its only source connection.
+
+#### Disconnected Slave
+
+Emits when a slave has been unable to connect to the master server for more 
+than 30 seconds.
 
 ## Who?
 
