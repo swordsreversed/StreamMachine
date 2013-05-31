@@ -54,6 +54,12 @@ module.exports = class LogController
                 server:     config.cube.server
                 event:      config.cube.event
                 level:      "minute"
+                
+        # -- Campfire -- #
+        
+        if config.campfire?
+            # set up logging to a Campfire room
+            transports.push new LogController.CampfireLogger config.campfire
         
         # -- Remote -- #
         
@@ -98,7 +104,7 @@ module.exports = class LogController
                     if _u.isObject(args[args.length-1])
                         args[args.length-1] = _u.extend {}, args[args.length-1], @opts
                     else
-                        args.push @opts
+                        args.push _u.clone(@opts)
                     
                     @parent[k].apply @, args
                     
@@ -196,6 +202,48 @@ module.exports = class LogController
             console.log "w3c finished flushing"
             @file.once "drain", => @emit "flush"
             
+    #----------
+    
+    class @CampfireLogger extends winston.Transport
+        name: "campfire"
+        
+        constructor: (@opts) ->
+            super @opts
+        
+            # -- build our connection -- #
+        
+            Campfire = (require "campfire").Campfire
+  
+            @_room  = false
+            @_queue = []
+
+            @campfire = new Campfire 
+                account:  @opts.account
+                token:    @opts.token
+                ssl:      true
+
+            @campfire.join @opts.room, (err,room) =>
+                if err
+                    console.error "Cannot connect to Campfire for logging: #{err}"
+                    return false
+                    
+                @_room = room
+                
+                for msg in @_queue
+                    @_room.speak msg, (err) =>
+                        # ok
+
+                @_queue = []
+                    
+        log: (level,msg,meta,cb) ->
+            if @_room
+                @_room.speak msg, (err) =>
+                    # ok
+            else
+                @_queue.push msg
+            
+            cb?()
+    
     #----------
     
     class @SocketLogger extends winston.Transport

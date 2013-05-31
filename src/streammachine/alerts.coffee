@@ -15,7 +15,9 @@ ALERT_TYPES =
 # class with a code, a key and a state.  
 
 module.exports = class Alerts extends require("events").EventEmitter
-    constructor: () ->
+    constructor: (@opts) ->
+        @logger = @opts.logger
+        
         @_states = {}
         
     #----------
@@ -79,6 +81,15 @@ module.exports = class Alerts extends require("events").EventEmitter
     _fireAlert: (obj) ->
         console.log "alert", "#{obj.code}:#{obj.key}", obj
         
+        alert = 
+            code:           obj.code
+            key:            obj.key
+            triggered_at:   obj.triggered_at
+            description:    ALERT_TYPES[ obj.code ].description
+        
+        @logger.alert "Alert: #{obj.key} : #{ alert.description }", alert
+        @emit "alert", alert
+        
         # mark our alert as sent
         obj.alert_sent = true
         
@@ -86,6 +97,16 @@ module.exports = class Alerts extends require("events").EventEmitter
         
     _fireAllClear: (obj) ->
         console.log "all_clear", "#{obj.code}:#{obj.key}", obj
+        
+        alert = 
+            code:           obj.code
+            key:            obj.key
+            triggered_at:   obj.triggered_at
+            last_seen_at:   obj.last_seen_at
+            description:    ALERT_TYPES[ obj.code ].description
+        
+        @logger.alert "Alert Cleared: #{obj.key} : #{ alert.description }", alert
+        @emit "alert_cleared", alert
         
         # we need to delete the alert now that it has been cleared. If the 
         # condition returns, it will be as a new event
