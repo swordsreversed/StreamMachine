@@ -105,11 +105,35 @@ class streammachine.Admin extends Backbone.Router
             @trigger "save", @model
             
         render: ->
-            console.log "edit modal with ", @model.toJSON()
             @$el.html @template _.extend @model.toJSON(), title:@title
             
             @modelBinder.bind @model, @el
             
+            @
+    
+    #----------
+            
+    class @StreamMetaModal extends Backbone.View
+        className: "modal stream_meta"
+        template: JST["admin/templates/stream_meta"]
+    
+        events:
+            "click .btn.update": "_update"
+    
+        initialize: ->
+            @modelBinder = new Backbone.ModelBinder()
+        
+            @title = "Update Stream Metadata"
+        
+        _update: (evt) ->
+            @trigger "update", @model
+        
+        render: ->
+            console.log "edit modal with ", @model.toJSON()
+            @$el.html @template _.extend @model.toJSON(), title:@title
+        
+            @modelBinder.bind @model, @el
+        
             @
     
     #----------
@@ -119,30 +143,70 @@ class streammachine.Admin extends Backbone.Router
         
         events:
           "click .edit_stream":     "_edit_stream"
+          "click .update_meta":     "_update_meta"
           "click .destroy_stream":  "_destroy_stream"
         
         initialize: ->
             @model.on "change", => @render()
         
+        #----------
+        
         render: ->
             @$el.html @template @model.toJSON()
             @
             
+        #----------
+            
         _edit_stream: (evt) ->
-          modal = new Admin.StreamEditModal model:@model
-          $(modal.render().el).modal show:true
-          
-          modal.on "save", =>
-            console.log "modal called save."
-            o_key = @model.get("id")
-            @model.save {}, success:(model,resp) =>
-                console.log "Successful save.", model, o_key
-                $(modal.render().el).modal "hide"
+            # clone our model so that updates don't stomp on changes
+            c_model = @model.clone()
+            c_model.url = @model.url()
                 
-                @trigger "update", model.get("key")
+            modal = new Admin.StreamEditModal model:c_model
+            $(modal.render().el).modal show:true
+
+            modal.on "save", =>
+                console.log "modal called save."
+                o_key = c_model.get("id")
+                c_model.save {}, success:(model,resp) =>
+                    console.log "Successful save.", model, o_key
+                    $(modal.render().el).modal "hide"
+    
+                    @trigger "update", c_model.get("key")
+    
+                , error:(model,resp) =>
+                    console.log "Got an error: ", resp, model
+        
+        #----------
                 
-            , error:(model,resp) =>
-                console.log "Got an error: ", resp, model
+        _update_meta: (evt) ->
+            c_model = @model.clone()
+            c_model.url = @model.url()
+            modal = new Admin.StreamMetaModal model:c_model
+            $(modal.render().el).modal show:true
+            
+            modal.on "update", =>
+                opts = 
+                    title:  c_model.get("metaTitle")
+                    url:    c_model.get("metaUrl")
+                
+                console.log "modal called update", opts, c_model
+                $.ajax "#{c_model.url}/metadata", 
+                    type: "POST"
+                    data:
+                        title:  c_model.get("metaTitle")
+                        url:    c_model.get("metaUrl")
+                    success: (data) =>
+                        modal.$(".last_notice").html $ "<div/>", 
+                            class:  "alert alert-success"
+                            text:   "Metadata successfully updated."
+                        
+                    error: (xhr,resp) =>
+                        modal.$(".last_notice").html $ "<div/>", 
+                            class:  "alert alert-error"
+                            text:   "Metadata update error: #{xhr.responseText}"
+            
+        #----------
           
         _destroy_stream: (evt) ->
             # ask for confirmation

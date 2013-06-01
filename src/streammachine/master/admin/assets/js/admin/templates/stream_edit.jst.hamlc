@@ -3,36 +3,51 @@
   %h3= @title
 
 .modal-body
-  %h2 Stream Key
+  %form.form-horizontal
   
-  %p Unique identifier for this stream.
-
-  %input(type="text" name="key")
+    .control-group
+      %label.control-label Stream Key
+      .controls
+        %input(type="text" name="key")
+        %span.help-block Unique identifier for this stream.
   
-  %h2 Stream Format
+    .control-group
+      %label.control-label Monitored?
+      %label.checkbox.controls
+        %input(type="checkbox" name="monitored") 
+        Generate alert if this stream does not have a source.
   
-  %select(name="format")
-    %option(value="") Select One
-    %option(value="mp3") MP3
-    %option(value="aac") AAC
+    .control-group
+      %label.control-label Stream Title
+      .controls
+        %input(type="text" name="metaTitle")
+        %span.help-block Used as default title metadata.
+        
+    .control-group
+      %label.control-label Stream Format
+      .controls
+        %select(name="format")
+          %option(value="") Select One
+          %option(value="mp3") MP3
+          %option(value="aac") AAC
 
-  %h2 Hostname
-  
-  %p Used in giving out playlist information.
+    .control-group    
+      %label.control-label Hostname
+      .controls
+        %input(type="text" name="host")
+        %span.help-block Used in giving out playlist information.
 
-  %input(type="text" name="host")
+    .control-group
+      %label.control-label Source Password
+      .controls
+        %input(type="text" name="source_password")
+        %span.help-block Required to allow Icecast clients to connect as sources.
 
-  %h2 Source Password
-  
-  %p Required to allow Icecast clients to connect as sources.
-
-  %input(type="text" name="source_password")
-
-  %h2 Fallback Source?
-
-  %p This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
-
-  %input(type="text" name="fallback")
+    .control-group
+      %label.control-label Fallback Source?
+      .controls
+        %input(type="text" name="fallback")
+        %span.help-block This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
 
 .modal-footer
   %button.btn.btn-primary.save Save

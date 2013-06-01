@@ -84,12 +84,12 @@ module.exports = class Router
             api.ok req, res, req.stream.status()
         
         # update stream metadata    
-        @app.post "/api/streams/:stream/metadata", (req,res) =>
-            req.stream.setMetadata req.query, (err,meta) =>
+        @app.post "/api/streams/:stream/metadata", express.bodyParser(), (req,res) =>
+            req.stream.setMetadata req.body||req.query, (err,meta) =>
                 if err
                     api.invalid req, res, err
                 else
-                    api.ok req, req, meta
+                    api.ok req, res, meta
         
         # Promote a source to live    
         @app.post "/api/streams/:stream/promote", (req,res) =>

@@ -47,6 +47,10 @@
   .well.sidebar-nav
     %h2 Options
     
+    %button.btn.update_meta Update Metadata
+    
+    %hr/
+    
     %button.btn.edit_stream Edit Stream Settings
     
     %hr/
