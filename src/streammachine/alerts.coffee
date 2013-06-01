@@ -1,5 +1,6 @@
-nconf = require "nconf"
-_u = require "underscore"
+nconf       = require "nconf"
+_u          = require "underscore"
+nodemailer  = require "nodemailer"
 
 ALERT_TYPES = 
     sourceless:
@@ -18,6 +19,8 @@ module.exports = class Alerts extends require("events").EventEmitter
     constructor: (@opts) ->
         @logger = @opts.logger
         
+        @email = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")
+
         @_states = {}
         
     #----------
@@ -111,11 +114,62 @@ module.exports = class Alerts extends require("events").EventEmitter
         # we need to delete the alert now that it has been cleared. If the 
         # condition returns, it will be as a new event
         delete @_states[ obj.code ][ obj.key ]
+    
+    #----------
         
-        
+    class @Email
+        constructor: (@alerts,@opts) ->
+            # -- set up the transport -- #
             
-        
-    
-    
+            @transport = nodemailer.createTransport(@opts.mailer_type,@opts.mailer_options)
             
-    
+            # -- register our listener -- #
+            
+            @alerts.on "alert", (msg) => @_sendAlert(msg)
+            @alerts.on "alert_cleared", (msg) => @_sendAllClear(msg)
+        
+        #----------
+            
+        _sendAlert: (msg) ->
+            email = _u.extend {}, @opts.email_options, 
+                subject: "[StreamMachine/#{msg.key}] #{msg.code} Alert"
+                generateTextFromHTML: true
+                html:   """
+                        <p>StreamMachine has detected an alert condition of <b>#{msg.code}</b> for <b>#{msg.key}</b>.</p>
+                        
+                        <p>#{msg.description}</p>
+                        
+                        <p>Condition was first detected at <b>#{msg.triggered_at}</b>.</p>
+                        """
+                        
+            @transport.sendMail email, (err,resp) =>
+                if err
+                    @alerts.logger.error "Error sending alert email: #{err}", error:err
+                    return false
+                    
+                @alerts.logger.debug "Alert email sent to #{email.to}.", code:msg.code, key:msg.key
+        
+        #----------
+            
+        _sendAllClear: (msg) ->
+            email = _u.extend {}, @opts.email_options, 
+                subject: "[StreamMachine/#{msg.key}] #{msg.code} Cleared"
+                generateTextFromHTML: true
+                html:   """
+                        <p>StreamMachine has cleared an alert condition of <b>#{msg.code}</b> for <b>#{msg.key}</b>.</p>
+                        
+                        <p>#{msg.description}</p>
+                        
+                        <p>Condition was first detected at <b>#{msg.triggered_at}</b>.</p>
+                        
+                        <p>Condition was last seen at <b>#{msg.last_seen_at}</b>.</p>
+                        """
+                        
+            @transport.sendMail email, (err,resp) =>
+                if err
+                    @alerts.logger.error "Error sending all clear email: #{err}", error:err
+                    return false
+                    
+                @alerts.logger.debug "All clear email sent to #{email.to}.", code:msg.code, key:msg.key
+            
+        #----------
