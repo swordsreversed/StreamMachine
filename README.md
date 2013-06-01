@@ -1,10 +1,9 @@
 ---
-     ______  ______ ______  ______  ______  __    __  __    __  ______  ______  __  __  __  __   __  ______    
-    /\  ___\/\__  _/\  == \/\  ___\/\  __ \/\ "-./  \/\ "-./  \/\  __ \/\  ___\/\ \_\ \/\ \/\ "-.\ \/\  ___\   
-    \ \___  \/_/\ \\ \  __<\ \  __\\ \  __ \ \ \-./\ \ \ \-./\ \ \  __ \ \ \___\ \  __ \ \ \ \ \-.  \ \  __\   
-     \/\_____\ \ \_\\ \_\ \_\ \_____\ \_\ \_\ \_\ \ \_\ \_\ \ \_\ \_\ \_\ \_____\ \_\ \_\ \_\ \_\\"\_\ \_____\ 
-      \/_____/  \/_/ \/_/ /_/\/_____/\/_/\/_/\/_/  \/_/\/_/  \/_/\/_/\/_/\/_____/\/_/\/_/\/_/\/_/ \/_/\/_____/ 
-                                                                                                           
+     ,---.   ,--.                                  ,--.   ,--.             ,--.     ,--.               
+    '   .-',-'  '-.,--.--. ,---.  ,--,--.,--,--,--.|   `.'   | ,--,--.,---.|  ,---. `--',--,--, ,---.  
+    `.  `-.'-.  .-'|  .--'| .-. :' ,-.  ||        ||  |'.'|  |' ,-.  | .--'|  .-.  |,--.|      \ .-. : 
+    .-'    | |  |  |  |   \   --.\ '-'  ||  |  |  ||  |   |  |\ '-'  \ `--.|  | |  ||  ||  ||  \   --. 
+    `-----'  `--'  `--'    `----' `--`--'`--`--`--'`--'   `--' `--`--'`---'`--' `--'`--'`--''--'`----' 
 ---
 
 StreamMachine is an open-source streaming audio server aimed at pushing 
@@ -99,6 +98,14 @@ Emits 30 seconds after a monitored stream loses its only source connection.
 
 Emits when a slave has been unable to connect to the master server for more 
 than 30 seconds.
+
+## Configuration
+
+StreamMachine uses [nconf](https://github.com/flatiron/nconf) to load 
+configuration settings from a JSON file, from environment variables and from 
+the command line. 
+
+Full configuration information [can be found in the wiki](https://github.com/StreamMachine/StreamMachine/wiki/Configuration-settings).
 
 ## Who?
 
