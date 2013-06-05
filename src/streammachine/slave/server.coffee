@@ -14,6 +14,13 @@ module.exports = class Server extends require('events').EventEmitter
         @opts = _u.defaults opts||{}, @DefaultOptions
         
         @core = @opts.core
+        @logger = @opts.logger
+        
+        # -- socket server -- #
+        
+        @sockets = new Server.Sockets @, @logger.child(mode:"sockets")
+        
+        # -- set up our express app -- #
         
         @app = express()
         @app.httpAllowHalfOpen = true
@@ -99,7 +106,7 @@ module.exports = class Server extends require('events').EventEmitter
         
             if req.param("socket")
                 # socket listener
-                @core.sockets.addListener req.stream,req,res
+                @sockets.registerListener req.param("socket"), req.stream, req:req, res:res
                 
             else if req.param("pump")
                 # pump listener pushes from the buffer as fast as possible
@@ -128,4 +135,89 @@ module.exports = class Server extends require('events').EventEmitter
     stopListening: ->
         console.log "stopListening"
         @hserver?.close => console.log "listening stopped."
+        
+    #----------
+    
+    class @Sockets extends require("events").EventEmitter
+        constructor: (@server,@logger) ->
+            @sessions = {}
+            
+            @server.on "io_connected", (@io) =>
+                @logger.debug "Got IO_connected event."
+                @_configureStreams @server.core.streams
+                
+                @server.core.on "streams", (streams) => @_configureStreams(streams)
+        
+        #----------
+        
+        registerListener: (sock_id,stream,opts) ->
+            # make sure it's a valid socket
+            if sock = @sessions[ sock_id ]
+                if sock.stream == stream
+                    # good to go...
+                    sock.listener = new @server.core.Outputs.raw stream, opts
+                    @logger.debug "Got socket listener for #{ sock_id }"
+                else
+                    
+            else
+        
+        #----------
+                
+        _configureStreams: (streams) ->
+            @_listen(k,s) for k,s of streams
+            
+        _listen: (key,stream) ->
+            @logger.debug "Registering listener on /#{key}"
+            @io.of("/#{key}").on "connection", (sock) =>
+                console.log "connection is ", sock.id
+                console.log "stream is #{key}"
+        
+                @sessions[sock.id] ||= {
+                    id:         sock.id
+                    stream:     stream
+                    socket:     sock
+                    listener:   null
+                    offset:     1
+                }
+        
+                sess = @sessions[sock.id]
+                
+                # send ready signal
+                sock.emit "ready",
+                    time:       new Date
+                    buffered:   stream.bufferedSecs()
+                    
+                @sessions[sock.id].timecheck = setInterval =>
+                    sock.emit "timecheck",
+                        time:       new Date
+                        buffered:   stream.bufferedSecs()
+                , 5000
+                
+                # -- Handle offset requests -- #
+                
+                # add offset listener
+                sock.on "offset", (i,fn) =>
+                    @logger.debug "Offset request with #{i}"
+                    
+                    # this might be called with a stream connection active, 
+                    # or it might not.  we have to check
+                    if sess.listener
+                        playHead = sess.listener.source.setOffset(i)
+                        sess.offset = playHead
+                    else
+                        # just set it on the socket.  we'll use it when they connect
+                        sess.offset = sess.stream.checkOffset i
+                
+                    secs = sess.offset / sess.stream._rsecsPerChunk
+                    @logger.debug offset:sess.offset, "Offset by #{secs} seconds"
+                    
+                    fn? secs
+                
+                # -- Handle disconnect -- #
+                
+                sock.on "disconnect", =>
+                    console.log "disconnected socket."
+                    clearInterval @sessions[sock.id].timecheck
+                    delete @sessions[sock.id]
+    
         

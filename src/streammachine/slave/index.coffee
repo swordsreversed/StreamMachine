@@ -50,7 +50,7 @@ module.exports = class Slave extends require("events").EventEmitter
         # -- set up our stream server -- #
             
         # init our server
-        @server = new Server core:@
+        @server = new Server core:@, logger:@log.child(subcomponent:"server")
             
         @log.debug "Slave is listening on port #{@options.listen}"
         
@@ -209,6 +209,10 @@ module.exports = class Slave extends require("events").EventEmitter
             # should this stream accept requests to /?
             if opts.root_route
                 @root_route = key
+                
+        # emit a streams event for any components under us that might 
+        # need to know
+        @emit "streams", @streams
     
     #----------
     

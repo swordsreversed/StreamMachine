@@ -332,6 +332,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             @_length = 0
             
+            @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
+            
             # -- What are we sending? -- #
             
             if opts?.pumpOnly
@@ -339,17 +341,15 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 pumpFrames = @rewind.checkOffset opts.pump || 0
                 @_queue.push @rewind.pumpFrom( pumpFrames, @_offset )
                             
-            else if opts?.pump
-                pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
-                
+            else if opts?.pump                
                 if @_offset == 0
                     # pump some data before we start regular listening
                     @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                    @_queue.push @rewind.pumpSeconds( pumpSecs )
+                    @_queue.push @rewind.pumpSeconds( @pumpSecs )
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
-                    [@_offset,data] = @rewind.burstFrom @_offset, pumpSecs
+                    [@_offset,data] = @rewind.burstFrom @_offset, @pumpSecs
                     @_queue.push data
                     
             @_length += @_queue[0]?.data.length
@@ -409,12 +409,35 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         _insert: (b) =>
             @_queue.push b
             @emit "readable" if !@_reading
+        
+        #----------
                         
         setOffset: (offset) ->
+            # -- make sure our offset is good -- #
+            
             @_offset = @rewind.checkOffset offset
+
+            # clear out the data we had buffered
+            @_queue.slice(0)
+
+            if @_offset == 0
+                # pump some data before we start regular listening
+                @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                @_queue.push @rewind.pumpSeconds( @pumpSecs )
+            else
+                # we're offset, so we'll pump from the offset point forward instead of 
+                # back from live
+                [@_offset,data] = @rewind.burstFrom @_offset, @pumpSecs
+                @_queue.push data
+                
+            @_offset
+        
+        #----------
             
         offset: ->
             @_offset
+            
+        #----------
             
         disconnect: ->
             @rewind._rremoveListener @
