@@ -4,6 +4,8 @@ _u      = require 'underscore'
 util    = require 'util'
 url     = require 'url'
 
+domain  = require "domain"
+
 module.exports = class ProxyRoom extends require("./base")
     DefaultOptions:
         url:     ""
@@ -36,6 +38,22 @@ module.exports = class ProxyRoom extends require("./base")
         
         @StreamTitle    = null
         @StreamUrl      = null
+        
+        @d = domain.create()
+        
+        @d.on "error", (err) =>
+            nice_err = "ProxyRoom encountered an error."
+            
+            nice_err = switch err.syscall
+                when "getaddrinfo"
+                    "Unable to look up DNS for Icecast proxy."
+                else
+                    "Error making connection to Icecast proxy."
+
+            @emit "error", nice_err, err
+        
+        @d.run =>
+            @connect()
     
     #----------
     
@@ -86,6 +104,8 @@ module.exports = class ProxyRoom extends require("./base")
             
             # return with success
             @connected = true
+            
+            @emit "connected"
         
         # outgoing -> Stream
         @parser.on "frame", (frame) =>

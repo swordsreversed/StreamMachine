@@ -83,12 +83,16 @@ module.exports = class Stream extends require('events').EventEmitter
         if @opts.fallback?
             console.log "Connecting initial source"
             newsource = new Proxy @, @opts.fallback
-            newsource.connect()
-            @addSource newsource, (result) =>
-                if result
-                    @log.event "Fallback source connected."
-                else
-                    @log.error "Connection to fallback source failed."
+
+            newsource.on "connect", =>
+                @addSource newsource, (result) =>
+                    if result
+                        @log.event "Fallback source connected."
+                    else
+                        @log.error "Connection to fallback source failed."
+                        
+            newsource.on "error", (err) =>
+                @log.error "ProxyRoom error: #{err}", error:err
                     
         # -- Listener Tracking -- #
         
