@@ -161,9 +161,6 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
     
     addSource: (source,cb) ->
-        # set the source's UUID
-        source.setUUID uuid.v4()
-        
         # add a disconnect monitor
         source.once "disconnect", =>
             # remove it from the list

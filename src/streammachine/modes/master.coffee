@@ -52,7 +52,41 @@ module.exports = class MasterMode extends require("./base")
                     return false
                     
                 @_sendHandoff translator
-
+                
+        # Also support a handoff trigger via USR2
+        process.on "SIGUSR2", =>
+            if @_restarting
+                return false
+                
+            if !process.send?
+              @log.error "Master was asked for handoff, but there is no process.send"
+              return false
+            
+            @_restarting = true
+            
+            @log.info "Master process for USR2. Starting handoff via proxy."
+            
+            _tTimeout = setTimeout =>
+               @log.error "Timeout waiting for proxied handoff."
+               # FIXME: not sure what else we should do
+                
+            , 10*1000
+            
+            # Send our GO signal
+            process.send "HANDOFF_GO"
+            
+            # and hopefully we'll get one back
+            process.once "message", (m) =>
+            
+              if m == "HANDOFF_GO"
+                @log.info "Master got handoff ACK. Starting handoff send."
+                translator = new MasterMode.HandoffTranslator process
+                
+                translator.once "streams", =>
+                  @_sendHandoff translator
+              else
+                @log.error "Unexpected handoff reply. Got #{m} when HANDOFF_GO was expected."
+                
     #----------
     
     _sendHandoff: (translator) ->

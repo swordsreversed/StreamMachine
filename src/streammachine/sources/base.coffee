@@ -1,23 +1,22 @@
 _u = require "underscore"
+uuid = require "node-uuid"
 
 module.exports = class Source extends require("events").EventEmitter
         
     #----------
     
     constructor: ->
-        @uuid = null
+        @uuid = uuid.v4() if !@uuid
+
         @streamKey = null
         @_vitals = null
+        
+        @log = @stream.log.child uuid:@uuid
             
     #----------
     
     _new_parser: ->
         new (require "../parsers/#{@stream.opts.format}")
-    
-    #----------
-    
-    setUUID: (uuid) ->
-        @uuid = uuid
     
     #----------
         

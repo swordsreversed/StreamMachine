@@ -3,17 +3,15 @@ _u = require "underscore"
 module.exports = class IcecastSource extends require("./base")    
     TYPE: -> "Icecast (#{[@sock.remoteAddress,@sock.remotePort].join(":")})"
     
-    constructor: (@stream,@sock,@headers) ->
+    constructor: (@stream,@sock,@headers,@uuid) ->
         super()
-        
-        @log = @stream.log
         
         @emitDuration  = 0.5
     
         # data is going to start streaming in as data on req. We need to pipe 
         # it into a parser to turn it into frames, headers, etc
         
-        console.log "New Icecast source!"
+        @log.debug "New Icecast source."
         
         @parser = @_new_parser()
                 
@@ -118,7 +116,7 @@ module.exports = class IcecastSource extends require("./base")
         source:     @TYPE?() ? @TYPE
         connected:  @connected
         url:        [@sock.remoteAddress,@sock.remotePort].join(":")
-        streamKey: @streamKey
+        streamKey:  @streamKey
         uuid:       @uuid
     
     #----------

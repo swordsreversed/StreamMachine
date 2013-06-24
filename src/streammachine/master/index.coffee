@@ -315,9 +315,13 @@ module.exports = class Master extends require("events").EventEmitter
                 fFunc()
                 
             # -- send source connections -- #
+            
+            sFunc = (source) ->
+                if source.sock                    
+                    translator.send "stream_source", { stream:stream.key, headers:source.headers, uuid:source.uuid }, source.sock
                 
             for source in stream.sources
-                translator.send "stream_source", { stream:stream.key, headers:source.headers }, source.sock if source.sock
+                sFunc(source)
         
         # run 'em    
         lFunc(s) for k,s of @streams
@@ -345,7 +349,7 @@ module.exports = class Master extends require("events").EventEmitter
             stream = @streams[ data.stream ]
             
             #sock = new net.Socket fd:handle, type:"tcp4"
-            source = new (require "../sources/icecast") stream, sock
+            source = new (require "../sources/icecast") stream, sock, data.headers, data.uuid
             stream.addSource source
     
     #----------

@@ -25,9 +25,7 @@ module.exports = class ProxyRoom extends require("./base")
         
         @_chunk_queue = []
         @_chunk_queue_ts = null
-        
-        @log = @stream.log
-        
+                
         @last_header = null
         
         # connection drop handling
