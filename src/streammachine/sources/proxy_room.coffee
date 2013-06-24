@@ -105,7 +105,7 @@ module.exports = class ProxyRoom extends require("./base")
             # return with success
             @connected = true
             
-            @emit "connected"
+            @emit "connect"
         
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
