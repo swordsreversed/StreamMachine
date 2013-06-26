@@ -6,6 +6,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
     constructor: (opts) ->
         @core = opts.core
         
+        @log = @core.log.child mode:"sourcein"
+        
         # grab our listening port
         @port = opts.port
         
@@ -18,7 +20,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
         @server.listen spec
         
     _connection: (sock) => 
-        console.log "Incoming source attempt."
+        @log.debug "Incoming source attempt."
         # -- incoming data -- #
         
         parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
@@ -30,7 +32,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
             
         parser.on "headersComplete", (headers) =>
             if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
-                console.log "ICY Request!"
+                @log.debug "ICY SOURCE attempt.", url:parser.info.url
                 @_trySource sock, parser.info
                 
                 # get out of the way
@@ -47,17 +49,22 @@ module.exports = class SourceIn extends require("events").EventEmitter
             # cool, now make sure we have the headers we need
 
             # first, make sure the authorization header contains the right password
+            @log.debug "Trying to authenticate ICY source for #{stream.key}"
             if info.headers.authorization && @_authorize(stream,info.headers.authorization)
                 sock.write "HTTP/1.0 200 OK\n\n"
+                @log.debug "ICY source authenticated for #{stream.key}"
 
                 # now create a new source
                 source = new (require "../sources/icecast") stream, sock, info.headers
                 stream.addSource source
             else
+                @log.debug "ICY source failed to authenticate for #{stream.key}."
                 sock.write "HTTP/1.0 401 Unauthorized\r\n"
                 sock.end "Invalid source or password.\r\n"
 
         else
+            @log.debug "ICY source attempted to connect to bad URL.", url:info.url
+            
             sock.write "HTTP/1.0 401 Unauthorized\r\n"
             sock.end "Invalid source or password.\r\n"
             
@@ -79,8 +86,6 @@ module.exports = class SourceIn extends require("events").EventEmitter
         if type.toLowerCase() == "basic"
             value = new Buffer(value, 'base64').toString('ascii')
             [user,pass] = value.split ":"
-
-            console.log "type/value is ", type, user, pass
             
             if pass == stream.opts.source_password
                 true
@@ -111,7 +116,6 @@ module.exports = class SourceIn extends require("events").EventEmitter
             true
         
         INIT_REQUEST: ->
-            console.log "init request"
             @state = "REQUEST_LINE"
             @lineState = "DATA"
             @info = headers:{}
