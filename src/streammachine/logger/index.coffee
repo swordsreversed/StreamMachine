@@ -31,12 +31,16 @@ module.exports = class LogController
         # -- JSON -- #
         
         if config.json?.file
+            console.log "Setting up JSON logger with ", config.json
             # set up JSON logging via Bunyan
             transports.push new (winston.transports.File)
                 level:      config.json.level || "interaction"
                 timestamp:  true
                 filename:   config.json.file
                 json:       true
+                options:
+                    flags: 'a'
+                    highWaterMark: 24
         
         # -- W3C -- #
         
