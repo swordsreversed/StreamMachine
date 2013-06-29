@@ -77,7 +77,13 @@ module.exports = class Stream extends require('../rewind_buffer')
             
             if @_rbuffer.length == 0
                 source.getRewind (err,stream) =>
-                    @loadBuffer stream if !err
+                    if err
+                        @log.error "Source getRewind encountered an error: #{err}", error:err
+                        return false
+                        
+                    @loadBuffer stream, (err) =>
+                        @log.debug "Slave source loaded rewind buffer."
+                        stream.end()
             
     #----------
     
