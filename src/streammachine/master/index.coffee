@@ -82,6 +82,17 @@ module.exports = class Master extends require("events").EventEmitter
             for k,s of @streams
                 @alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
         , 5*1000
+        
+        # -- Buffer Stats -- #
+        
+        @_buffer_interval = setInterval =>
+            counts = []
+            for k,s of @streams
+                counts.push [s.key,s.rewind._rbuffer?.length].join(":")
+                
+            @log.debug "Rewind buffers: " + counts.join(" -- ")
+            
+        , 5 * 1000
                         
     #----------
     
@@ -93,11 +104,7 @@ module.exports = class Master extends require("events").EventEmitter
         
         # attach proxies for any streams that are already up
         @_attachIOProxy(s) for key,s of @streams
-            
-                    
-        # FIXME: disconnect from our port on SIGTERM
-        # process.on "SIGTERM", => @io.close()
-        
+                
         # add our authentication
         @io.configure =>
             # don't bombard us with stream data
@@ -107,8 +114,10 @@ module.exports = class Master extends require("events").EventEmitter
                 @log.debug "In authorization for slave connection."
                 # look for password                    
                 if @options.master.password == data.query?.password
+                    @log.debug "Slave password is valid."
                     cb null, true
                 else
+                    @log.debug "Slave password is incorrect."
                     cb "Invalid slave password.", false
         
         # look for slave connections    

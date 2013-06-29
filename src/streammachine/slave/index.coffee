@@ -133,7 +133,7 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
     
     _connectMaster: ->
-        @log.debug "Trying connection to master."
+        @log.info "Slave trying connection to master."
         @master = Socket.connect @options.slave.master, "connect timeout":5000
             
         @master.on "connect", => @_onConnect()
@@ -144,10 +144,10 @@ module.exports = class Slave extends require("events").EventEmitter
             if err.code =~ /ECONNREFUSED/
                 @_retryConnection()
             else
+                @log.info "Slave got connection error of #{err}", error:err
                 console.log "got connection error of ", err
             
         @master.on "config", (config) =>
-            console.log "got config of ", config
             @configureStreams config.streams
                 
         @master.on "disconnect", =>
@@ -156,11 +156,14 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
     
     _onConnect: ->
+        @log.debug "Slave in _onConnect."
         return false if @connected
         
         if @_retrying
             clearTimeout @_retrying
             @_retrying = null
+            
+        @log.debug "Slave is connected."
         
         @connected = true
         

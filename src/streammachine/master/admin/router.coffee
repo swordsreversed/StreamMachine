@@ -10,7 +10,9 @@ BasicStrategy   = (require "passport-http").BasicStrategy
 Users = require "./users"
 
 module.exports = class Router
-    constructor: (@master) ->        
+    constructor: (@master) ->
+        @log = @master.log.child component:"admin"
+        
         @app = express()
         @app.set "views", __dirname + "/views"
         @app.set "view engine", "hamlc"
