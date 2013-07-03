@@ -14,14 +14,14 @@ module.exports = class Pumper
         @client.ip          = @opts.req.connection.remoteAddress
         @client.path        = @opts.req.url
         @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-        @client.offset      = @opts.req.param("offset") || -1
+        @client.offsetSecs  = @req.param("from") || @req.param("pump")
         @client.meta_int    = @stream.opts.meta_interval
         
         @socket = @opts.req.connection
 
         # figure out what we're pulling
         playHead = @stream.listen @, 
-            offset:     @req.param("from") || @req.param("pump")
+            offsetSecs: @req.param("from") || @req.param("pump")
             pump:       @req.param("pump")
             pumpOnly:   true
         

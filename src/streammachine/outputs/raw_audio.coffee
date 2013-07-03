@@ -8,10 +8,10 @@ module.exports = class RawAudio
         @pump = true
         
         if @opts.req && @opts.res
-            @client.ip      = @opts.req.connection.remoteAddress
-            @client.path    = @opts.req.url
-            @client.ua      = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-            @client.offset  = @opts.req.param("offset") || -1
+            @client.ip          = @opts.req.connection.remoteAddress
+            @client.path        = @opts.req.url
+            @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+            @client.offsetSecs  = @opts.req.param("offset") || -1
             
             @opts.res.chunkedEncoding = false
             @opts.res.useChunkedEncodingByDefault = false
@@ -64,15 +64,17 @@ module.exports = class RawAudio
     #----------
     
     prepForHandoff: (cb) ->
+        # remove the initial client.offsetSecs if it exists
+        delete @client.offsetSecs
+        
         cb?()
     
     #----------
     
     connectToStream: ->
         unless @socket.destroyed
-            @source = @stream.listen @, offset:@client.offset, pump:@pump
+            @stream.listen @, offsetSecs:@client.offsetSecs, offset:@client.offset, pump:@pump, (err,@source) =>            
+                # update our offset now that it's been checked for availability
+                @client.offset = @source.offset()
             
-            # update our offset now that it's been checked for availability
-            @client.offset = @source.offset()
-            
-            @source.pipe @socket
+                @source.pipe @socket

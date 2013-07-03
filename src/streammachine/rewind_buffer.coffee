@@ -99,7 +99,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
     
-    getRewinder: (id,opts) ->
+    getRewinder: (id,opts,cb) ->
         # get a rewinder object (opts.offset will tell it where to connect)
         rewind = new RewindBuffer.Rewinder @, id, opts
         
@@ -107,7 +107,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_raddListener rewind unless opts.pumpOnly
         
         # and return it
-        rewind
+        cb? null, rewind
     
     #----------
     
@@ -208,10 +208,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
     #----------
     
-    checkOffset: (offset) ->
-        # we're passed offset in seconds. we'll convert it to frames
-        offset = Math.round Number(offset) / @_rsecsPerChunk
+    checkOffsetSecs: (secs) ->
+        @checkOffset @secsToOffset(secs)
         
+    #----------
+    
+    checkOffset: (offset) ->        
         if offset < 0
             @log.debug "offset is invalid! 0 for live."
             return 0
@@ -222,13 +224,23 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         else
             @log.debug "Not available. Instead giving max buffer of ", length:@_rbuffer.length - 1
             return @_rbuffer.length - 1
+    
+    #----------
+    
+    secsToOffset: (secs) ->
+        Math.round Number(secs) / @_rsecsPerChunk
+    
+    #----------
+            
+    offsetToSecs: (offset) ->
+        Math.round Number(offset) * @_rsecsPerChunk
             
     #----------
     
     pumpSeconds: (seconds) ->
         # pump the most recent X seconds
         
-        frames = @checkOffset seconds
+        frames = @checkOffsetSecs seconds
             
         @pumpFrom(frames,frames)
         
@@ -275,7 +287,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # return them the new offset position and the burst data
         
         # convert burstSecs to frames
-        burst = @checkOffset burstSecs
+        burst = @checkOffsetSecs burstSecs
 
         if offset > burst
             return [ offset-burst, @pumpFrom(offset,burst) ]
@@ -323,8 +335,15 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             super highWaterMark:512*1024
             
             @_offset = -1
-            @_offset = @rewind.checkOffset opts.offset || 0
             
+            @_offset = 
+                if opts.offsetSecs
+                    @rewind.checkOffsetSecs opts.offsetSecs
+                else if opts.offset
+                    @rewind.checkOffset opts.offset
+                else
+                    0
+                        
             @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
             
             @_queue = []
@@ -338,7 +357,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
             if opts?.pumpOnly
                 # we're just giving one pump of data, then EOF
-                pumpFrames = @rewind.checkOffset opts.pump || 0
+                pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
                 @_queue.push @rewind.pumpFrom( pumpFrames, @_offset )
                             
             else if opts?.pump                
@@ -411,11 +430,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @emit "readable" if !@_reading
         
         #----------
-                        
+        
+        # Set a new offset (in seconds)                
         setOffset: (offset) ->
             # -- make sure our offset is good -- #
             
-            @_offset = @rewind.checkOffset offset
+            @_offset = @rewind.checkOffsetSecs offset
 
             # clear out the data we had buffered
             @_queue.slice(0)
@@ -433,9 +453,16 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_offset
         
         #----------
-            
+        
+        # Return the current offset in chunks
         offset: ->
             @_offset
+            
+        #----------
+        
+        # Return the current offset in seconds
+        offsetSecs: ->
+            @rewind.offsetToSecs @_offset
             
         #----------
             

@@ -70,6 +70,7 @@ module.exports = class Stream extends require('../rewind_buffer')
     
     _buildSocketSource: ->
         if !@source && @core.master
+            @_sourceInitializing = true
             source = @core.socketSource @
             @useSource source
             
@@ -79,12 +80,29 @@ module.exports = class Stream extends require('../rewind_buffer')
                 source.getRewind (err,stream,req) =>
                     if err
                         @log.error "Source getRewind encountered an error: #{err}", error:err
+                        @_sourceInitializing = false
+                        @emit "_source_init"
+                        
                         return false
                         
                     @loadBuffer stream, (err) =>
                         @log.debug "Slave source loaded rewind buffer."
                         req.end()
+                        
+                        @_sourceInitializing = false
+                        @emit "_source_init"
             
+    #----------
+    
+    _once_source_loaded: (cb) ->
+        if @_sourceInitializing
+            # wait for a source_init event
+            @once "_source_init", => cb?()
+            
+        else
+            # send them on through
+            cb?()
+    
     #----------
     
     configure: (opts) ->
@@ -163,22 +181,31 @@ module.exports = class Stream extends require('../rewind_buffer')
         
     #----------
     
-    listen: (obj,opts) ->
+    listen: (obj,opts,cb) ->
         # generate a metadata hash
         lmeta = 
             id:         @_id_increment++
             obj:        obj
             startTime:  (new Date) 
             minuteTime: (new Date)
+
+        # don't ask for a rewinder while our source is going through init, 
+        # since we don't want to fail an offset request that should be 
+        # valid.
+        @_once_source_loaded =>
+            # get a rewinder (handles the actual broadcast)
+            @getRewinder lmeta.id, opts, (err,rewind) =>
+                if err
+                    cb? err, null
+                    return false
+            
+                lmeta.rewind = rewind
         
-        # get a rewinder (handles the actual broadcast)
-        lmeta.rewind = @getRewinder lmeta.id, opts
+                # stash the object
+                @_lmeta[ lmeta.id ] = lmeta
         
-        # stash the object
-        @_lmeta[ lmeta.id ] = lmeta
-        
-        # return the rewinder (so that they can change offsets, etc)
-        lmeta.rewind
+                # return the rewinder (so that they can change offsets, etc)
+                cb? null, lmeta.rewind
     
     #----------
             

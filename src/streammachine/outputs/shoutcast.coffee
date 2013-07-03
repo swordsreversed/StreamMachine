@@ -19,7 +19,7 @@ module.exports = class Shoutcast
             @client.ip          = @opts.req.connection.remoteAddress
             @client.path        = @opts.req.url
             @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-            @client.offset      = @opts.req.param("offset") || -1
+            @client.offsetSecs  = @opts.req.param("offset") || -1
             @client.meta_int    = @stream.opts.meta_interval
             
             @opts.res.chunkedEncoding = false
@@ -76,35 +76,38 @@ module.exports = class Shoutcast
         # in sync
         
         @client.bytesToNextMeta = @ice._parserBytesLeft
+        
+        # remove the initial client.offsetSecs if it exists
+        delete @client.offsetSecs
+        
         cb?()
     
     #----------
     
     connectToStream: ->
         unless @socket.destroyed
-            @source = @stream.listen @, offset:@client.offset, pump:@pump
+            @stream.listen @, offsetSecs:@client.offsetSecs, offset:@client.offset, pump:@pump, (err,@source) =>            
+                # set our offset (in chunks) now that it's been checked for availability
+                @client.offset = @source.offset()
             
-            # update our offset now that it's been checked for availability
-            @client.offset = @source.offset()
+                # -- create an Icecast creator to inject metadata -- #
             
-            # -- create an Icecast creator to inject metadata -- #
+                @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
             
-            @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
-            
-            @source.onFirstMeta (err,meta) =>
-                @ice.queue meta
+                @source.onFirstMeta (err,meta) =>
+                    @ice.queue meta
         
-            @metaFunc = (data) =>
-                unless @_lastMeta && _u(data).isEqual(@_lastMeta)
-                    @ice.queue data
-                    @_lastMeta = data
+                @metaFunc = (data) =>
+                    unless @_lastMeta && _u(data).isEqual(@_lastMeta)
+                        @ice.queue data
+                        @_lastMeta = data
 
-            @ice.pipe(@socket)
+                @ice.pipe(@socket)
             
-            # -- pipe source audio to icecast -- #
+                # -- pipe source audio to icecast -- #
             
-            @source.pipe @ice
-            @source.on "meta", @metaFunc
+                @source.pipe @ice
+                @source.on "meta", @metaFunc
         
     #----------
             
