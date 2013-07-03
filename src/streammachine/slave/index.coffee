@@ -288,6 +288,11 @@ module.exports = class Slave extends require("events").EventEmitter
         getRewind: (cb) ->
             # connect to the master's StreamTransport and ask for any rewind 
             # buffer that is available
+            
+            gRT = setTimeout => 
+                @log.debug "Failed to get rewind buffer response."
+                cb? "Failed to get a rewind buffer response."
+            , 2000
 
             # connect to: @master.options.host:@master.options.port
             
@@ -300,12 +305,19 @@ module.exports = class Slave extends require("events").EventEmitter
                 headers:   
                     'stream-slave-id':    @slave.master.socket.sessionid
             , (res) =>
+                clearTimeout gRT
+                
                 @log.debug "Got Rewind response with status code of #{ res.statusCode }"
                 if res.statusCode == 200
                     # emit a 'rewind' event with a callback to get the response 
                     cb? null, res, req
+                    
+                else
+                    cb? "Rewind request got a non-500 response."
 
             req.on "error", (err) =>
+                clearTimeout gRT
+                
                 @log.debug "Rewind request got error: #{err}", error:err
                 cb? err
 
