@@ -237,19 +237,18 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
     #----------
     
-    pumpSeconds: (seconds) ->
+    pumpSeconds: (rewinder,seconds,cb) ->
         # pump the most recent X seconds
-        
         frames = @checkOffsetSecs seconds
-            
-        @pumpFrom(frames,frames)
+        @pumpFrom rewinder, frames, frames, cb
         
     #----------
     
-    pumpFrom: (offset,length) ->
+    pumpFrom: (rewinder,offset,length,cb) ->
         # we want to send _length_ frames, starting at _offset_
         
-        return null if offset == 0
+        if offset == 0
+            cb? null, null
         
         # sanity checks...
         if offset > @_rbuffer.length
@@ -260,7 +259,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
         bl = @_rbuffer.length
         
-        bufs        = []
         pumpLen     = 0
         duration    = 0
         
@@ -269,16 +267,15 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         for i in [1..length]
             b = @_rbuffer[ bl - 1 - (offset - i) ]
             pumpLen     += b.data.length
-            bufs.push   b.data
             duration    += b.duration
+            
+            rewinder._insert b
             
             meta = b.meta if !meta
             
-        @log.debug "creating buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
+        @log.debug "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
         
-        pumpBuf = Buffer.concat bufs, pumpLen
-            
-        return data:pumpBuf, meta:meta, duration:duration
+        cb? null, meta:meta, duration:duration, length:pumpLen
         
     #----------
     
@@ -334,6 +331,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         constructor: (@rewind,@conn_id,opts={}) ->
             super highWaterMark:512*1024
             
+            @_pumpOnly = false
+            
             @_offset = -1
             
             @_offset = 
@@ -349,33 +348,39 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_queue = []
             @_reading = false
             
-            @_length = 0
-            
             @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
             
             # -- What are we sending? -- #
             
             if opts?.pumpOnly
                 # we're just giving one pump of data, then EOF
+                @_pumpOnly = true
                 pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
-                @_queue.push @rewind.pumpFrom( pumpFrames, @_offset )
+                @rewind.pumpFrom @, pumpFrames, @_offset, (err,info) =>
+                    @rewind.log.debug "Pump complete.", info:info
+                    if err
+                        @emit "error", err
+                        return false
+                        
+                    # we don't want to emit this until there's a listener ready
+                    process.nextTick =>
+                        @emit "pump", info
                             
             else if opts?.pump                
                 if @_offset == 0
                     # pump some data before we start regular listening
                     @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                    @_queue.push @rewind.pumpSeconds( @pumpSecs )
+                    @rewind.pumpSeconds @, @pumpSecs
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
                     [@_offset,data] = @rewind.burstFrom @_offset, @pumpSecs
                     @_queue.push data
                     
-            @_length += @_queue[0]?.data.length
-            console.log "Initial pump length is ", @_length
-            
             # that's it... now RewindBuffer will call our @data directly
             @emit "readable"
+            
+        #----------
             
         onFirstMeta: (cb) ->
             if @_queue.length > 0
@@ -383,45 +388,90 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             else
                 @once "readable", =>
                     cb? null, @_queue[0].meta
+        
+        #----------
+        
+        # Implement the guts of the Readable stream. For a normal stream, 
+        # RewindBuffer will be calling _insert at regular ticks to put content 
+        # into our queue, and _read takes the task of buffering and sending 
+        # that out to the listener.
             
         _read: (size) =>
+            # we only want one queue read going on at a time, so go ahead and 
+            # abort if we're already reading
             if @_reading
-                return false
-                
-            if @_queue.length == 0
-                @push ''
                 return false
                 
             # -- push anything queued up to size -- #
             
+            # set a read lock
             @_reading = true
 
             sent = 0
             
+            # Set up pushQueue as a function so that we can call it multiple 
+            # times until we get to the size requested (or the end of what we 
+            # have ready)
+            
             _pushQueue = =>
+                # -- Handle an empty queue -- #
+            
+                # In normal operation, you can think of the queue as infinite, 
+                # but not speedy.  If we've sent everything we have, we'll send 
+                # out an empty string to signal that more will be coming.  On 
+                # the other hand, in pump mode we need to send a null character 
+                # to signal that we've reached the end and nothing more will 
+                # follow.
+                
+                _handleEmpty = =>
+                    if @_pumpOnly
+                        @rewind.log.debug "pumpOnly reached end of queue. Sending EOF"                
+                        @push null
+                
+                    else
+                        @push ''
+                        
+                    @_reading = false
+                    return false
+                
+                # See if the queue is empty to start with            
+                if @_queue.length == 0
+                    return _handleEmpty()
+                
+                # Grab a chunk off of the queued up buffer
                 next_buf = @_queue.shift()
                 
+                # This shouldn't happen...
                 if !next_buf
                     @rewind.log.error "Shifted queue but got null", length:@_queue.length
                 
+                # Not all chunks will contain metadata, but go ahead and send 
+                # ours out if it does
                 if next_buf.meta
                     @emit "meta", next_buf.meta 
+                    
+                # Push the chunk of data onto our reader. The return from push 
+                # will tell us whether to keep pushing, or whether we need to 
+                # stop and wait for a drain event (basically wait for the 
+                # reader to catch up to us)
                 
                 if @push next_buf.data
                     sent += next_buf.data.length
-                    
+                                        
                     if sent < size && @_queue.length > 0
                         _pushQueue()
                     else
-                        if opts?.pumpOnly && @_queue.length == 0
-                            # this is a listener that is only getting pump data.  Now 
-                            # that we're done pumping we can go ahead and trigger EOF
-                            @push null
-                            @_reading = false
-                            
-                        else                        
+                        if @_queue.length == 0
+                            _handleEmpty()
+
+                        else
                             @push ''
                             @_reading = false
+                                            
+                else
+                    # give a signal that we're here for more when they're ready
+                    @_reading = false
+                    @emit "readable"
 
             _pushQueue()
             
@@ -443,7 +493,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if @_offset == 0
                 # pump some data before we start regular listening
                 @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                @_queue.push @rewind.pumpSeconds( @pumpSecs )
+                @rewind.pumpSeconds @, @pumpSecs
             else
                 # we're offset, so we'll pump from the offset point forward instead of 
                 # back from live

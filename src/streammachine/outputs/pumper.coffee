@@ -20,26 +20,26 @@ module.exports = class Pumper
         @socket = @opts.req.connection
 
         # figure out what we're pulling
-        playHead = @stream.listen @, 
+        @stream.listen @, 
             offsetSecs: @req.param("from") || @req.param("pump")
             pump:       @req.param("pump")
             pumpOnly:   true
+        , (err,playHead) =>
+            playHead.once "pump", (info) =>
+                console.log "In pump readable. playHead queue is ", info
+                headers = 
+                    "Content-Type":         
+                        if @stream.opts.format == "mp3"         then "audio/mpeg"
+                        else if @stream.opts.format == "aac"    then "audio/aacp"
+                        else "unknown"
+                    "Connection":           "close"
+                    "Content-Length":       info.length
         
-        playHead.once "readable", =>
-            console.log "In pump readable. playHead queue is ", playHead._queue
-            headers = 
-                "Content-Type":         
-                    if @stream.opts.format == "mp3"         then "audio/mpeg"
-                    else if @stream.opts.format == "aac"    then "audio/aacp"
-                    else "unknown"
-                "Connection":           "close"
-                "Content-Length":       playHead._length
+                # write out our headers
+                @res.writeHead 200, headers
         
-            # write out our headers
-            @res.writeHead 200, headers
+                # send our pump buffer to the client
+                playHead.pipe(@res)
         
-            # send our pump buffer to the client
-            playHead.pipe(@res)
-        
-        @res.on "close",    => playHead.disconnect()
-        @res.on "end",      => playHead.disconnect()
+            @res.on "close",    => playHead.disconnect()
+            @res.on "end",      => playHead.disconnect()
