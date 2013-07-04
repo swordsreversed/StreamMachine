@@ -279,7 +279,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
     #----------
     
-    burstFrom: (offset,burstSecs) ->
+    burstFrom: (rewinder,offset,burstSecs,cb) ->
         # we want to send them @burst frames (if available), starting at offset.
         # return them the new offset position and the burst data
         
@@ -287,9 +287,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         burst = @checkOffsetSecs burstSecs
 
         if offset > burst
-            return [ offset-burst, @pumpFrom(offset,burst) ]
+            @pumpFrom rewinder, offset, burst, (err,info) =>
+                cb? err, offset-burst
         else
-            return [ 0, @pumpFrom(offset,offset) ]
+            @pumpFrom rewinder, offset, offset, (err,info) =>
+                cb? err, 0
     
     #----------
             
@@ -374,11 +376,15 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
-                    [@_offset,data] = @rewind.burstFrom @_offset, @pumpSecs
-                    @_queue.push data
+                    @rewind.burstFrom @, @_offset, @pumpSecs, (err,new_offset) =>
+                        if err
+                            @rewind.log.error "burstFrom gave error of #{err}", error:err
+                            return false
+                            
+                        @_offset = new_offset
                     
             # that's it... now RewindBuffer will call our @data directly
-            @emit "readable"
+            #@emit "readable"
             
         #----------
             
