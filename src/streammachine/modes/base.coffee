@@ -10,6 +10,55 @@ module.exports = class Core
         
     #----------
     
+    constructor: ->
+        @log.debug "Attaching listener for SIGUSR2 restarts."
+        
+        # Also support a handoff trigger via USR2
+        process.on "SIGUSR2", =>
+            if @_restarting
+                return false
+                
+            @_restarting = true
+
+            if @opts.handoff_type == "internal"
+                # we spawn our own replacement process
+                @_spawnReplacement (err,translator) =>
+                    if err
+                        @log.error "FATAL: Error spawning replacement process: #{err}", error:err
+                        @_restarting = false
+                        return false
+                    
+                    @_sendHandoff translator
+                
+            else
+                # replacement process is spawned externally
+                
+                # make sure there's an external process out there...            
+                if !process.send?
+                  @log.error "Master was asked for external handoff, but there is no process.send"
+                  @_restarting = false
+                  return false
+            
+                @log.info "Master process for USR2. Starting handoff via proxy."
+                
+                # Send our GO signal
+                process.send "HANDOFF_GO"
+                
+                @_handshakeHandoff process, (err,translator) =>
+                    if err
+                        @log.error "FATAL: Failed to handshake replacement process! #{err}", error:err
+                        @_restarting = false
+                        return false
+                    
+                    @_sendHandoff translator
+            
+            _tTimeout = setTimeout =>
+               @log.error "Timeout waiting for proxied handoff."
+               # FIXME: not sure what else we should do
+            , 10*1000
+            
+    #----------
+    
     # Build a hash of stream information, including sources and listener counts
     
     streamInfo: ->
@@ -37,7 +86,12 @@ module.exports = class Core
 
         newp.on "error", (err) =>
             @log.error "Spawned child gave error: #{err}", error:err
-
+            
+        @_handshakeHandoff newp, cb
+        
+    #----------
+                
+    _handshakeHandoff: (newp,cb) ->
         newp.once "message", (m) =>
             # if all goes well, this first message will be a string that 
             # says 'HANDOFF_GO'
@@ -52,6 +106,7 @@ module.exports = class Core
                     cb? null, translator
             else
                 @log.error "Invalid first message from handoff.", message:m
+                cb? "Invalid first message from handoff."
     
     #----------
                 

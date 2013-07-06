@@ -14,55 +14,23 @@ Slave   = require "../slave"
 module.exports = class SlaveMode extends require("./base")
     
     MODE: "Slave"
-    constructor: (opts) ->
+    constructor: (@opts) ->
         @log = new Logger opts.log
         @log.debug("Slave Instance initialized")
         
         process.title = "StreamM:slave"
         
+        super
+        
         # create a slave
-        @slave = new Slave _u.extend opts, logger:@log
+        @slave = new Slave _u.extend @opts, logger:@log
         
         if nconf.get("handoff")
             @_acceptHandoff()
             
         else
             @log.info "Slave listening."
-            @slave.server.listen opts.port
-            
-        # Support a handoff trigger via USR2
-        process.on "SIGUSR2", =>
-            if @_restarting
-                return false
-                
-            if !process.send?
-              @log.error "Slave was asked for handoff, but there is no process.send"
-              return false
-            
-            @_restarting = true
-            
-            @log.info "Slave process for USR2. Starting handoff via proxy."
-            
-            _tTimeout = setTimeout =>
-               @log.error "Slave timeout waiting for proxied handoff."
-               # FIXME: not sure what else we should do
-                
-            , 10*1000
-            
-            # Send our GO signal
-            process.send "HANDOFF_GO"
-            
-            # and hopefully we'll get one back
-            process.once "message", (m) =>
-            
-              if m == "HANDOFF_GO"
-                @log.info "Master got handoff ACK. Starting handoff send."
-                translator = new SlaveMode.HandoffTranslator process
-                
-                translator.once "streams", =>
-                  @_sendHandoff translator
-              else
-                @log.error "Unexpected handoff reply. Got #{m} when HANDOFF_GO was expected."
+            @slave.server.listen @opts.port
     
     #----------
     

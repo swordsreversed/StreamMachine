@@ -8,22 +8,22 @@ Slave   = require "../slave"
 
 module.exports = class StandaloneMode extends require("./base")
     MODE: "StandAlone"
-    constructor: (opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
-        
+    constructor: (@opts) ->        
         # -- Set up logging -- #
         
-        @log = (new Logger @options.log).child pid:process.pid
+        @log = (new Logger @opts.log).child pid:process.pid
         @log.debug("StreamMachine standalone initialized.")
         
         process.title = "StreamMachine"
+        
+        super
         
         @streams = {}
                     
         # -- Set up master and slave -- #
         
-        @master = new Master _u.extend {}, opts, logger:@log.child(mode:"master")
-        @slave  = new Slave _u.extend {}, opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
+        @master = new Master _u.extend {}, @opts, logger:@log.child(mode:"master")
+        @slave  = new Slave _u.extend {}, @opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
         
         # -- Set up combined server -- #
         
@@ -34,12 +34,12 @@ module.exports = class StandaloneMode extends require("./base")
         # -- Handoff? -- #
         
         if nconf.get("handoff")
-            @_runHandoff()
+            @_acceptHandoff()
         
         else
             @log.info "Attaching listeners."
             @master.sourcein.listen()
-            @handle = @server.listen opts.port
+            @handle = @server.listen @opts.port
                     
         # proxy data events from master -> slave
         @master.on "streams", (streams) =>
@@ -64,55 +64,40 @@ module.exports = class StandaloneMode extends require("./base")
         @slave.on "listeners", (obj) =>
             @master._recordListeners "standalone", obj
         
-        @log.debug "Standalone is listening on port #{@options.listen}"
-        
-        # -- restart handling -- #
-        
-        process.on "SIGHUP", =>
-            if @_restarting
-                # we've already been asked to restart.  do nothing more
-                return false
+        @log.debug "Standalone is listening on port #{@opts.port}"
+    
+    #----------
+    
+    _sendHandoff: (translator) ->
+        @master.sendHandoffData translator, (err) =>
+            @log.event "Sent master data to new process."
             
-            @_restarting = true
+            # Hand over our public listening port
+            @log.info "Hand off standalone socket."
+            translator.send "standalone_socket", {}, @handle
             
-            # We've been asked to restart.  We do so by starting up a new 
-            # process and scripting the handoff of master and slave data
-            
-            @log.event "Standalone process asked to restart."
-            
-            # Start the new process and wait for streams signal
-            @_spawnReplacement (err,translator) =>
-                @log.event "Got streams signal from new process."
-                # Send master data (includes source port handoff)
-                @master.sendHandoffData translator, (err) =>
-                    @log.event "Sent master data to new process."
+            translator.once "standalone_socket_up", =>
+                @log.info "Got standalone socket confirmation. Closing listener."
+                @handle.unref()
                     
-                    # Hand over our public listening port
-                    @log.info "Hand off standalone socket."
-                    translator.send "standalone_socket", {}, @handle
-                    
-                    translator.once "standalone_socket_up", =>
-                        @log.info "Got standalone socket confirmation. Closing listener."
-                        @handle.unref()
-                            
-                        # Hand over the source port
-                        @log.info "Hand off source socket."
-                        translator.send "source_socket", {}, @master.sourcein.server
-                
-                        translator.once "source_socket_up", =>
-                            @log.info "Got source socket confirmation. Closing listener."
-                            @master.sourcein.server.unref()
-                 
-                            # Send slave data
-                            @slave.sendHandoffData translator, (err) =>
-                                @log.event "Sent slave data to new process. Exiting."
+                # Hand over the source port
+                @log.info "Hand off source socket."
+                translator.send "source_socket", {}, @master.sourcein.server
+        
+                translator.once "source_socket_up", =>
+                    @log.info "Got source socket confirmation. Closing listener."
+                    @master.sourcein.server.unref()
+         
+                    # Send slave data
+                    @slave.sendHandoffData translator, (err) =>
+                        @log.event "Sent slave data to new process. Exiting."
 
-                                # Exit
-                                process.exit()
+                        # Exit
+                        process.exit()
     
     #----------
                     
-    _runHandoff: ->
+    _acceptHandoff: ->
         @log.info "Initializing handoff receptor."
         
         if !process.send?

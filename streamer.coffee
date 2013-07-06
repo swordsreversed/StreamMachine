@@ -12,7 +12,8 @@ nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streamma
 # -- Defaults -- #
 
 nconf.defaults
-    mode:   "standalone"
+    mode:           "standalone"
+    handoff_type:   "external"
 
 # There are three potential modes of operation:
 # 1) Standalone -- One server, handling boths streams and configuration
