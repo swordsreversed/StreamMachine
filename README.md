@@ -27,6 +27,9 @@ the current program from its start", or "Play the 9am broadcast." Unlike
 podcasts, these functions are available immediately and keep the user connected 
 to the station's live stream.
 
+You can read more about the implementation of the 
+[RewindBuffer in the wiki](https://github.com/StreamMachine/StreamMachine/wiki/RewindBuffer).
+
 ## Architecture
 
 StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on 
@@ -69,11 +72,14 @@ StreamMachine can operate as a single process or in a master-slave configuration
 * __Slave:__ Slave handles all client requests. Stream audio is proxied from the 
     master over a single socket connection.
 
+For more, see the 
+[Mode documentation in the wiki](https://github.com/StreamMachine/StreamMachine/wiki/Modes).
+
 ## Outputs
 
 #### Traditional
 
-The `LiveMP3` and `Shoutcast` outputs provide traditional output streams.
+The `RawAudio` and `Shoutcast` outputs provide traditional output streams.
 
 #### New
 
@@ -105,9 +111,10 @@ StreamMachine uses [nconf](https://github.com/flatiron/nconf) to load
 configuration settings from a JSON file, from environment variables and from 
 the command line. 
 
-Full configuration information [can be found in the wiki](https://github.com/StreamMachine/StreamMachine/wiki/Configuration-settings).
+For more, see the 
+[full documentation of configuration options](https://github.com/StreamMachine/StreamMachine/wiki/Configuration-settings).
 
 ## Who?
 
 StreamMachine was developed by [Eric Richardson](http://ewr.is) (e@ewr.is) 
-while at [Southern California Public Radio](http://scpr.org).
+while at [Southern California Public Radio](http://scpr.org). 
