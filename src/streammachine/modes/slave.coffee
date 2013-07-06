@@ -28,7 +28,7 @@ module.exports = class SlaveMode extends require("./base")
             
         else
             @log.info "Slave listening."
-            @slave.server.listen opts.listen
+            @slave.server.listen opts.port
             
         # Support a handoff trigger via USR2
         process.on "SIGUSR2", =>

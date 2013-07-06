@@ -57,7 +57,7 @@ module.exports = class MasterMode extends require("./base")
         process.on "SIGUSR2", =>
             if @_restarting
                 return false
-                
+            
             if !process.send?
               @log.error "Master was asked for handoff, but there is no process.send"
               return false

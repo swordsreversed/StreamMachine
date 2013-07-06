@@ -39,7 +39,7 @@ module.exports = class StandaloneMode extends require("./base")
         else
             @log.info "Attaching listeners."
             @master.sourcein.listen()
-            @handle = @server.listen opts.listen
+            @handle = @server.listen opts.port
                     
         # proxy data events from master -> slave
         @master.on "streams", (streams) =>
