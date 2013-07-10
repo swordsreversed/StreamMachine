@@ -1,6 +1,6 @@
 {
   "name": "StreamMachine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Flexible live streaming for broadcast audio.",
   "keywords": ["audio","broadcast","shoutcast","icecast"],
   "homepage": "http://github.com/StreamMachine/StreamMachine/",
@@ -34,5 +34,8 @@
 	"dissolve":				"~0.3.1",
     "campfire":             "~0.1.1",
     "temp":                 "~0.5.0"
+  },
+  "bin": {
+    "streammachine": "./streammachine-cmd"
   }
 }
