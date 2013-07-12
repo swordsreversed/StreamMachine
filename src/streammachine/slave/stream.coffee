@@ -186,8 +186,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         lmeta = 
             id:         @_id_increment++
             obj:        obj
-            startTime:  (new Date) 
-            minuteTime: (new Date)
+            startTime:  opts.startTime  || (new Date) 
+            minuteTime: opts.minuteTime || (new Date)
 
         # don't ask for a rewinder while our source is going through init, 
         # since we don't want to fail an offset request that should be 

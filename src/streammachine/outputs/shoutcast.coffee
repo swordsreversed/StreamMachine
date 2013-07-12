@@ -86,28 +86,34 @@ module.exports = class Shoutcast
     
     connectToStream: ->
         unless @socket.destroyed
-            @stream.listen @, offsetSecs:@client.offsetSecs, offset:@client.offset, pump:@pump, (err,@source) =>            
-                # set our offset (in chunks) now that it's been checked for availability
-                @client.offset = @source.offset()
+            @stream.listen @, 
+                offsetSecs: @client.offsetSecs, 
+                offset:     @client.offset, 
+                pump:       @pump, 
+                startTime:  @opts.startTime,
+                minuteTime: @opts.minuteTime
+                (err,@source) =>            
+                    # set our offset (in chunks) now that it's been checked for availability
+                    @client.offset = @source.offset()
             
-                # -- create an Icecast creator to inject metadata -- #
+                    # -- create an Icecast creator to inject metadata -- #
             
-                @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
+                    @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
             
-                @source.onFirstMeta (err,meta) =>
-                    @ice.queue meta
+                    @source.onFirstMeta (err,meta) =>
+                        @ice.queue meta
         
-                @metaFunc = (data) =>
-                    unless @_lastMeta && _u(data).isEqual(@_lastMeta)
-                        @ice.queue data
-                        @_lastMeta = data
+                    @metaFunc = (data) =>
+                        unless @_lastMeta && _u(data).isEqual(@_lastMeta)
+                            @ice.queue data
+                            @_lastMeta = data
 
-                @ice.pipe(@socket)
+                    @ice.pipe(@socket)
             
-                # -- pipe source audio to icecast -- #
+                    # -- pipe source audio to icecast -- #
             
-                @source.pipe @ice
-                @source.on "meta", @metaFunc
+                    @source.pipe @ice
+                    @source.on "meta", @metaFunc
         
     #----------
             

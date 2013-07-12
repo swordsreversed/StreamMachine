@@ -259,7 +259,11 @@ module.exports = class Slave extends require("events").EventEmitter
         
         translator.on "stream_listener", (obj,socket) =>
             # create an output and attach it to the proper stream
-            output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], socket:socket, client:obj.client
+            output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], 
+                socket:     socket
+                client:     obj.client
+                startTime:  new Date(obj.startTime)
+                minuteTime: new Date(obj.minuteTime)
     
     #----------
     

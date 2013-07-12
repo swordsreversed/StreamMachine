@@ -73,8 +73,14 @@ module.exports = class RawAudio
     
     connectToStream: ->
         unless @socket.destroyed
-            @stream.listen @, offsetSecs:@client.offsetSecs, offset:@client.offset, pump:@pump, (err,@source) =>            
-                # update our offset now that it's been checked for availability
-                @client.offset = @source.offset()
+            @stream.listen @, 
+                offsetSecs: @client.offsetSecs, 
+                offset:     @client.offset, 
+                pump:       @pump, 
+                startTime:  @opts.startTime,
+                minuteTime: @opts.minuteTime
+                (err,@source) =>            
+                    # update our offset now that it's been checked for availability
+                    @client.offset = @source.offset()
             
-                @source.pipe @socket
+                    @source.pipe @socket

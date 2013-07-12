@@ -136,25 +136,27 @@ module.exports = class LogController
         #----------
         
         log: (level,msg,meta,cb) ->
-            # for a valid w3c log, level should == "request", meta.
-            logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
+            # unlike a normal logging endpoint, we only care about our request entries
+            if level == @options.level                        
+                # for a valid w3c log, level should == "request", meta.
+                logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
-            if @file
-                # make sure there aren't any queued writes
-                unless _u(@queued).isEmpty
-                    q = @queued
-                    @queued = []
-                    @file.write line for line in q
+                if @file
+                    # make sure there aren't any queued writes
+                    unless _u(@queued).isEmpty
+                        q = @queued
+                        @queued = []
+                        @file.write line for line in q
                 
-                # now write this line
-                @file.write logline
-                cb null, true
+                    # now write this line
+                    @file.write logline
+                    cb null, true
                 
-            else
-                @open (err) =>
+                else
+                    @open (err) =>
                     
-                @queued.push logline
-                cb null, true
+                    @queued.push logline
+                    cb null, true
         
         #----------
         
