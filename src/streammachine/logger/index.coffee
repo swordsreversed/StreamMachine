@@ -277,7 +277,8 @@ module.exports = class LogController
         #----------
         
         log: (level,msg,meta,cb) ->
-            @socket.send type:@options.event, time:meta.time, data:meta if @socket
+            if level == @options.level
+                @socket.send type:@options.event, time:meta.time, data:meta if @socket
             
         #----------
             

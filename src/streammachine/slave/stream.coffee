@@ -130,7 +130,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                     # but use minuteTime for accumulating unlogged time 
                     if ( now.getTime() / 1000 - l.startTime.getTime() / 1000 ) > 60
                         dur = ( now.getTime() / 1000 - l.minuteTime.getTime() / 1000 )
-                        @log.minute "", path:l.obj.reqPath, time:now, ua:l.obj.reqUA, duration:dur
+                        @log.minute "", path:l.obj.client.path, time:now, ua:l.obj.client.ua, duration:dur
                         l.minuteTime = now
                                         
             , 60*1000

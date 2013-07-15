@@ -23,6 +23,7 @@ module.exports = class Stream extends require('events').EventEmitter
         host:               null
         fallback:           null
         acceptSourceMeta:   false
+        log_minutes:        true
         monitored:          true
         metaTitle:          ""
         format:             "mp3"
