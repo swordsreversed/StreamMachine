@@ -14,9 +14,9 @@ module.exports = class Router
         @log = @master.log.child component:"admin"
         
         @app = express()
-        @app.set "views", __dirname + "/views"
+        @app.set "views",       __dirname + "/views"
         @app.set "view engine", "hamlc"
-        @app.engine '.hamlc', hamlc.__express
+        @app.engine '.hamlc',   hamlc.__express
         
         mincer = new Mincer.Environment()
         mincer.appendPath __dirname + "/assets/js"
