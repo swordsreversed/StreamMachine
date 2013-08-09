@@ -1,30 +1,41 @@
 _u = require "underscore"
 http = require "http"
+url = require "url"
 
 module.exports = class Preroller
     DefaultOptions:
         server:     null
         path:       "/p"
         
-    constructor: (@stream,@key,opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
+    constructor: (@stream,@key,uri) ->
+        #@options = _u.defaults opts||{}, @DefaultOptions
         
         @_counter = 1
         
-        if !@options.server
-            @stream.log.error("Cannot connect to preroll without a server")
+        # make sure this is a valid URI
+        @uri = url.parse uri
+        
+        if @uri.protocol != "http:"
+            @stream.log.error("Preroller only supports HTTP connections.")
             return false
         
         # -- need to look at the stream to get characteristics -- #
         
         @stream.log.debug "waiting to call getStreamKey"
-        @stream.once "source", (source) =>
+        
+        _skFunc = (source) =>
             source.getStreamKey (@streamKey) =>
-                @stream.log.debug "Stream key is #{@streamKey}"
+                @stream.log.debug "Preroller: Stream key is #{@streamKey}"
+            
+        if @stream.source
+            _skFunc(@stream.source)
+            
+        else
+            @stream.once "source", (source) => _skFunc(source)
         
     #----------
     
-    pump: (res,cb) ->
+    pump: (socket,writer,cb) ->
         # short-circuit if we haven't gotten a stream key yet
         if !@streamKey
             cb?()
@@ -33,31 +44,29 @@ module.exports = class Preroller
         count = @_counter++
 
         # -- make a request to the preroll server -- #
-        
-        opts = 
-            host:       @options.server
-            path:       [@options.path,@key,@streamKey].join("/")
-        
-        conn = res.stream?.connection || res.connection
                 
+        opts = 
+            host:       @uri.host
+            path:       [@uri.path,@key,@streamKey].join("/")
+                        
         @stream.log.debug "firing preroll request", count
-        req = http.get opts, (rres) =>
+        req = http.get opts, (res) =>
             @stream.log.debug "got preroll response ", count
-            if rres.statusCode == 200
+            if res.statusCode == 200
                 # stream preroll through to the output
-                rres.on "data", (chunk) =>
-                    res.write(chunk)
+                res.on "data", (chunk) =>
+                    writer.write(chunk)
 
                 # when preroll is done, call the output's callback
-                rres.on "end", =>
-                    conn.removeListener "close", conn_pre_abort
-                    conn.removeListener "end", conn_pre_abort
+                res.on "end", =>
+                    socket.removeListener "close", conn_pre_abort
+                    socket.removeListener "end", conn_pre_abort
                     cb?()
                     return true
                     
             else
-                conn.removeListener "close", conn_pre_abort
-                conn.removeListener "end", conn_pre_abort
+                socket.removeListener "close", conn_pre_abort
+                socket.removeListener "end", conn_pre_abort
                 cb?()
                 return true
                 
@@ -71,12 +80,12 @@ module.exports = class Preroller
         # shut down and we should abort the request
 
         conn_pre_abort = => 
-            if conn.destroyed
+            if socket.destroyed
                 @stream.log.debug "aborting preroll ", count
                 req.abort()
         
-        conn.once "close", conn_pre_abort
-        conn.once "end", conn_pre_abort
+        socket.once "close", conn_pre_abort
+        socket.once "end", conn_pre_abort
         
     
     #----------

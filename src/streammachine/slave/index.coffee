@@ -281,13 +281,22 @@ module.exports = class Slave extends require("events").EventEmitter
                 chunk.data = new Buffer(chunk.data)
                 @emit "data", chunk
             
+            @_streamKey = null
+            
             @slave.master.emit "stream_stats", @stream.key, (err,obj) =>
+                @_streamKey = obj.streamKey
                 @emit "vitals", obj
                 
             #@slave.master.on "disconnect", =>
             #    @emit "disconnect"
 
         #----------
+        
+        getStreamKey: (cb) ->
+            if @_streamKey
+                cb? @_streamKey
+            else
+                @once "vitals", => cb? @_streamKey
         
         getRewind: (cb) ->
             # connect to the master's StreamTransport and ask for any rewind 

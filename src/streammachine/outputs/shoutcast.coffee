@@ -40,14 +40,7 @@ module.exports = class Shoutcast
             
             @socket = @opts.req.connection
             
-            process.nextTick =>     
-                # -- send a preroll if we have one -- #
-        
-                if @stream.preroll && !@req.param("preskip")
-                    @stream.log.debug "making preroll request"
-                    @stream.preroll.pump @socket, => @connectToStream()
-                else
-                    @connectToStream()       
+            process.nextTick => @_startAudio(true)
             
         else if @opts.socket
             # -- socket mode... just data -- #
@@ -55,11 +48,24 @@ module.exports = class Shoutcast
             @client = @opts.client
             @socket = @opts.socket
             @pump = false
-            process.nextTick => @connectToStream()
+            process.nextTick => @_startAudio(false)
         
         # register our various means of disconnection
         @socket.on "end",   => @disconnect()
         @socket.on "close", => @disconnect()
+    
+    #----------
+    
+    _startAudio: (initial) ->
+        # -- create an Icecast creator to inject metadata -- #
+
+        @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null
+        
+        if initial && @stream.preroll && !@opts.req.param("preskip")
+            @stream.log.debug "making preroll request"
+            @stream.preroll.pump @socket, @ice, => @connectToStream()
+        else
+            @connectToStream()  
         
     #----------
     
@@ -95,10 +101,6 @@ module.exports = class Shoutcast
                 (err,@source) =>            
                     # set our offset (in chunks) now that it's been checked for availability
                     @client.offset = @source.offset()
-            
-                    # -- create an Icecast creator to inject metadata -- #
-            
-                    @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null   
             
                     @source.onFirstMeta (err,meta) =>
                         @ice.queue meta

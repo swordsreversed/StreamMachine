@@ -42,6 +42,14 @@
       .controls
         %input(type="text" name="source_password")
         %span.help-block Required to allow Icecast clients to connect as sources.
+        
+    .control-group
+      %label.control-label Preroll URL
+      .controls
+        %input(type="text" name="preroll")
+        %span.help-block URL to a preroll server.  Requests will go to 
+          %i (preroll)/(key)/(stream-key),
+          where stream-key is the audio format.
 
     .control-group
       %label.control-label Fallback Source?
