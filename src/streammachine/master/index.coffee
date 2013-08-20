@@ -181,8 +181,9 @@ module.exports = class Master extends require("events").EventEmitter
         # disconnect them
         for k,obj of @streams
             @log.debug "calling destroy on ", k
-            obj.destroy() unless options?[k]
-            delete @streams[ k ]
+            if !options?[k]
+                obj.destroy()
+                delete @streams[ k ]
         
         # run through the streams we've been passed, initializing sources and 
         # creating rewind buffers

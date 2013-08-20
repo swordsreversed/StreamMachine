@@ -15,7 +15,7 @@ module.exports = class RedisConfig extends EventEmitter
         info = Url.parse @options.server
         @client = Redis.createClient info.port, info.hostname
         
-        @client.on "connect", =>
+        @client.once "connect", =>
             @_connected = true
             @emit "connected", @client
             

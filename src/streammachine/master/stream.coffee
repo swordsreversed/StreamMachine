@@ -27,6 +27,7 @@ module.exports = class Stream extends require('events').EventEmitter
         monitored:          true
         metaTitle:          ""
         format:             "mp3"
+        preroll:            ""
     
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
@@ -142,6 +143,7 @@ module.exports = class Stream extends require('events').EventEmitter
             sources:    ( s.info() for s in @sources )
             listeners:  @listeners()
             rewind:     @rewind.bufferedSecs()
+            vitals:     @_vitals
         , @opts 
     
     #----------
