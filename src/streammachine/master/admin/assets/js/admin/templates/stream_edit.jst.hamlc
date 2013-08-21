@@ -16,6 +16,14 @@
       %label.checkbox.controls
         %input(type="checkbox" name="monitored") 
         Generate alert if this stream does not have a source.
+        
+    .control-group
+      %label.control-label Root Stream?
+      %label.checkbox.controls
+        %input(type="checkbox" name="root_route") 
+        Should this stream be used on requests for /?
+        %br/
+        Only one stream can usefully have this setting.
   
     .control-group
       %label.control-label Stream Title

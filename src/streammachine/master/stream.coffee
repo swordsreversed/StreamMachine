@@ -28,6 +28,7 @@ module.exports = class Stream extends require('events').EventEmitter
         metaTitle:          ""
         format:             "mp3"
         preroll:            ""
+        root_route:         false
     
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
