@@ -71,6 +71,10 @@ module.exports = class Router
             # return JSON version of the status for all streams
             api.ok req, res, @master.config()
             
+        # list slaves
+        @app.get "/api/slaves", (req,res) =>
+            api.ok req, res, @master.slavesInfo()
+            
         # create a stream
         @app.post "/api/streams", express.bodyParser(), (req,res) =>
             # add a new stream

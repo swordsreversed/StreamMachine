@@ -144,10 +144,10 @@ module.exports = class Master extends require("events").EventEmitter
                 # respond with the stream's vitals
                 @streams[key].vitals cb                
             
-        # attach disconnect handler
-        @io.on "disconnect", (sock) =>
-            @log.debug "slave disconnect from #{sock.id}"
-            delete @slaves[sock.id]
+            # attach disconnect handler
+            sock.on "disconnect", =>
+                @log.debug "slave disconnect from #{sock.id}"
+                delete @slaves[sock.id]
             
         @on "config_update", =>
             config = @config()
@@ -279,6 +279,12 @@ module.exports = class Master extends require("events").EventEmitter
     
     streamsInfo: ->
         obj.status() for k,obj of @streams
+        
+    #----------
+    
+    slavesInfo: ->
+        slaveCount: Object.keys(@slaves).length
+        slaves: { id:k, listeners:@listeners.slaves[k]||0 } for k in Object.keys(@slaves)
         
     #----------
     

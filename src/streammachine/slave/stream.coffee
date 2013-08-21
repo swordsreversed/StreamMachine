@@ -113,7 +113,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         
         @preroll.disconnect() if @preroll
         
-        if opts.preroll?
+        if opts.preroll? && opts.preroll != ""
             # create a Preroller connection
             @preroll = new Preroller @, @key, opts.preroll
         
