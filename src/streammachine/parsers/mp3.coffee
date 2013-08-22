@@ -197,7 +197,7 @@ module.exports = class MP3 extends require("stream").Writable
                 @beginning = false
                 
                 @frameHeader = h
-                @emit "header", buf, h
+                #@emit "header", buf, h
                 @frameSize = @frameHeader.frameSize
                                     
                 if @frameSize == 1
