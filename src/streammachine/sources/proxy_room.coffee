@@ -8,13 +8,16 @@ domain  = require "domain"
 
 module.exports = class ProxyRoom extends require("./base")
     DefaultOptions:
-        url:     ""
+        url:        ""
+        fallback:   false
         
     #----------
     
     TYPE: -> "Proxy (#{@url})"
-    constructor: (@stream,@url) ->
+    constructor: (@stream,@url,_isFall) ->
         super()
+        
+        @isFallback     = _isFall
         
         @connected      = false
         @framesPerSec   = null
@@ -61,6 +64,7 @@ module.exports = class ProxyRoom extends require("./base")
         url:        @url
         streamKey: @streamKey
         uuid:       @uuid
+        isFallback: @isFallback
     
     #----------
         

@@ -85,7 +85,7 @@ module.exports = class Stream extends require('events').EventEmitter
         
         if @opts.fallback?
             console.log "Connecting initial source"
-            newsource = new Proxy @, @opts.fallback
+            newsource = new Proxy @, @opts.fallback, true
 
             newsource.on "connect", =>
                 @addSource newsource, (result) =>
@@ -189,7 +189,7 @@ module.exports = class Stream extends require('events').EventEmitter
         # check whether this source should be made active. It should be if 
         # the active source is defined as a fallback
         
-        if !@sources[0] || @sources[0]?.options?.fallback
+        if !@sources[0] || @sources[0]?.isFallback
             # go to the front
             @log.event "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
             @useSource source, cb

@@ -7,7 +7,8 @@ module.exports = class Source extends require("events").EventEmitter
     
     constructor: ->
         @uuid = uuid.v4() if !@uuid
-
+        
+        @isFallback = false
         @streamKey = null
         @_vitals = null
         
