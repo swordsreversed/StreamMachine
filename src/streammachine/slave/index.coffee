@@ -322,12 +322,14 @@ module.exports = class Slave extends require("events").EventEmitter
         
         translator.on "stream_listener", (obj,socket) =>
             if !@_seen[ obj.key ]
-                # create an output and attach it to the proper stream
-                output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], 
-                    socket:     socket
-                    client:     obj.client
-                    startTime:  new Date(obj.startTime)
-                    minuteTime: new Date(obj.minuteTime)
+                # check and make sure they haven't disconnected mid-flight
+                if socket && !socket.destroyed                
+                    # create an output and attach it to the proper stream
+                    output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], 
+                        socket:     socket
+                        client:     obj.client
+                        startTime:  new Date(obj.startTime)
+                        minuteTime: new Date(obj.minuteTime)
                     
                 @_seen[obj.key] = 1
                 
@@ -375,7 +377,7 @@ module.exports = class Slave extends require("events").EventEmitter
             gRT = setTimeout => 
                 @log.debug "Failed to get rewind buffer response."
                 cb? "Failed to get a rewind buffer response."
-            , 2000
+            , 15000
 
             # connect to: @master.options.host:@master.options.port
             
