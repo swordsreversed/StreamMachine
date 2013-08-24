@@ -272,38 +272,46 @@ module.exports = class Slave extends require("events").EventEmitter
                 if id
                     l = stream._lmeta[id]
                     
-                    process.nextTick =>
-                        l.obj.prepForHandoff =>
-                            lobj = 
-                                timer:  null, 
-                                ack:    false, 
-                                socket: l.obj.socket, 
-                                opts:
-                                    key:        [stream.key,id].join("::"),
-                                    stream:     stream.key
-                                    id:         id
-                                    startTime:  l.startTime
-                                    minuteTime: l.minuteTime
-                                    client:     l.obj.client
-
-                            # there's a chance that the connection could end 
-                            # after we recorded the id but before we get here.
-                            # don't send in that case...
-                            if lobj.socket && !lobj.socket.destroyed    
-                                translator.send "stream_listener", lobj.opts, lobj.socket
-
-                                # mark them as in-flight
-                                @_inflight[ lobj.opts.key ] = lobj
-                            
-                                # set a timer to check in on them
-                                lobj.timer = setTimeout =>
-                                    if !lobj.ack
-                                        console.error "Failed to get ack for #{lobj.opts.key}"
-                                        translator.send "stream_listener", lobj.opts, lobj.socket
-                                , 1000
-                    
-                            # go on to the next listener
+                    process.nextTick =>                        
+                        # wrap the listener send in an error domain to try as 
+                        # hard as we can to get it all there
+                        d = require("domain").create()
+                        d.on "error", (err) =>
+                            @log.error "Send handoff listener for #{id} hit error: #{err}"
                             slFunc()
+                            
+                        d.run =>                            
+                            l.obj.prepForHandoff =>
+                                lobj = 
+                                    timer:  null, 
+                                    ack:    false, 
+                                    socket: l.obj.socket, 
+                                    opts:
+                                        key:        [stream.key,id].join("::"),
+                                        stream:     stream.key
+                                        id:         id
+                                        startTime:  l.startTime
+                                        minuteTime: l.minuteTime
+                                        client:     l.obj.client
+                                
+                                # there's a chance that the connection could end 
+                                # after we recorded the id but before we get here.
+                                # don't send in that case...
+                                if lobj.socket && !lobj.socket.destroyed    
+                                    translator.send "stream_listener", lobj.opts, lobj.socket
+
+                                    # mark them as in-flight
+                                    @_inflight[ lobj.opts.key ] = lobj
+                            
+                                    # set a timer to check in on them
+                                    lobj.timer = setTimeout =>
+                                        if !lobj.ack
+                                            console.error "Failed to get ack for #{lobj.opts.key}"
+                                            translator.send "stream_listener", lobj.opts, lobj.socket unless lobj.socket.destroyed
+                                    , 1000
+                    
+                                # go on to the next listener
+                                slFunc()
                     
                 else
                     fFunc()    
