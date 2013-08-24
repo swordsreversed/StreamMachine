@@ -55,7 +55,7 @@ module.exports = class Preroller
             if res.statusCode == 200
                 # stream preroll through to the output
                 res.on "data", (chunk) =>
-                    writer.write(chunk)
+                    writer?.write(chunk)
 
                 # when preroll is done, call the output's callback
                 res.on "end", =>
