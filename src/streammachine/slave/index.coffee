@@ -285,18 +285,22 @@ module.exports = class Slave extends require("events").EventEmitter
                                     startTime:  l.startTime
                                     minuteTime: l.minuteTime
                                     client:     l.obj.client
-                                
-                            translator.send "stream_listener", lobj.opts, lobj.socket
 
-                            # mark them as in-flight
-                            @_inflight[ lobj.opts.key ] = lobj
+                            # there's a chance that the connection could end 
+                            # after we recorded the id but before we get here.
+                            # don't send in that case...
+                            if lobj.socket && !lobj.socket.destroyed    
+                                translator.send "stream_listener", lobj.opts, lobj.socket
+
+                                # mark them as in-flight
+                                @_inflight[ lobj.opts.key ] = lobj
                             
-                            # set a timer to check in on them
-                            lobj.timer = setTimeout =>
-                                if !lobj.ack
-                                    console.error "Failed to get ack for #{lobj.opts.key}"
-                                    translator.send "stream_listener", lobj.opts, lobj.socket
-                            , 1000
+                                # set a timer to check in on them
+                                lobj.timer = setTimeout =>
+                                    if !lobj.ack
+                                        console.error "Failed to get ack for #{lobj.opts.key}"
+                                        translator.send "stream_listener", lobj.opts, lobj.socket
+                                , 1000
                     
                             # go on to the next listener
                             slFunc()
