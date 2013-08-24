@@ -287,6 +287,9 @@ module.exports = class Stream extends require('events').EventEmitter
         for k,v of @DefaultOptions
             @opts[k] = new_opts[k] if new_opts[k]?
             
+            # convert to a number if necessary
+            @opts[k] = Number(@opts[k]) if _u.isNumber(@DefaultOptions[k])
+            
         if @key != @opts.key
             @key = @opts.key
             

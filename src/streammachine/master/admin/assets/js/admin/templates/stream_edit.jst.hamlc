@@ -30,6 +30,12 @@
       .controls
         %input(type="text" name="metaTitle")
         %span.help-block Used as default title metadata.
+
+    .control-group
+      %label.control-label Rewind Seconds
+      .controls
+        %input(type="text" name="seconds")
+        %span.help-block Number of seconds of audio data that should be kept in memory for rewind usage.
         
     .control-group
       %label.control-label Stream Format
