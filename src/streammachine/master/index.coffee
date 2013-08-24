@@ -147,6 +147,10 @@ module.exports = class Master extends require("events").EventEmitter
             # attach disconnect handler
             sock.on "disconnect", =>
                 @log.debug "slave disconnect from #{sock.id}"
+                
+                # need to unregister this slave's listeners
+                s.recordSlaveListeners sock.id, 0 for k,s of @streams
+                
                 delete @slaves[sock.id]
             
         @on "config_update", =>

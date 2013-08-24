@@ -40,6 +40,11 @@ module.exports = class Preroller
         if !@streamKey
             cb?()
             return true
+            
+        # short-circuit if the socket has already disconnected
+        if socket.destroyed
+            cb?()
+            return true
 
         count = @_counter++
 

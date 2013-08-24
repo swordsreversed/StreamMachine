@@ -28,8 +28,7 @@ module.exports = class RawAudio
             
             @socket = @opts.req.connection
             
-            process.nextTick =>
-        
+            process.nextTick =>        
                 # -- send a preroll if we have one -- #
         
                 if @stream.preroll && !@opts.req.param("preskip")
@@ -53,6 +52,9 @@ module.exports = class RawAudio
         # register our various means of disconnection
         @socket.on "end",   => @disconnect()
         @socket.on "close", => @disconnect()
+        @socket.on "error", (err) => 
+            @stream.log.debug "Got client socket error: #{err}"
+            @disconnect()
         
     #----------
     

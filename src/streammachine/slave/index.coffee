@@ -59,7 +59,7 @@ module.exports = class Slave extends require("events").EventEmitter
         
         # -- Listener Counts -- #
         
-        # once every 30 seconds, count all listeners and send them on to the master
+        # once every 10 seconds, count all listeners and send them on to the master
         
         @_listeners_interval = setInterval =>
             return if !@connected?
@@ -77,7 +77,7 @@ module.exports = class Slave extends require("events").EventEmitter
             @emit "listeners", counts:counts, total:total
             @master?.emit "listeners", counts:counts, total:total
 
-        , 30 * 1000
+        , 10 * 1000
         
         # -- Buffer Stats -- #
         
@@ -229,41 +229,107 @@ module.exports = class Slave extends require("events").EventEmitter
         
         @log.info "Sending slave handoff data."
         
+        # we need to track in-flight listeners to make sure they get there
+        @_inflight  = {}
+        @_allSent   = false
+        
+        # -- register a listener for acks -- #
+        
+        translator.on "stream_listener_ok", (msg) =>
+            console.log "Got ACK on ", msg
+            if l = @_inflight[ msg.key ]
+                console.log "Marking listener #{msg.key} as arrived."
+                clearTimeout l.timeout
+                delete @_inflight[ msg.key ]
+                
+            # how many people are still in flight?
+            icount = Object.keys(@_inflight).length
+            console.log "In flight count should be #{icount}."
+            
+            if icount == 0 && @_allSent
+                console.log "All listeners are arrived."
+                cb?()
+        
+        # -- send listeners -- #
+        
         fFunc = _u.after Object.keys(@streams).length, =>
             @log.info "Listeners sent."
-            cb? null
+            @_allSent = true
+            
+            if Object.keys(@_inflight).length == 0
+                # we probably didn't have anyone to send...
+                cb?()
         
         sFunc = (stream) =>
             @log.info "Sending #{ Object.keys(stream._lmeta).length } listeners for #{ stream.key }."
+                        
+            # snapshot our listener ids
+            slisteners = Object.keys(stream._lmeta)
             
-            sfFunc = _u.after Object.keys(stream._lmeta).length, =>
-                fFunc()
+            slFunc = =>
+                id = slisteners.shift()
                 
-            for id,l of stream._lmeta
-                l.obj.prepForHandoff =>
-                    translator.send "stream_listener",
-                        stream:     stream.key
-                        id:         id
-                        startTime:  l.startTime
-                        minuteTime: l.minuteTime
-                        client:     l.obj.client
-                    , l.obj.socket
+                if id
+                    l = stream._lmeta[id]
                     
-                    sfFunc()
+                    process.nextTick =>
+                        l.obj.prepForHandoff =>
+                            lobj = 
+                                timer:  null, 
+                                ack:    false, 
+                                socket: l.obj.socket, 
+                                opts:
+                                    key:        [stream.key,id].join("::"),
+                                    stream:     stream.key
+                                    id:         id
+                                    startTime:  l.startTime
+                                    minuteTime: l.minuteTime
+                                    client:     l.obj.client
+                                
+                            translator.send "stream_listener", lobj.opts, lobj.socket
+
+                            # mark them as in-flight
+                            @_inflight[ lobj.opts.key ] = lobj
+                            
+                            # set a timer to check in on them
+                            lobj.timer = setTimeout =>
+                                if !lobj.ack
+                                    console.error "Failed to get ack for #{lobj.opts.key}"
+                                    translator.send "stream_listener", lobj.opts, lobj.socket
+                            , 1000
+                    
+                            # go on to the next listener
+                            slFunc()
+                    
+                else
+                    fFunc()    
+                    
+            slFunc()                        
         
         sFunc(s) for k,s of @streams
+        
+        # -- 
     
     loadHandoffData: (translator,cb) ->
+        
+        @_seen = {}
         
         # -- look for transferred listeners -- #
         
         translator.on "stream_listener", (obj,socket) =>
-            # create an output and attach it to the proper stream
-            output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], 
-                socket:     socket
-                client:     obj.client
-                startTime:  new Date(obj.startTime)
-                minuteTime: new Date(obj.minuteTime)
+            if !@_seen[ obj.key ]
+                # create an output and attach it to the proper stream
+                output = new @Outputs[ obj.client.output ] @streams[ obj.stream ], 
+                    socket:     socket
+                    client:     obj.client
+                    startTime:  new Date(obj.startTime)
+                    minuteTime: new Date(obj.minuteTime)
+                    
+                @_seen[obj.key] = 1
+                
+            # -- ACK that we received the listener -- #
+            
+            translator.send "stream_listener_ok", key:obj.key
     
     #----------
     
