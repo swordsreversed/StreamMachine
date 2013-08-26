@@ -33,7 +33,7 @@ module.exports = class RawAudio
         
                 if @stream.preroll && !@opts.req.param("preskip")
                     @stream.log.debug "making preroll request", stream:@stream.key
-                    @stream.preroll.pump @socket, @res, => @connectToStream()
+                    @stream.preroll.pump @socket, @socket, => @connectToStream()
                 else
                     @connectToStream()
             
