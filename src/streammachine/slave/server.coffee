@@ -46,7 +46,9 @@ module.exports = class Server extends require('events').EventEmitter
                     req.url = "/#{@core.root_route}"
                     next()
                 else if req.url == "/listen.pls"
+                    console.log "Converting /listen.pls to /#{@core.root_route}.pls"
                     req.url = "/#{@core.root_route}.pls"
+                    next()
                 else
                     next()
             else
@@ -82,6 +84,7 @@ module.exports = class Server extends require('events').EventEmitter
         
         # playlist file
         @app.get "/:stream.pls", (req,res) =>
+            console.log "Sending playlist."
             res.set "X-Powered-By", "StreamMachine"
             res.set "content-type", "audio/x-scpls"
             res.set "connection", "close"
