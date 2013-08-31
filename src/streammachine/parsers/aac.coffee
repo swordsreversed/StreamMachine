@@ -47,8 +47,8 @@ module.exports = class AAC extends require("stream").Writable
         @_id3v2_1 = null
         @_id3v2_2 = null
         
-        @on "frame", (frame) =>
-            @outbuf.push frame
+        #@on "frame", (frame) =>
+        #    @outbuf.push frame
         
         strtok.parse @istream, (v,cb) =>            
             # -- initial request -- #

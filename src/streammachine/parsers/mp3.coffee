@@ -68,8 +68,8 @@ module.exports = class MP3 extends require("stream").Writable
 
         @_id3v1_1 = null
         
-        @on "frame", (frame) =>
-            @outbuf.push frame
+        #@on "frame", (frame) =>
+        #    @outbuf.push frame
         
         strtok.parse @istream, (v,cb) =>
             # -- initial request -- #
