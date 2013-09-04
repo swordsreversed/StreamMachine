@@ -265,11 +265,12 @@ module.exports = class Slave extends require("events").EventEmitter
                 # hard as we can to get it all there
                 d = require("domain").create()
                 d.on "error", (err) =>
+                    console.error "Handoff error: #{err}"
                     @log.error "Send handoff listener for #{l.id} hit error: #{err}"
                     d.exit()
                     sFunc()
                     
-                d.run =>                            
+                d.run =>
                     l.obj.prepForHandoff =>
                         lobj = 
                             timer:  null, 
@@ -291,6 +292,10 @@ module.exports = class Slave extends require("events").EventEmitter
 
                             # mark them as in-flight
                             @_inflight = lobj.opts.key
+                        
+                        else
+                            @log.debug "Lost listener #{lobj.opts.id} during taxi. Moving on."
+                            sFunc()
                 
             else
                 # all done!
@@ -301,7 +306,7 @@ module.exports = class Slave extends require("events").EventEmitter
         translator.on "stream_listener_ok", (msg) =>
             console.log "Got ACK on ", msg
             if @_inflight == msg.key
-                @log.info "Successful ack for listener #{msg.key}."
+                @log.info "Successful ack for listener #{msg.key}. Boarding length is #{@_boarding.length}"
 
             @_inflight = null
             
