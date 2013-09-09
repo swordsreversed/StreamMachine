@@ -130,8 +130,7 @@ module.exports = class LogController
             process.addListener "SIGHUP", =>
                 # re-open our log file
                 console.log "w3c reloading log file"
-                @close()
-                @open()
+                @close => @open()
                 
         #----------
         
@@ -141,7 +140,7 @@ module.exports = class LogController
                 # for a valid w3c log, level should == "request", meta.
                 logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
             
-                if @file
+                if @file && !@_opening
                     # make sure there aren't any queued writes
                     unless _u(@queued).isEmpty
                         q = @queued
@@ -162,9 +161,12 @@ module.exports = class LogController
         
         open: (cb) ->
             if @_opening
+                console.log "W3C already opening... wait."
                 # we're already trying to open.  return an error so we queue the message
                 cb?(true)
                 return true
+                
+            console.log "W3C opening log file."
             
             # otherwise, open the file
             @_opening = true
@@ -178,26 +180,25 @@ module.exports = class LogController
                     # existing file...  don't write headers, just open so we can 
                     # start appending
                     initFile = false
-                
-            @file = fs.createWriteStream @options.filename
+            
+            @file = fs.createWriteStream @options.filename, flags:(if initFile then "w" else "r+")
             
             @file.once "open", (err) =>   
                 console.log "w3c log open with ", err
                 if initFile
                     # write our initial w3c lines
-                    @file.write "#Software: StreamMachine\n#Version: 0.1.0\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n"
-
-                @once "flush", =>
-                    @_opening = false
-                    console.log "w3c open complete"
-                    cb?(false)
+                    @file.write "#Software: StreamMachine\n#Version: 0.1.0\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", =>
+                      @_opening = false
+                      console.log "w3c open complete"
+                      cb?(false)
                     
                 @flush()
                             
         #----------
             
         close: (cb) ->
-            @file?.end()
+            @file?.end null, null, =>
+              console.log "W3C log file closed."
             @file = null
             
         #----------
