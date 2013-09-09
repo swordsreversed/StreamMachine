@@ -187,7 +187,7 @@ module.exports = class LogController
                 console.log "w3c log open with ", err
                 if initFile
                     # write our initial w3c lines
-                    @file.write "#Software: StreamMachine\n#Version: 0.1.0\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", =>
+                    @file.write "#Software: StreamMachine\n#Version: 0.2.9\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", =>
                       @_opening = false
                       console.log "w3c open complete"
                       cb?(false)
