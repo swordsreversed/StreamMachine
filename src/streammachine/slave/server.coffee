@@ -102,9 +102,6 @@ module.exports = class Server extends require('events').EventEmitter
         @app.get "/:stream", (req,res) =>
             res.set "X-Powered-By", "StreamMachine"
             
-            console.log "stream is ", req.stream.key
-            console.log "format is ", req.param[0]
-            
             # -- Stream match! -- #
         
             if req.param("socket")
