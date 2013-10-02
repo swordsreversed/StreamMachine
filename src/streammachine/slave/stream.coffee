@@ -153,12 +153,10 @@ module.exports = class Stream extends require('../rewind_buffer')
         @buf_timer = setInterval =>
             all_buf = 0
             for id,l of @_lmeta
-                conn = l.obj.req?.socket
-                
-                all_buf += conn?.bufferSize||0
-                
-                if (conn?.bufferSize||0) > @opts.max_buffer
-                    @log.debug "Connection exceeded max buffer size.", req:l.obj.req, bufferSize:conn.bufferSize
+                all_buf += l.rewind._queuedBytes + l.obj.socket?.bufferSize
+                                
+                if (l.rewind._queuedBytes||0) + (l.obj.socket?.bufferSize||0) > @opts.max_buffer
+                    @log.debug "Connection exceeded max buffer size.", client:l.obj.client, bufferSize:l.rewind._queuedBytes
                     l.obj.disconnect(true)
 
             @log.debug "All buffers: #{all_buf}"

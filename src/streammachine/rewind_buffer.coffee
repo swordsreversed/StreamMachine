@@ -33,7 +33,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
         # create buffer as an array
         @_rbuffer = []
-                
+                        
         # -- set up header and frame functions -- #
         
         @_rdataFunc = (chunk) =>
@@ -195,16 +195,23 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             c.buffer chunk.data
             
             c.flush()
-            
+                        
             slices += 1
             
+            # clean up
+            meta_buf = null
+            
             if i == 0
-                c.end()        
+                c.end() 
+                
+                rbuf_copy.slice(0)
+                rbuf_copy = null
+                       
                 @log.info "Dumped rewind buffer. Sent #{slices} slices."
+                
                 cb? null
                 
-            
-        #console.log "Dump socket is ", stream
+        true    
         
     #----------
     
@@ -237,14 +244,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
     #----------
     
-    pumpSeconds: (rewinder,seconds,cb) ->
+    pumpSeconds: (rewinder,seconds,concat,cb) ->
         # pump the most recent X seconds
         frames = @checkOffsetSecs seconds
-        @pumpFrom rewinder, frames, frames, cb
+        @pumpFrom rewinder, frames, frames, concat, cb
         
     #----------
     
-    pumpFrom: (rewinder,offset,length,cb) ->
+    pumpFrom: (rewinder,offset,length,concat,cb) ->
         # we want to send _length_ frames, starting at _offset_
         
         if offset == 0
@@ -264,14 +271,23 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
         meta = null
         
+        buffers = []
+        
         for i in [1..length]
             b = @_rbuffer[ bl - 1 - (offset - i) ]
             pumpLen     += b.data.length
             duration    += b.duration
             
-            rewinder._insert b
+            if concat
+              buffers.push b.data
+            else
+              rewinder._insert b
             
             meta = b.meta if !meta
+            
+        if concat
+          cbuf = Buffer.concat(buffers)
+          rewinder._insert { data:cbuf, meta:meta }
             
         @log.debug "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
         
@@ -287,18 +303,16 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         burst = @checkOffsetSecs burstSecs
 
         if offset > burst
-            @pumpFrom rewinder, offset, burst, (err,info) =>
+            @pumpFrom rewinder, offset, burst, false, (err,info) =>
                 cb? err, offset-burst
         else
-            @pumpFrom rewinder, offset, offset, (err,info) =>
+            @pumpFrom rewinder, offset, offset, false, (err,info) =>
                 cb? err, 0
     
     #----------
             
     _raddListener: (obj) ->
-        console.log "addListener request"
         if obj._offset? && obj._offset >= 0
-            console.log "Pushing to _rlisteners"
             @_rlisteners.push obj
             return true
         else
@@ -331,7 +345,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     
     class @Rewinder extends require("stream").Readable
         constructor: (@rewind,@conn_id,opts={}) ->
-            super highWaterMark:512*1024
+            super highWaterMark:256*1024
             
             @_pumpOnly = false
             
@@ -348,6 +362,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
             
             @_queue = []
+            @_queuedBytes = 0
+            
             @_reading = false
             
             @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
@@ -358,7 +374,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 # we're just giving one pump of data, then EOF
                 @_pumpOnly = true
                 pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
-                @rewind.pumpFrom @, pumpFrames, @_offset, (err,info) =>
+                @rewind.pumpFrom @, pumpFrames, @_offset, false, (err,info) =>
                     @rewind.log.debug "Pump complete.", info:info
                     if err
                         @emit "error", err
@@ -372,7 +388,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 if @_offset == 0
                     # pump some data before we start regular listening
                     @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                    @rewind.pumpSeconds @, @pumpSecs
+                    @rewind.pumpSeconds @, @pumpSecs, true
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
                     # back from live
@@ -447,6 +463,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 # Grab a chunk off of the queued up buffer
                 next_buf = @_queue.shift()
                 
+                @_queuedBytes -= next_buf.data.length
+                
                 # This shouldn't happen...
                 if !next_buf
                     @rewind.log.error "Shifted queue but got null", length:@_queue.length
@@ -461,7 +479,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 # stop and wait for a drain event (basically wait for the 
                 # reader to catch up to us)
                 
-                if @push next_buf.data
+                if @push next_buf.data                    
                     sent += next_buf.data.length
                                         
                     if sent < size && @_queue.length > 0
@@ -483,6 +501,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             
         _insert: (b) =>
             @_queue.push b
+            @_queuedBytes += b.data.length
+            
             @emit "readable" if !@_reading
         
         #----------
