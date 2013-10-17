@@ -13,13 +13,7 @@ nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streamma
 
 # -- Defaults -- #
 
-nconf.defaults
-    mode:           "standalone"
-    handoff_type:   "external"
-    port:           8000
-    source_port:    8001
-    log:
-        stdout:     true
+nconf.defaults StreamMachine.Defaults
 
 # There are three potential modes of operation:
 # 1) Standalone -- One server, handling boths streams and configuration

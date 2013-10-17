@@ -9,4 +9,12 @@ module.exports = class StreamMachine
     @StandaloneMode: require "./modes/standalone"
     @MasterMode:     require "./modes/master"
     @SlaveMode:      require "./modes/slave"
+    
+    @Defaults:
+        mode:           "standalone"
+        handoff_type:   "external"
+        port:           8000
+        source_port:    8001
+        log:
+            stdout:     true
                                         

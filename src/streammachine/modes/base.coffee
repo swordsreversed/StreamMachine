@@ -2,7 +2,7 @@ _u = require "underscore"
 
 #----------
 
-module.exports = class Core
+module.exports = class Core extends require("events").EventEmitter
     DefaultOptions:
         # after a new deployment, allow a one hour grace period for 
         # connected listeners
@@ -113,11 +113,11 @@ module.exports = class Core
     class @HandoffTranslator extends require("events").EventEmitter
         constructor: (@p) ->
             @p.on "message", (msg,handle) =>
-                console.log "SMTRANSLATE GOT #{msg.key}", msg, handle?
+                console.log "#{process.pid} TR <- #{msg.key}", msg, handle?
                 if msg?.key
                     msg.data = {} if !msg.data
                     @emit msg.key, msg.data, handle
         
         send: (key,data,handle=null) ->
-            console.log "SMTRANSLATE #{key}", data, handle?
+            console.log "#{process.pid} TR -> #{key}", data, handle?
             @p.send { key:key, data:data }, handle

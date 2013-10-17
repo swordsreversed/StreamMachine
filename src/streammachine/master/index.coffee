@@ -422,7 +422,8 @@ module.exports = class Master extends require("events").EventEmitter
             @app.get "/:stream/rewind", (req,res) =>
                 @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
-                req.stream.rewind.dumpBuffer res
+                req.stream.rewind.dumpBuffer res, (err) =>
+                    @master.log.debug "Rewind dumpBuffer finished."                
     
     #----------
         
