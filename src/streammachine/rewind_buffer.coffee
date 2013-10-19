@@ -222,14 +222,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     
     checkOffset: (offset) ->        
         if offset < 0
-            @log.debug "offset is invalid! 0 for live."
+            @log.silly "offset is invalid! 0 for live."
             return 0
                     
         if @_rbuffer.length >= offset
-            @log.debug "Granted. current buffer length is ", length:@_rbuffer.length
+            @log.silly "Granted. current buffer length is ", length:@_rbuffer.length
             return offset
         else
-            @log.debug "Not available. Instead giving max buffer of ", length:@_rbuffer.length - 1
+            @log.silly "Not available. Instead giving max buffer of ", length:@_rbuffer.length - 1
             return @_rbuffer.length - 1
     
     #----------
@@ -289,7 +289,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
           cbuf = Buffer.concat(buffers)
           rewinder._insert { data:cbuf, meta:meta }
             
-        @log.debug "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
+        @log.silly "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
         
         cb? null, meta:meta, duration:duration, length:pumpLen
         
@@ -375,7 +375,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 @_pumpOnly = true
                 pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
                 @rewind.pumpFrom @, pumpFrames, @_offset, false, (err,info) =>
-                    @rewind.log.debug "Pump complete.", info:info
+                    @rewind.log.silly "Pump complete.", info:info
                     if err
                         @emit "error", err
                         return false
@@ -387,7 +387,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             else if opts?.pump                
                 if @_offset == 0
                     # pump some data before we start regular listening
-                    @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                    @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
                     @rewind.pumpSeconds @, @pumpSecs, true
                 else
                     # we're offset, so we'll pump from the offset point forward instead of 
@@ -518,7 +518,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
             if @_offset == 0
                 # pump some data before we start regular listening
-                @rewind.log.debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
                 @rewind.pumpSeconds @, @pumpSecs
             else
                 # we're offset, so we'll pump from the offset point forward instead of 

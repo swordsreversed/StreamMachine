@@ -14,6 +14,7 @@ module.exports = class LogController
         interaction:    30
         minute:         30
         debug:          10
+        silly:          5
         
     constructor: (config) ->
                             
