@@ -254,12 +254,16 @@ module.exports = class Slave extends require("events").EventEmitter
                             @_inflight = lobj.opts.key
                         
                         else
-                            @log.debug "Lost listener #{lobj.opts.id} during taxi. Moving on."
+                            @log.info "Lost listener #{lobj.opts.id} during taxi. Moving on."
                             sFunc()
                 
             else
                 # all done!
                 @log.info "Last listener is in flight."
+                
+                if !@_inflight
+                    @log.info "All listeners are arrived or lost."
+                    cb?()
         
         # -- register a listener for acks -- #
                 
