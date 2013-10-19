@@ -62,7 +62,12 @@ module.exports = class Shoutcast
     _startAudio: (initial) ->
         # -- create an Icecast creator to inject metadata -- #
 
-        @ice = new icecast.Writer @client.meta_int, initialMetaInt:@client.bytesToNextMeta||null
+        # the initial interval value that we pass in may be different than 
+        # the one we want to use later.  Since the initializer queues the 
+        # first read, we can set both in succession without having to worry 
+        # about timing
+        @ice = new icecast.Writer @client.bytesToNextMeta||@client.meta_int
+        @ice.metaint = @client.meta_int
         
         if initial && @stream.preroll && !@opts.req.param("preskip")
             @stream.log.debug "making preroll request"
