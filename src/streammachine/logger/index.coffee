@@ -1,5 +1,8 @@
 _u = require "underscore"
+
 winston = require "winston"
+WinstonCommon = require "winston/lib/winston/common"
+
 fs = require "fs"
 path = require "path"
 strftime = require("prettydate").strftime
@@ -24,10 +27,11 @@ module.exports = class LogController
         
         if config.stdout
             console.log "adding Console transport"
-            transports.push new (winston.transports.Console)
+            transports.push new (LogController.Console)
                 level:      config.stdout?.level        || "debug"
                 colorize:   config.stdout?.colorize     || false
                 timestamp:  config.stdout?.timestamp    || false
+                ignore:     config.stdout?.ignore       || ""
         
         # -- JSON -- #
         
@@ -115,6 +119,51 @@ module.exports = class LogController
                     
             @child = (opts={}) -> new LogController.Child(@parent,_u.extend({},@opts,opts))
                     
+    #----------
+    
+    class @Console extends winston.transports.Console
+        constructor: (@opts) ->
+            super @opts
+            @ignore_levels = (@opts.ignore||"").split(",")
+      
+        log: (level, msg, meta, callback) ->
+            #console.log "in log for ", level, msg, meta, @ignore_levels
+            if @silent
+                return callback null, true
+            
+            if @ignore_levels.indexOf(level) != -1
+                return callback null, true
+        
+            # extract prefix elements from meta
+            prefixes = []
+            for k in ['pid','mode','component']
+                if meta[k]
+                    prefixes.push meta[k]
+                    delete meta[k]
+        
+            output = WinstonCommon.log
+                colorize:    this.colorize
+                json:        this.json
+                level:       level
+                message:     msg
+                meta:        meta
+                stringify:   this.stringify
+                timestamp:   this.timestamp
+                prettyPrint: this.prettyPrint
+                raw:         this.raw
+                label:       this.label
+      
+            if prefixes.length > 0
+                output = prefixes.join("/") + " -- " + output
+        
+            if level == 'error' || level == 'debug'
+                process.stderr.write output + "\n"
+            else
+                process.stdout.write output + "\n"
+        
+            @emit "logged"
+            callback null, true
+    
     #----------
     
     class @W3CLogger extends winston.Transport
