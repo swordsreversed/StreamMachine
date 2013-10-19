@@ -1,5 +1,7 @@
-_u = require "underscore"
-nconf = require "nconf"
+_u      = require "underscore"
+nconf   = require "nconf"
+cluster = require "cluster"
+path    = require "path"
 
 Logger  = require "../logger"
 Slave   = require "../slave"
@@ -16,39 +18,143 @@ module.exports = class SlaveMode extends require("./base")
     MODE: "Slave"
     constructor: (@opts) ->
         @log = new Logger opts.log
+        
         @log.debug("Slave Instance initialized")
-        
+
         process.title = "StreamM:slave"
-        
         super
         
-        # create a slave
-        @slave = new Slave _u.extend @opts, logger:@log
+        @workers = {}
+        @lWorkers = {}
+        @_handle = null
+        @_haveHandle = false
+        @_shuttingDown = false
+        
+        cluster.setupMaster
+            exec: path.resolve(__dirname,"./slave_worker.js")
+            args: ["--config",path.resolve(process.cwd(), nconf.get("config"))]
+            
+        cluster.on "online", (worker) =>
+            console.log "SlaveWorker online: #{worker.id}"
+            @workers[ worker.id ] = obj = w:worker, t:(new SlaveMode.HandoffTranslator worker)
+            console.log "Asking worker to listen to ", @_handle?.fd
+            obj.t.send("listen",fd:@_handle?.fd) if @_haveHandle            
+                    
+            obj.t.once "streams", =>
+                @lWorkers[ worker.id ] = @workers[ worker.id ]
+                @emit "worker_listening"
+            
+        cluster.on "disconnect", (worker) =>
+            console.log "SlaveWorker disconnect: #{worker.id}"
+            delete @lWorkers[worker.id]
+            
+        cluster.on "exit", (worker) =>
+            console.log "SlaveWorker exit: #{worker.id}"
+            delete @workers[ worker.id ]
+            @_respawnWorkers() if !@_shuttingDown
+            
+        @_respawnWorkers()
+        
+        # -- are we looking for a handoff? -- #
         
         if nconf.get("handoff")
             @_acceptHandoff()
-            
         else
-            @log.info "Slave listening."
-            @slave.server.listen @opts.port
+            @_haveHandle = true
+            w.t.send("listen") for id,w of @workers
+            
+        @once "server_handle", =>
+            w.t.send("listen",fd:@_handle.fd) for id,w of @workers
+    
+    #----------
+    
+    _respawnWorkers: ->
+        # if our worker count has dropped below our minimum, launch more workers
+        wl = Object.keys(@workers).length
+        _u.times ( nconf.get("cluster") - wl ), => cluster.fork()
     
     #----------
     
     _sendHandoff: (translator) ->
         @log.info "Starting slave handoff."
         
-        # Send our public handle
-        translator.send "server_socket", {}, @slave.server.hserver
+        # don't try to spawn new workers
+        @_shuttingDown = true
         
-        translator.once "server_socket_up", =>
-            @log.info "Server socket transferred. Sending listener connections."
-        
-            # Send slave data
-            @slave.sendHandoffData translator, (err) =>
-                @log.event "Sent slave data to new process. Exiting."
+        # Coordinate handing off our server handle
 
-                # Exit
-                process.exit()
+        _send = (handle) =>
+            translator.send "server_socket", {}, handle
+        
+            translator.once "server_socket_up", =>
+                @log.info "Server socket transferred. Sending listener connections."
+            
+                # now we ask each worker to send its listeners. We proxy them through
+                # to the new process, which in turn hands them off to its workers
+            
+                currentWorker = null
+            
+                translator.on "stream_listener_ok", (msg) =>
+                    currentWorker.send "stream_listener_ok", msg
+            
+                _proxyWorker = (cb) =>
+                    # are we done yet?
+                    if Object.keys(cluster.workers).length == 0
+                        cb?()
+                        return false
+                    
+                    # grab a worker id off the stack
+                    id = Object.keys(cluster.workers)[0]
+                
+                    console.log "#{process.pid} STARTING #{id}"
+                
+                
+                    currentWorker = @workers[id].t
+                
+                    # set up proxy function
+                    @workers[id].t.on "stream_listener", (obj,handle) =>
+                        # send it on up river
+                        translator.send "stream_listener", obj, handle
+                    
+                    # listen for the all-clear
+                    @workers[id].t.once "sentAllListeners", =>
+                        console.log "#{process.pid} DONE WITH #{id}"
+                        # tell the worker we're done with its services
+                        @workers[id].w.kill()
+                    
+                        # do it again...
+                        _proxyWorker cb
+                                
+                    # ask for listeners
+                    @workers[id].t.send "sendListeners"
+
+
+                _proxyWorker =>
+                    @log.event "Sent slave data to new process. Exiting."
+
+                    # Exit
+                    process.exit()
+                    
+        # we need to pass over a copy of the server handle.  We ask the 
+        # workers for it and go with the first one that comes back
+        
+        _handleSent = false
+        
+        if @_handle
+            _send @_handle
+        else
+            _askHandle = (id,w) =>
+                w.t.once "handle", (msg,handle) =>
+                    if !_handleSent
+                        _handleSent = true
+                        _send handle._handle
+
+                @log.debug "Sending req_handle to #{id}"
+                w.t.send "req_handle"
+        
+            _askHandle(id,w) for id,w of @lWorkers
+    
+    #----------
             
     _acceptHandoff: ->
         @log.info "Initializing handoff receptor."
@@ -63,16 +169,74 @@ module.exports = class SlaveMode extends require("./base")
         # set up our translator
         translator = new SlaveMode.HandoffTranslator process
         
-        @slave.once "streams", =>
-            # signal that we are configured
-            translator.send "streams"
-            
-            translator.once "server_socket", (msg,handle) =>
-                @log.info "Got server socket."
-                @slave.server.listen handle
-                @log.info "Accepting new connections."
-                translator.send "server_socket_up"
-                
-            # Watch for any transferred listeners
-            @slave.loadHandoffData translator
+        # signal that we are configured (even though we may not be...)
+        translator.send "streams"
         
+        translator.once "server_socket", (msg,handle) =>
+            @_handle = handle
+                        
+            # don't accept connections here...
+            #handle._handle.onconnection = (client) => 
+            #    console.log "CONNECTION IN SLAVE-MASTER>>> CLOSING"
+            #    client.close(); false
+            
+            console.log "GOT SERVER SOCKET: ", handle
+            @_haveHandle = true
+            @emit "server_socket"
+            
+            _go = => 
+                translator.send "server_socket_up"
+        
+                # -- Watch for incoming listeners -- #
+        
+                translator.on "stream_listener", (msg,handle) =>
+                    # pick a worker randomly...
+                    worker_id = _u.sample(Object.keys(@lWorkers))
+                    console.log "Picked #{worker_id} for listener destination."
+            
+                    @workers[worker_id].t.once "stream_listener_ok", (msg) =>
+                        translator.send "stream_listener_ok", msg
+            
+                    @workers[worker_id].t.send "stream_listener", msg, handle
+                    
+            if Object.keys(@lWorkers).length > 0
+                _go()
+            else
+                @once "worker_listening", => _go()
+        
+    #----------
+    
+    class @SlaveWorker
+        constructor: ->
+            @log = new Logger nconf.get("log")
+            @log.debug("SlaveWorker Instance initialized")
+            
+            @_t = new SlaveMode.HandoffTranslator process
+            
+            @slave = new Slave _u.extend nconf.get(), logger:@log
+            
+            @slave.once "streams", =>
+                @_t.send "streams"
+            
+            @_t.once "listen", (msg) =>
+                if msg?.fd
+                    @slave.server.listen {fd:msg.fd}, =>
+                        @log.debug "#{process.pid}: SlaveWorker listening via handle #{msg.fd}."
+                else                
+                    @slave.server.listen nconf.get("port"), =>
+                        @log.debug "#{process.pid}: SlaveWorker listening via port #{nconf.get("port")}."
+                    
+            @_t.on "req_handle", =>
+                @_t.send "handle", {}, @slave.server.hserver
+            
+            # Listen for the order to send our listeners to the cluster master, 
+            # most likely as part of a handoff            
+            @_t.once "sendListeners", (msg) =>
+                @slave.sendHandoffData @_t, =>
+                    @log.debug "All listeners sent."
+                    @_t.send "sentAllListeners"
+                    
+            # We always register to be able to accept listeners
+            @slave.loadHandoffData @_t
+            
+    #----------

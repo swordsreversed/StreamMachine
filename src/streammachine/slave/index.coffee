@@ -51,9 +51,7 @@ module.exports = class Slave extends require("events").EventEmitter
             
         # init our server
         @server = new Server core:@, logger:@log.child(subcomponent:"server")
-            
-        @log.debug "Slave is listening on port #{@options.listen}"
-        
+                
         # start up the socket manager on the listener
         #@sockets = new @Outputs.sockets server:@server.server, core:@
         
@@ -91,44 +89,6 @@ module.exports = class Slave extends require("events").EventEmitter
             @log.debug "Rewind buffers: " + counts.join(" -- ")
             
         , 5 * 1000
-                            
-        # -- Graceful Shutdown -- #
-        
-        # attach a USR2 handler that causes us to stop listening. this is 
-        # used to allow a new server to start up
-
-        process.on "SIGTERM", =>
-            @log.debug "Got SIGTERM in core...  Starting shutdown"
-            
-            # stop accepting new connections
-            @server?.stopListening()
-            
-            # when should we get pushy?
-            @_shutdownMaxTime = (new Date).getTime() + @options.max_zombie_life
-            
-            # need to start a process to quit when existing connections disconnect
-            @_shutdownTimeout = setInterval =>
-               # have we used up the grace period yet?
-               force_shut = if (new Date).getTime() > @_shutdownMaxTime then true else false
-                
-               # build a listener count for all streams
-               listeners = 0
-               for k,stream of @streams
-                   slisteners = stream.countListeners()
-                    
-                   if slisteners == 0 || force_shut
-                       # if everyone's done (or we're feeling pushy), disconnect
-                       stream.disconnect()
-                   else
-                       listeners += slisteners
-                    
-               if listeners == 0
-                   # everyone's out...  go ahead and shut down
-                   @log.debug "Shutdown complete", => process.exit()
-               else
-                   @log.debug "Still awaiting shutdown; #{listeners} listeners"
-                
-            , 60 * 1000
     
     #----------
     
@@ -294,12 +254,16 @@ module.exports = class Slave extends require("events").EventEmitter
                             @_inflight = lobj.opts.key
                         
                         else
-                            @log.debug "Lost listener #{lobj.opts.id} during taxi. Moving on."
+                            @log.info "Lost listener #{lobj.opts.id} during taxi. Moving on."
                             sFunc()
                 
             else
                 # all done!
                 @log.info "Last listener is in flight."
+                
+                if !@_inflight
+                    @log.info "All listeners are arrived or lost."
+                    cb?()
         
         # -- register a listener for acks -- #
                 

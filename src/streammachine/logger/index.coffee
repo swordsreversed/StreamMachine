@@ -1,5 +1,8 @@
 _u = require "underscore"
+
 winston = require "winston"
+WinstonCommon = require "winston/lib/winston/common"
+
 fs = require "fs"
 path = require "path"
 strftime = require("prettydate").strftime
@@ -14,6 +17,7 @@ module.exports = class LogController
         interaction:    30
         minute:         30
         debug:          10
+        silly:          5
         
     constructor: (config) ->
                             
@@ -23,10 +27,11 @@ module.exports = class LogController
         
         if config.stdout
             console.log "adding Console transport"
-            transports.push new (winston.transports.Console)
+            transports.push new (LogController.Console)
                 level:      config.stdout?.level        || "debug"
                 colorize:   config.stdout?.colorize     || false
                 timestamp:  config.stdout?.timestamp    || false
+                ignore:     config.stdout?.ignore       || ""
         
         # -- JSON -- #
         
@@ -116,6 +121,51 @@ module.exports = class LogController
                     
     #----------
     
+    class @Console extends winston.transports.Console
+        constructor: (@opts) ->
+            super @opts
+            @ignore_levels = (@opts.ignore||"").split(",")
+      
+        log: (level, msg, meta, callback) ->
+            #console.log "in log for ", level, msg, meta, @ignore_levels
+            if @silent
+                return callback null, true
+            
+            if @ignore_levels.indexOf(level) != -1
+                return callback null, true
+        
+            # extract prefix elements from meta
+            prefixes = []
+            for k in ['pid','mode','component']
+                if meta[k]
+                    prefixes.push meta[k]
+                    delete meta[k]
+        
+            output = WinstonCommon.log
+                colorize:    this.colorize
+                json:        this.json
+                level:       level
+                message:     msg
+                meta:        meta
+                stringify:   this.stringify
+                timestamp:   this.timestamp
+                prettyPrint: this.prettyPrint
+                raw:         this.raw
+                label:       this.label
+      
+            if prefixes.length > 0
+                output = prefixes.join("/") + " -- " + output
+        
+            if level == 'error' || level == 'debug'
+                process.stderr.write output + "\n"
+            else
+                process.stdout.write output + "\n"
+        
+            @emit "logged"
+            callback null, true
+    
+    #----------
+    
     class @W3CLogger extends winston.Transport
         name: "w3c"
         
@@ -123,9 +173,10 @@ module.exports = class LogController
             super(options)
             
             @options = options
-            @_opening = false
             
-            @queued = []
+            @_opening   = false
+            @_file      = null
+            @_queue = []
             
             process.addListener "SIGHUP", =>
                 # re-open our log file
@@ -138,24 +189,23 @@ module.exports = class LogController
             # unlike a normal logging endpoint, we only care about our request entries
             if level == @options.level                        
                 # for a valid w3c log, level should == "request", meta.
-                logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}\n"
+                logline = "#{meta.ip} #{strftime(new Date(meta.time),"%F %T")} #{meta.path} 200 #{escape(meta.ua)} #{meta.bytes} #{meta.seconds}"
             
-                if @file && !@_opening
-                    # make sure there aren't any queued writes
-                    unless _u(@queued).isEmpty
-                        q = @queued
-                        @queued = []
-                        @file.write line for line in q
+                @_queue.push logline
+                @_runQueue()
+        
+        #----------
+        
+        _runQueue:  ->
+            if @_file
+                # we're open, so do a write...
+                if @_queue.length > 0
+                    line = @_queue.shift()
+                    @_file.write line+"\n", "utf8", =>
+                        @_runQueue if @_queue.length > 0
                 
-                    # now write this line
-                    @file.write logline
-                    cb null, true
-                
-                else
-                    @open (err) =>
-                    
-                    @queued.push logline
-                    cb null, true
+            else
+                @open (err) => @_runQueue()
         
         #----------
         
@@ -163,14 +213,19 @@ module.exports = class LogController
             if @_opening
                 console.log "W3C already opening... wait."
                 # we're already trying to open.  return an error so we queue the message
-                cb?(true)
-                return true
+                return false
                 
             console.log "W3C opening log file."
             
-            # otherwise, open the file
-            @_opening = true
-                        
+            # note that we're opening, and also set a timeout to make sure 
+            # we don't get stuck
+            @_opening = setTimeout =>
+                console.log "Failed to open w3c log within one second."
+                @_opening = false
+                @open(cb)
+            , 1000
+            
+            # is this a new file or one that we're just re-opening?
             initFile = true
             if fs.existsSync(@options.filename)
                 # file exists...  see if there's anything in it
@@ -181,33 +236,36 @@ module.exports = class LogController
                     # start appending
                     initFile = false
             
-            @file = fs.createWriteStream @options.filename, flags:(if initFile then "w" else "r+")
+            @_file = fs.createWriteStream @options.filename, flags:(if initFile then "w" else "r+")
             
-            @file.once "open", (err) =>   
+            @_file.once "open", (err) =>
                 console.log "w3c log open with ", err
+                
+                _clear = =>
+                    console.log "w3c open complete"
+                    clearTimeout @_opening if @_opening
+                    @_opening = null
+                    cb?()
+                
                 if initFile
-                    # write our initial w3c lines
-                    @file.write "#Software: StreamMachine\n#Version: 0.2.9\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", =>
-                      @_opening = false
-                      console.log "w3c open complete"
-                      cb?(false)
+                    # write our initial w3c lines before we return
+                    @_file.write "#Software: StreamMachine\n#Version: 0.2.9\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", =>
+                        _clear()
                     
-                @flush()
+                else
+                    _clear()
                             
         #----------
             
         close: (cb) ->
-            @file?.end null, null, =>
+            @_file?.end null, null, =>
               console.log "W3C log file closed."
-            @file = null
+            @_file = null
             
         #----------
         
         flush: ->
-            _u(@queued).each (l) => process.nextTick => @file.write(l)
-            @queued.length = 0
-            console.log "w3c finished flushing"
-            @file.once "drain", => @emit "flush"
+            @_runQueue()
             
     #----------
     
