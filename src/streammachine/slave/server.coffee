@@ -123,16 +123,17 @@ module.exports = class Server extends require('events').EventEmitter
     
     #----------
     
-    listen: (port) ->
+    listen: (port,cb) ->
         console.log "Start listening"
-        @hserver = @app.listen port
-        @io = require("socket.io").listen @hserver
-        @emit "io_connected", @io
+        @hserver = @app.listen port, =>
+            @io = require("socket.io").listen @hserver
+            @emit "io_connected", @io
+            cb?(@hserver)
         @hserver
         
     #----------
         
-    stopListening: ->
+    close: ->
         console.log "stopListening"
         @hserver?.close => console.log "listening stopped."
         

@@ -37,12 +37,8 @@ module.exports = class SlaveMode extends require("./base")
         cluster.on "online", (worker) =>
             console.log "SlaveWorker online: #{worker.id}"
             @workers[ worker.id ] = obj = w:worker, t:(new SlaveMode.HandoffTranslator worker)
-            obj.t.send("listen",{},@_handle) if @_haveHandle
-            
-            if !@_handle
-                obj.t.once "handle", (msg,handle) =>
-                    @log.debug "Setting slave _handle based on handle from #{worker.id}"
-                    @_handle = handle if !@_handle
+            console.log "Asking worker to listen to ", @_handle?.fd
+            obj.t.send("listen",fd:@_handle?.fd) if @_haveHandle            
                     
             obj.t.once "streams", =>
                 @lWorkers[ worker.id ] = @workers[ worker.id ]
@@ -67,8 +63,8 @@ module.exports = class SlaveMode extends require("./base")
             @_haveHandle = true
             w.t.send("listen") for id,w of @workers
             
-        @once "server_handle", (handle) =>
-            w.t.send("listen",{},handle) for id,w of @workers
+        @once "server_handle", =>
+            w.t.send("listen",fd:@_handle.fd) for id,w of @workers
     
     #----------
     
@@ -82,58 +78,81 @@ module.exports = class SlaveMode extends require("./base")
     _sendHandoff: (translator) ->
         @log.info "Starting slave handoff."
         
+        # don't try to spawn new workers
+        @_shuttingDown = true
+        
         # Coordinate handing off our server handle
+
+        _send = (handle) =>
+            translator.send "server_socket", {}, handle
         
-        translator.send "server_socket", {}, @_handle
-        
-        translator.once "server_socket_up", =>
-            @log.info "Server socket transferred. Sending listener connections."
+            translator.once "server_socket_up", =>
+                @log.info "Server socket transferred. Sending listener connections."
             
-            # now we ask each worker to send its listeners. We proxy them through
-            # to the new process, which in turn hands them off to its workers
+                # now we ask each worker to send its listeners. We proxy them through
+                # to the new process, which in turn hands them off to its workers
             
-            currentWorker = null
+                currentWorker = null
             
-            translator.on "stream_listener_ok", (msg) =>
-                currentWorker.send "stream_listener_ok", msg
+                translator.on "stream_listener_ok", (msg) =>
+                    currentWorker.send "stream_listener_ok", msg
             
-            _proxyWorker = (cb) =>
-                # are we done yet?
-                if Object.keys(cluster.workers).length == 0
-                    cb?()
-                    return false
+                _proxyWorker = (cb) =>
+                    # are we done yet?
+                    if Object.keys(cluster.workers).length == 0
+                        cb?()
+                        return false
                     
-                # grab a worker id off the stack
-                id = Object.keys(cluster.workers)[0]
+                    # grab a worker id off the stack
+                    id = Object.keys(cluster.workers)[0]
                 
-                console.log "#{process.pid} STARTING #{id}"
+                    console.log "#{process.pid} STARTING #{id}"
                 
                 
-                currentWorker = @workers[id].t
+                    currentWorker = @workers[id].t
                 
-                # set up proxy function
-                @workers[id].t.on "stream_listener", (obj,handle) =>
-                    # send it on up river
-                    translator.send "stream_listener", obj, handle
+                    # set up proxy function
+                    @workers[id].t.on "stream_listener", (obj,handle) =>
+                        # send it on up river
+                        translator.send "stream_listener", obj, handle
                     
-                # listen for the all-clear
-                @workers[id].t.once "sentAllListeners", =>
-                    console.log "#{process.pid} DONE WITH #{id}"
-                    # tell the worker we're done with its services
-                    @workers[id].w.kill()
+                    # listen for the all-clear
+                    @workers[id].t.once "sentAllListeners", =>
+                        console.log "#{process.pid} DONE WITH #{id}"
+                        # tell the worker we're done with its services
+                        @workers[id].w.kill()
                     
-                    # do it again...
-                    _proxyWorker cb
+                        # do it again...
+                        _proxyWorker cb
                                 
-                # ask for listeners
-                @workers[id].t.send "sendListeners"
+                    # ask for listeners
+                    @workers[id].t.send "sendListeners"
 
 
-            _proxyWorker =>
-                @log.event "Sent slave data to new process. Exiting."
+                _proxyWorker =>
+                    @log.event "Sent slave data to new process. Exiting."
 
-                # Exit
-                process.exit()
+                    # Exit
+                    process.exit()
+                    
+        # we need to pass over a copy of the server handle.  We ask the 
+        # workers for it and go with the first one that comes back
+        
+        _handleSent = false
+        
+        if @_handle
+            _send @_handle
+        else
+            _askHandle = (id,w) =>
+                w.t.once "handle", (msg,handle) =>
+                    if !_handleSent
+                        _handleSent = true
+                        _send handle._handle
+
+                @log.debug "Sending req_handle to #{id}"
+                w.t.send "req_handle"
+        
+            _askHandle(id,w) for id,w of @lWorkers
     
     #----------
             
@@ -154,30 +173,37 @@ module.exports = class SlaveMode extends require("./base")
         translator.send "streams"
         
         translator.once "server_socket", (msg,handle) =>
-            @log.info "Got server socket."
             @_handle = handle
-            @emit "server_socket", @_handle
+                        
+            # don't accept connections here...
+            #handle._handle.onconnection = (client) => 
+            #    console.log "CONNECTION IN SLAVE-MASTER>>> CLOSING"
+            #    client.close(); false
             
-        _go = =>
-            translator.send "server_socket_up"
-        
-            # -- Watch for incoming listeners -- #
-        
-            translator.on "stream_listener", (msg,handle) =>
-                # pick a worker randomly...
-                worker_id = _u.sample(Object.keys(@workers))
-                console.log "Picked #{worker_id} for listener destination."
+            console.log "GOT SERVER SOCKET: ", handle
+            @_haveHandle = true
+            @emit "server_socket"
             
-                @workers[worker_id].t.once "stream_listener_ok", (msg) =>
-                    translator.send "stream_listener_ok", msg
-            
-                @workers[worker_id].t.send "stream_listener", msg, handle
+            _go = => 
+                translator.send "server_socket_up"
         
-        if Object.keys(@lWorkers).length > 0
-            _go()
-        else
-            @once "worker_listening", => _go()
-
+                # -- Watch for incoming listeners -- #
+        
+                translator.on "stream_listener", (msg,handle) =>
+                    # pick a worker randomly...
+                    worker_id = _u.sample(Object.keys(@lWorkers))
+                    console.log "Picked #{worker_id} for listener destination."
+            
+                    @workers[worker_id].t.once "stream_listener_ok", (msg) =>
+                        translator.send "stream_listener_ok", msg
+            
+                    @workers[worker_id].t.send "stream_listener", msg, handle
+                    
+            if Object.keys(@lWorkers).length > 0
+                _go()
+            else
+                @once "worker_listening", => _go()
+        
     #----------
     
     class @SlaveWorker
@@ -192,17 +218,16 @@ module.exports = class SlaveMode extends require("./base")
             @slave.once "streams", =>
                 @_t.send "streams"
             
-            @_t.once "listen", (msg,handle) =>
-                if handle
-                    @slave.server.listen handle
-                    @log.debug "#{process.pid}: SlaveWorker listening via handle."
-                    
-                else
+            @_t.once "listen", (msg) =>
+                if msg?.fd
+                    @slave.server.listen {fd:msg.fd}, =>
+                        @log.debug "#{process.pid}: SlaveWorker listening via handle #{msg.fd}."
+                else                
                     @slave.server.listen nconf.get("port"), =>
                         @log.debug "#{process.pid}: SlaveWorker listening via port #{nconf.get("port")}."
                     
-                        # send our handle back upstream
-                        @_t.send "handle", {}, @slave.server.hserver
+            @_t.on "req_handle", =>
+                @_t.send "handle", {}, @slave.server.hserver
             
             # Listen for the order to send our listeners to the cluster master, 
             # most likely as part of a handoff            
