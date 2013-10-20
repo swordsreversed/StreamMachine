@@ -7,6 +7,17 @@ module.exports = class IcecastSource extends require("./base")
         super()
         
         @emitDuration  = 0.5
+        
+        # -- Alert if data stops flowing -- #
+        
+        # creates a sort of dead mans switch that we use to kill the connection 
+        # if it stops sending data
+        @_pingData = _u.debounce => 
+            # data has stopped flowing. kill the connection.
+            @log.info "Source data stopped flowing.  Killing connection."
+            @disconnect()
+            
+        , 30*1000
     
         # data is going to start streaming in as data on req. We need to pipe 
         # it into a parser to turn it into frames, headers, etc
@@ -25,6 +36,7 @@ module.exports = class IcecastSource extends require("./base")
                 
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
+            @_pingData()
             @emit "frame", frame
 
             # -- queue up frames until we get to @emitDuration -- #
@@ -106,7 +118,7 @@ module.exports = class IcecastSource extends require("./base")
             # source has gone away
             @emit "disconnect"
             @sock.end()
-
+        
         # return with success
         @connected = true
     
@@ -122,6 +134,6 @@ module.exports = class IcecastSource extends require("./base")
     #----------
     
     disconnect: ->
-        @res.end()
+        @sock.end()
         @connected = false
         @emit "disconnect"
