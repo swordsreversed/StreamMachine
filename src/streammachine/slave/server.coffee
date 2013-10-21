@@ -26,6 +26,10 @@ module.exports = class Server extends require('events').EventEmitter
         @app.httpAllowHalfOpen = true
         @app.useChunkedEncodingByDefault = false
         
+        # -- Shoutcast emulation -- #
+        
+        @_ua_skip = if nconf.get("ua_skip") then ///#{nconf.get("ua_skip").join("|")}/// else null
+        
         # -- Stream Finder -- #
         
         @app.param "stream", (req,res,next,key) =>
@@ -84,7 +88,6 @@ module.exports = class Server extends require('events').EventEmitter
         
         # playlist file
         @app.get "/:stream.pls", (req,res) =>
-            console.log "Sending playlist."
             res.set "X-Powered-By", "StreamMachine"
             res.set "content-type", "audio/x-scpls"
             res.set "connection", "close"
@@ -101,6 +104,20 @@ module.exports = class Server extends require('events').EventEmitter
         # listen to the stream
         @app.get "/:stream", (req,res) =>
             res.set "X-Powered-By", "StreamMachine"
+            
+            # -- check user agent -- #
+            
+            if @_ua_skip && req.headers?['user-agent'] && @_ua_skip.test(req.headers["user-agent"])
+                # Shoutcast servers had a special handling for user agents that 
+                # contained the string "Mozilla". It gave them an HTTP status 
+                # page instead of the audio content.  One exception: if the 
+                # requested path contained a ";", it gave the audio.
+                @logger.debug "Request from banned User-Agent: #{req.headers['user-agent']}", 
+                    ip:     req.connection.remoteAddress
+                    url:    req.url
+                    
+                res.status(200).end("Invalid User Agent.")
+                return false
             
             # -- Stream match! -- #
         

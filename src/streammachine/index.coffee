@@ -17,4 +17,6 @@ module.exports = class StreamMachine
         source_port:    8001
         log:
             stdout:     true
+            
+        ua_skip:        false
                                         
