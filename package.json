@@ -1,5 +1,5 @@
 {
-    "name":         "StreamMachine",
+    "name":         "streammachine",
     "version":      "0.3.1",
     "description":  "Flexible live streaming for broadcast audio.",
     "keywords":     ["audio","broadcast","shoutcast","icecast"],
@@ -7,6 +7,9 @@
     "author":       {"name": "Eric Richardson", "url": "http://ewr.is"},
     "repository":   {"type": "git", "url": "http://github.com/StreamMachine/StreamMachine.git"},
     "main":         "./index.js",
+    "engines": {
+        "node": ">=0.10.0"
+    },
     "dependencies": {
         "coffee-script":        "~1.4.0",
         "express":              "~3.3.0",
