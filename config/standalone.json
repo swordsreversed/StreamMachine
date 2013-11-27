@@ -1,0 +1,21 @@
+{
+	"port":			    8001,
+	"source_port":	8002,
+	"log": {
+		"stdout":     true
+  },
+  "streams": {
+    "test": {
+      "key":              "test",
+      "root_route":       true,
+      "format":           "mp3",
+      "seconds":          3600,
+      "metaTitle":        "Testing",
+      "host":             "localhost",
+      "source_password":  "testing"
+    }
+  },
+  "users": {
+    "admin": "sha1$4910774a$1$d9ad69e6b7be6dd2fd4767dda957ed47a582c7e3"
+  }
+}

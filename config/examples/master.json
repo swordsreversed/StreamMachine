@@ -35,6 +35,6 @@
         }
     },
 	"redis": {
-		"server": "redis://localhost:6379/3"
+		"server": "redis://localhost:6379"
 	}
 }
