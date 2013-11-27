@@ -4,12 +4,12 @@
 	"log": {
 		"stdout":     true,
 		"json": {
-			"file": 	  "/tmp/streammachine.log",
+			"file": 	  "/var/log/streammachine/streammachine.log",
 			"level":	  "info"
 		},
     "w3c": {
       "level":    "request",
-      "file":     "/tmp/streammachine-w3c.log"
+      "file":     "/var/log/streammachine/streammachine-w3c.log"
     },
     "campfire": {
       "level":    "alert",
