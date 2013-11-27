@@ -114,6 +114,30 @@ the command line.
 For more, see the 
 [full documentation of configuration options](https://github.com/StreamMachine/StreamMachine/wiki/Configuration-settings).
 
+## Getting Started
+
+StreamMachine isn't the most user-friendly piece of software to install at the 
+moment, but there are two options for quickly getting something running that 
+you can play with:
+
+#### Running Locally
+
+To run StreamMachine locally with no service dependencies, try the included `config/standalone.json`. To do so:
+
+* Install Node.js v0.10
+* Download the StreamMachine repository
+* Run `npm install` to install the Node modules that we depend on
+* Run `./streammachine-cmd --config ./config/standalone.json` to start the StreamMachine service
+
+Connect to the admin by going to http://localhost:8001/admin and using admin/admin. There is an 
+MP3 stream configured at /test, with the source password "testing".  The source input listener is 
+on port 8002, and that is where the broadcast should be pointed.
+
+#### Vagrant
+
+You can also [use the Vagrantfile included in streammachine-cookbook](https://github.com/StreamMachine/streammachine-cookbook) 
+to install a standalone configuration in a virtual machine.
+
 ## Who?
 
 StreamMachine was developed by [Eric Richardson](http://ewr.is) (e@ewr.is) 
