@@ -3,6 +3,7 @@ _u = require("underscore")
 util = require 'util'
 fs = require 'fs'
 path = require 'path'
+nconf = require 'nconf'
 
 module.exports = class Server extends require('events').EventEmitter
     DefaultOptions:
