@@ -21,8 +21,8 @@ module.exports = class Alerts extends require("events").EventEmitter
     constructor: (@opts) ->
         @logger = @opts.logger
         
-        @email = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")
-        @pagerduty = new Alerts.PagerDuty @, nconf.get("alerts:pagerduty") if nconf.get("alerts:pagerduty")
+        @email      = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")
+        @pagerduty  = new Alerts.PagerDuty @, nconf.get("alerts:pagerduty") if nconf.get("alerts:pagerduty")
 
         @_states = {}
         
@@ -84,9 +84,7 @@ module.exports = class Alerts extends require("events").EventEmitter
     
     #----------
             
-    _fireAlert: (obj) ->
-        console.log "alert", "#{obj.code}:#{obj.key}", obj
-        
+    _fireAlert: (obj) ->        
         alert = 
             code:           obj.code
             key:            obj.key
@@ -102,8 +100,6 @@ module.exports = class Alerts extends require("events").EventEmitter
     #----------
         
     _fireAllClear: (obj) ->
-        console.log "all_clear", "#{obj.code}:#{obj.key}", obj
-        
         alert = 
             code:           obj.code
             key:            obj.key
@@ -128,7 +124,7 @@ module.exports = class Alerts extends require("events").EventEmitter
             
             # -- register our listener -- #
             
-            @alerts.on "alert", (msg) => @_sendAlert(msg)
+            @alerts.on "alert",         (msg) => @_sendAlert(msg)
             @alerts.on "alert_cleared", (msg) => @_sendAllClear(msg)
         
         #----------
@@ -175,18 +171,18 @@ module.exports = class Alerts extends require("events").EventEmitter
                     
                 @alerts.logger.debug "All clear email sent to #{email.to}.", code:msg.code, key:msg.key
             
-        #----------
-
-
+    #----------
 
     class @PagerDuty
         constructor: (@alerts, @opts) ->
-            @pager = new pagerduty(serviceKey: @opts.serviceKey)
+            @pager = new pagerduty serviceKey:@opts.serviceKey
             @incidentKeys = {}
 
-            @alerts.on "alert", (msg) => @_sendAlert(msg)
+            @alerts.on "alert",         (msg) => @_sendAlert(msg)
             @alerts.on "alert_cleared", (msg) => @_sendAllClear(msg)
 
+
+        #----------
 
         # Create the initial alert in PagerDuty.
         # In the callback, if the response contained an incident key,
@@ -203,9 +199,11 @@ module.exports = class Alerts extends require("events").EventEmitter
                     if response.incident_key
                         @incidentKeys[details.key] = response.incident_key
 
-                    @_logResponse(error, response,
-                        "Alert sent to PagerDuty.", msg)
+                    @_logResponse error, response,
+                        "Alert sent to PagerDuty.", msg
 
+
+        #----------
 
         # Mark the alert as "Resolved" in PagerDuty
         # In the callback, whether it was an error or success, we will
@@ -221,9 +219,11 @@ module.exports = class Alerts extends require("events").EventEmitter
                 callback: (error, response) =>
                     delete @incidentKeys[details.key]
 
-                    @_logResponse(error, response,
-                        "Alert marked as Resolved in PagerDuty.", msg)
+                    @_logResponse error, response,
+                        "Alert marked as Resolved in PagerDuty.", msg
 
+
+        #----------
 
         # Details to send to PagerDuty. The properties are arbitrary
         # * via  - Just so we know.
@@ -240,16 +240,12 @@ module.exports = class Alerts extends require("events").EventEmitter
             description     : msg.description
             key             : "#{msg.code}/#{msg.key}"
 
+        #----------
 
         # Log the PagerDuty response, whether it was a success or an error.
         _logResponse: (error, response, logText, msg) ->
             if error
-                @alerts.logger.error(
-                    "Error sending alert to PagerDuty: #{error}",
-                    error: error)
+                @alerts.logger.error "Error sending alert to PagerDuty: #{error}", error:error
 
             else
-                @alerts.logger.debug(
-                    logText,
-                    code    : msg.code,
-                    key     : msg.key)
+                @alerts.logger.debug logText, code:msg.code, key:msg.key

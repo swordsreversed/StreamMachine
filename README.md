@@ -96,6 +96,8 @@ the streaming process. A similar alert will fire when the condition is ended.
 Where logging is intended to signal an event, alerts are about signalling 
 that a condition exists.
 
+Alerts can be sent via email or [Pagerduty](http://pagerduty.com).
+
 #### Sourceless Stream
 
 Emits 30 seconds after a monitored stream loses its only source connection.
