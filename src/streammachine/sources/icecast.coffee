@@ -84,15 +84,9 @@ module.exports = class IcecastSource extends require("./base")
                 
                 # -- compute frames per second and stream key -- #
                 
-                if @stream.opts.format == 'mp3'
-                    @framesPerSec = header.samplingRateHz / header.samplesPerFrame                    
-                    @streamKey = ['mp3',header.samplingRateHz,header.bitrateKBPS,(if header.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
-                
-                else if @stream.opts.format == 'aac'
-                    # each AAC frame is 1024 samples
-                    @framesPerSec = header.sample_freq * 1000 / 1024
-                    @streamKey = ['aac',header.sample_freq,header.profile,header.channels].join("-")
-                    
+                @framesPerSec   = header.frames_per_sec
+                @streamKey      = header.stream_key
+                                    
                 @log.debug "setting framesPerSec to ", frames:@framesPerSec
                 @log.debug "first header is ", header
                 
