@@ -273,17 +273,18 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         
         buffers = []
         
-        for i in [1..length]
-            b = @_rbuffer[ bl - 1 - (offset - i) ]
-            pumpLen     += b.data.length
-            duration    += b.duration
+        if length > 0        
+            for i in [1..length]
+                b = @_rbuffer[ bl - 1 - (offset - i) ]
+                pumpLen     += b.data.length
+                duration    += b.duration
             
-            if concat
-              buffers.push b.data
-            else
-              rewinder._insert b
+                if concat
+                  buffers.push b.data
+                else
+                  rewinder._insert b
             
-            meta = b.meta if !meta
+                meta = b.meta if !meta
             
         if concat
           cbuf = Buffer.concat(buffers)
