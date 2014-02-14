@@ -150,15 +150,13 @@ module.exports = class Stream extends require('events').EventEmitter
     
     #----------
     
-    setMetadata: (opts,cb) ->
-        console.log "Emitting metadata: ", StreamTitle:opts.title, StreamUrl:opts.url
+    setMetadata: (opts,cb) ->        
+        if opts.StreamTitle? || opts.title?
+            @_meta.StreamTitle = opts.StreamTitle||opts.title
+            
+        if opts.StreamUrl? || opts.url?
+            @_meta.StreamUrl = opts.StreamUrl||opts.url
         
-        if opts.title?
-            @_meta.StreamTitle = opts.title
-            
-        if opts.url?
-            @_meta.StreamUrl = opts.url
-            
         @emit "meta", @_meta
         
         cb? null, @_meta
