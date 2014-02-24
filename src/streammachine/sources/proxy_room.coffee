@@ -99,7 +99,7 @@ module.exports = class ProxyRoom extends require("./base")
                     if meta.StreamUrl
                         @StreamUrl = meta.StreamUrl
                 
-                    @emit "metadata", StreamTitle:@StreamTitle, StreamUrl:@StreamUrl
+                    @emit "metadata", StreamTitle:@StreamTitle||"", StreamUrl:@StreamUrl||""
 
             # incoming -> Parser
             @icecast.on "data", (chunk) => @parser.write chunk

@@ -71,5 +71,13 @@
         %input(type="text" name="fallback")
         %span.help-block This is an outside source that StreamMachine should connect to at startup if no sources have connected yet.
 
+    .control-group
+      %label.control-label Accept Source Metadata?
+      .controls
+        %input(type="checkbox" name="acceptSourceMeta") 
+        Should we rebroadcast metadata?
+        %br/
+        Only applies to fallback sources at the moment.
+
 .modal-footer
   %button.btn.btn-primary.save Save
