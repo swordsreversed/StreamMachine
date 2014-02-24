@@ -139,6 +139,14 @@ module.exports = class Stream extends require('events').EventEmitter
     
     #----------
     
+    getStreamKey: (cb) ->
+        if @_vitals
+            cb? @_vitals.streamKey
+        else
+            @once "vitals", => cb? @_vitals.streamKey
+    
+    #----------
+    
     status: ->
         _u.defaults 
             id:         @key
