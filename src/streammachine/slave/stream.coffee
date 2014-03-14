@@ -115,7 +115,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         
         if opts.preroll? && opts.preroll != ""
             # create a Preroller connection
-            @preroll = new Preroller @, @key, opts.preroll
+            key = if @opts.preroll_key == "" then @key else @opts.preroll_key
+            @preroll = new Preroller @, key, opts.preroll
         
         # -- Should we be logging minutes? -- #
         

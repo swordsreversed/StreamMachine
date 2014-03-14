@@ -66,6 +66,13 @@
           where stream-key is the audio format.
 
     .control-group
+      %label.control-label Preroll Key
+      .controls
+        %input(type="text" name="preroll_key")
+        %span.help-block The key to send to the Preroll. If left empty,
+          the key for the stream will be sent.
+
+    .control-group
       %label.control-label Fallback Source?
       .controls
         %input(type="text" name="fallback")
