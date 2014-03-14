@@ -241,7 +241,7 @@ class streammachine.Admin extends Backbone.Router
             modal.on "save", =>
                 console.log "save called on ", stream
                 # try saving the new stream to the server
-                stream.save {}, success:(model,res) ->
+                stream.save {}, success:(model,res) =>
                     console.log "got success", res
                     @collection.add model
                     $(modal.render().el).modal "hide"
