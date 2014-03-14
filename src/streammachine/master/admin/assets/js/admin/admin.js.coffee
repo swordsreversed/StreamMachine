@@ -70,6 +70,9 @@ class streammachine.Admin extends Backbone.Router
         # add navigation
         view.on "update", (key) =>
             @navigate "/streams/#{key}", trigger:true
+        view.on "destroy", () =>
+            @navigate "/", trigger:true
+
             
         
     #----------
@@ -212,7 +215,7 @@ class streammachine.Admin extends Backbone.Router
             # ask for confirmation
             if window.confirm "Really delete the stream #{@model.get("key")}?"
                 @model.destroy()
-                # navigate...
+                @trigger "destroy"
     
     #----------
     
