@@ -337,6 +337,11 @@ module.exports = class MP3 extends require("stream").Writable
         r.frameSize = ~~r.frameSizeRaw
         
         if (!r.frameSize)
-          throw new Error('bad size: ' + r.frameSize)
+            throw new Error('bad size: ' + r.frameSize)
+          
+        # -- compute StreamMachine-specific header bits -- #
+        
+        r.frames_per_sec = r.samplingRateHz / r.samplesPerFrame
+        r.stream_key = ['mp3',r.samplingRateHz,r.bitrateKBPS,(if r.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
           
         r

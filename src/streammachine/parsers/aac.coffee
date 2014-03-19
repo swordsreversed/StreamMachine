@@ -13,7 +13,7 @@ PROFILES = [
 ]
 
 SAMPLE_FREQUENCIES = [
-    96, 88.2, 64, 48, 44.1, 32, 24, 22.05, 16, 12, 11.025, 8, 7.35
+    96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350
 ]
 
 CHANNEL_COUNTS = [
@@ -219,4 +219,8 @@ module.exports = class AAC extends require("stream").Writable
             frame_length:       frame_length
             buffer_fullness:    buffer_full
             number_of_frames:   num_frames
-    
+            frames_per_sec:     SAMPLE_FREQUENCIES[sample_freq] / 1024
+            
+        header.stream_key = ['aac',header.sample_freq,header.profile,header.channels].join("-")
+            
+        header
