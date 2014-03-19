@@ -70,6 +70,9 @@ class streammachine.Admin extends Backbone.Router
         # add navigation
         view.on "update", (key) =>
             @navigate "/streams/#{key}", trigger:true
+        view.on "destroy", () =>
+            @navigate "/", trigger:true
+
             
         
     #----------
@@ -212,7 +215,7 @@ class streammachine.Admin extends Backbone.Router
             # ask for confirmation
             if window.confirm "Really delete the stream #{@model.get("key")}?"
                 @model.destroy()
-                # navigate...
+                @trigger "destroy"
     
     #----------
     
@@ -241,7 +244,7 @@ class streammachine.Admin extends Backbone.Router
             modal.on "save", =>
                 console.log "save called on ", stream
                 # try saving the new stream to the server
-                stream.save {}, success:(model,res) ->
+                stream.save {}, success:(model,res) =>
                     console.log "got success", res
                     @collection.add model
                     $(modal.render().el).modal "hide"
