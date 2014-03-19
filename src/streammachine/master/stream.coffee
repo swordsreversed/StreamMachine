@@ -29,6 +29,7 @@ module.exports = class Stream extends require('events').EventEmitter
         metaUrl:            ""
         format:             "mp3"
         preroll:            ""
+        preroll_key:        ""
         root_route:         false
     
     constructor: (@core,@key,@log,opts)->
