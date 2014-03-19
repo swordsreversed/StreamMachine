@@ -191,6 +191,8 @@ module.exports = class Alerts extends require("events").EventEmitter
         _sendAlert: (msg) ->
             details = @_details(msg)
 
+            @alerts.logger.debug "Sending alert to PagerDuty.", details:details
+            
             @pager.create
                 description : "[StreamMachine/#{msg.key}] #{msg.code} Alert"
                 details     : details
@@ -198,6 +200,8 @@ module.exports = class Alerts extends require("events").EventEmitter
                 callback: (error, response) =>
                     if response.incident_key
                         @incidentKeys[details.key] = response.incident_key
+                    else
+                        @alerts.logger.error "PagerDuty response did not include an incident key.", response:response
 
                     @_logResponse error, response,
                         "Alert sent to PagerDuty.", msg
@@ -210,18 +214,22 @@ module.exports = class Alerts extends require("events").EventEmitter
         # delete the incident key from the stored keys.
         _sendAllClear: (msg) ->
             details = @_details(msg)
+            
+            @alerts.logger.debug "Sending allClear to PagerDuty.", details:details
 
-            @pager.resolve
-                incidentKey : @incidentKeys[details.key],
-                description : "[StreamMachine/#{msg.key}] #{msg.code} Cleared"
-                details     : details
+            if @incidentKeys[details.key]
+                @pager.resolve
+                    incidentKey : @incidentKeys[details.key],
+                    description : "[StreamMachine/#{msg.key}] #{msg.code} Cleared"
+                    details     : details
 
-                callback: (error, response) =>
-                    delete @incidentKeys[details.key]
+                    callback: (error, response) =>
+                        delete @incidentKeys[details.key]
 
-                    @_logResponse error, response,
-                        "Alert marked as Resolved in PagerDuty.", msg
-
+                        @_logResponse error, response,
+                            "Alert marked as Resolved in PagerDuty.", msg
+            else
+                @alerts.logger.error "Could not send allClear to PagerDuty. No incident key in system.", keys:@incidentKeys
 
         #----------
 
