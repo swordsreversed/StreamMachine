@@ -111,7 +111,8 @@ module.exports = class Shoutcast
                     @client.offset = @source.offset()
             
                     @source.onFirstMeta (err,meta) =>
-                        @ice.queue meta
+                        if meta
+                            @ice.queue meta
         
                     @metaFunc = (data) =>
                         unless @_lastMeta && _u(data).isEqual(@_lastMeta)
