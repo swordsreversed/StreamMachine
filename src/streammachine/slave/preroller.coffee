@@ -80,7 +80,8 @@ module.exports = class Preroller
             
         req.on "error", (err) =>
             @stream.log.debug "got a request error for ", count, err
-            
+            cb?()
+
         # attach a close listener to the response, to be fired if it gets 
         # shut down and we should abort the request
 
