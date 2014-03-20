@@ -49,13 +49,9 @@ module.exports = class Preroller
         count = @_counter++
 
         # -- make a request to the preroll server -- #
-                
-        opts = 
-            host:       @uri.host
-            path:       [@uri.path,@key,@streamKey].join("/")
-                        
+
         @stream.log.debug "firing preroll request", count
-        req = http.get opts, (res) =>
+        req = http.get [@uri.href,@key,@streamKey].join("/"), (res) =>
             @stream.log.debug "got preroll response ", count
             if res.statusCode == 200
                 # stream preroll through to the output
