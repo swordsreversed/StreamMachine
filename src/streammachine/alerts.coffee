@@ -201,7 +201,7 @@ module.exports = class Alerts extends require("events").EventEmitter
                     if response.incident_key
                         @incidentKeys[details.key] = response.incident_key
                     else
-                        @alerts.logger.error "PagerDuty response did not include an incident key.", response:response
+                        @alerts.logger.error "PagerDuty response did not include an incident key.", response:response, error:error
 
                     @_logResponse error, response,
                         "Alert sent to PagerDuty.", msg
