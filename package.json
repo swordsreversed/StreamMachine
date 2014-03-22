@@ -39,6 +39,10 @@
         "pagerduty":            "~0.0.3",
         "temp":                 "~0.5.0"
     },
+    "devDependencies": {
+        "mocha":                "~1.18.2",
+        "chai":                 "~1.9.1"
+    },
     "bin": {
       "streammachine":        "./streammachine-cmd"
     }
