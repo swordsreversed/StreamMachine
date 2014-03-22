@@ -1,0 +1,13 @@
+{
+	"log": {
+	    "stdout":   false,
+        "w3c":      false,
+        "json":     false
+	},
+	"master": {
+		"password":   "zxcasdqwe"
+	},
+	"redis": {
+		"server":     "redis://localhost:6379"
+	}
+}

@@ -176,7 +176,7 @@ module.exports = class Master extends require("events").EventEmitter
     
     # configureStreams can be called on a new core, or it can be called to 
     # reconfigure an existing core.  we need to support either one.
-    configureStreams: (options) ->
+    configureStreams: (options,cb) ->
         @log.debug "In configure with ", options
 
         # -- Sources -- #
@@ -202,6 +202,8 @@ module.exports = class Master extends require("events").EventEmitter
                 @_startStream key, opts
                 
         @emit "streams", @streams
+        
+        cb? null, @streams
         
     #----------
     
