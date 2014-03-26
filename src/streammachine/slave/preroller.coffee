@@ -70,7 +70,16 @@ module.exports = class Preroller
                 socket.removeListener "end", conn_pre_abort
                 cb?()
                 return true
-                
+
+        # If the preroll request can't be made in 5 seconds or less,
+        # abort the preroll.
+        # TODO: Make the timeout wait configurable
+        setTimeout(=>
+            @stream.log.debug "preroll request timeout. Aborting."
+            req.abort()
+            cb?()
+        , 5*1000)
+
         req.on "socket", (sock) =>
             @stream.log.debug "socket granted for ", count
             
