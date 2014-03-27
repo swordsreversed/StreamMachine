@@ -48,14 +48,19 @@ module.exports = class Preroller
 
         count = @_counter++
 
+        # If the preroll request can't be made in 5 seconds or less,
+        # abort the preroll.
+        # TODO: Make the timeout wait configurable
+        prerollTimeout = setTimeout(=>
+            @stream.log.debug "preroll request timeout. Aborting."
+            req.abort()
+            cb?()
+        , 5*1000)
+
         # -- make a request to the preroll server -- #
-                
-        opts = 
-            host:       @uri.host
-            path:       [@uri.path,@key,@streamKey].join("/")
-                        
+
         @stream.log.debug "firing preroll request", count
-        req = http.get opts, (res) =>
+        req = http.get [@uri.href,@key,@streamKey].join("/"), (res) =>
             @stream.log.debug "got preroll response ", count
             if res.statusCode == 200
                 # stream preroll through to the output
@@ -67,24 +72,29 @@ module.exports = class Preroller
                     socket.removeListener "close", conn_pre_abort
                     socket.removeListener "end", conn_pre_abort
                     cb?()
+                    clearTimeout(prerollTimeout)
                     return true
                     
             else
                 socket.removeListener "close", conn_pre_abort
                 socket.removeListener "end", conn_pre_abort
                 cb?()
+                clearTimeout(prerollTimeout)
                 return true
-                
+
         req.on "socket", (sock) =>
             @stream.log.debug "socket granted for ", count
-            
+
         req.on "error", (err) =>
             @stream.log.debug "got a request error for ", count, err
-            
+            cb?()
+            clearTimeout(prerollTimeout)
+
         # attach a close listener to the response, to be fired if it gets 
         # shut down and we should abort the request
 
         conn_pre_abort = => 
+            clearTimeout(prerollTimeout)
             if socket.destroyed
                 @stream.log.debug "aborting preroll ", count
                 req.abort()
