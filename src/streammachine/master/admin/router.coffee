@@ -109,7 +109,10 @@ module.exports = class Router
         
         # Drop a source    
         @app.post "/api/streams/:stream/drop", (req,res) =>
-            # drop a stream source
+            source = _u(req.stream.sources).find((s) -> s.uuid == req.query.uuid)
+            if source then source.disconnect()
+            api.ok req, res
+
             
         # Update a stream's configuration
         @app.put "/api/streams/:stream", express.bodyParser(), (req,res) =>
