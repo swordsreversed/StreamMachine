@@ -14,7 +14,7 @@ Master  = require "../master"
 module.exports = class MasterMode extends require("./base")
     
     MODE: "Master"
-    constructor: (@opts) ->
+    constructor: (@opts,cb) ->
         @log = new Logger opts.log
         @log.debug("Master Instance initialized")
         
@@ -31,14 +31,17 @@ module.exports = class MasterMode extends require("./base")
         @server.use @master.admin.app
         
         if nconf.get("handoff")
-            @_acceptHandoff()
+            @_acceptHandoff cb
             
         else
-            @log.info "Listening."
             @handle = @server.listen @opts.master.port
             @master.listenForSlaves(@handle)
             @master.sourcein.listen()
-                            
+            
+            @log.info "Listening."
+            
+            cb? null, @
+                                        
     #----------
     
     _sendHandoff: (translator) ->
@@ -66,7 +69,7 @@ module.exports = class MasterMode extends require("./base")
         
     #----------
     
-    _acceptHandoff: ->
+    _acceptHandoff: (cb) ->
         @log.info "Initializing handoff receptor."
         
         if !process.send?
@@ -86,11 +89,16 @@ module.exports = class MasterMode extends require("./base")
 
             @master.loadHandoffData translator
             
+            aFunc = _u.after 2, =>
+                @log.info "Source and Master handles are up."
+                cb? null, @
+            
             translator.once "source_socket", (msg,handle) =>
                 @log.info "Got source socket."
                 @master.sourcein.listen handle
                 @log.info "Listening for sources!"
                 translator.send "source_socket_up"
+                aFunc()
                 
             translator.once "master_handle", (msg,handle) =>
                 @log.info "Got master socket."
@@ -98,5 +106,6 @@ module.exports = class MasterMode extends require("./base")
                 @master.listenForSlaves @handle
                 @log.info "Master up!"
                 translator.send "master_handle_up"
+                aFunc()
         
     #----------

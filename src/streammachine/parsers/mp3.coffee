@@ -136,7 +136,7 @@ module.exports = class MP3 extends require("stream").Writable
                                 
                 if tag == 'ID3'
                     # parse ID3v2 tag
-                    console.log "got an ID3"
+                    @emit "debug", "got an ID3"
                     @_parsingId3v2 = true
                     @id3v2 = versionMajor:v[3]
                     @_id3v2_1 = v
@@ -157,7 +157,7 @@ module.exports = class MP3 extends require("stream").Writable
                         h = @parseFrame(v)
                     catch e
                         # uh oh...  bad news
-                        console.log "invalid header... ", v, tag, @frameHeader
+                        @emit "debug", "invalid header... ", v, tag, @frameHeader
                         @frameHeader = null
                         return FIRST_BYTE
                 
@@ -167,7 +167,7 @@ module.exports = class MP3 extends require("stream").Writable
                     
                     if @frameSize == 1
                         # problem...  just start over
-                        console.log "Invalid frame header: ", h
+                        @emit "debug", "Invalid frame header: ", h
                         return FIRST_BYTE
                     else
                         return new strtok.BufferType(@frameSize - MPEG_HEADER_LENGTH);
@@ -186,7 +186,7 @@ module.exports = class MP3 extends require("stream").Writable
                     
                 catch e
                     # invalid header...  chuck everything and try again
-                    console.log "chucking invalid try at header: ", buf
+                    @emit "debug", "chucking invalid try at header: ", buf
                     @gotFF = false
                     @byteTwo = null
                     return FIRST_BYTE
@@ -202,11 +202,11 @@ module.exports = class MP3 extends require("stream").Writable
                                     
                 if @frameSize == 1
                     # problem...  just start over
-                    console.log "Invalid frame header: ", h
+                    @emit "debug", "Invalid frame header: ", h
                     
                     return FIRST_BYTE
                 else
-                    console.log "On-tracking with frame of: ", @frameSize - MPEG_HEADER_LENGTH
+                    @emit "debug", "On-tracking with frame of: ", @frameSize - MPEG_HEADER_LENGTH
                     return new strtok.BufferType(@frameSize - MPEG_HEADER_LENGTH);
                 
             if @gotFF
@@ -243,7 +243,7 @@ module.exports = class MP3 extends require("stream").Writable
     #----------
         
     _flush: (cb) ->
-        console.log "Parser: got flush."
+        @emit "debug", "Parser: got flush."
             
     #----------
     
