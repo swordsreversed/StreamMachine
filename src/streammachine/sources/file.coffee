@@ -10,6 +10,8 @@ module.exports = class FileSource extends require("./base")
     constructor: (@stream,@filePath) ->
         super()
 
+        @connected = false
+
         @emitDuration  = 0.5
 
         @_file = null
@@ -107,6 +109,7 @@ module.exports = class FileSource extends require("./base")
                 emitDuration:       @emitDuration
 
             @emit "connect"
+            @connected = true
 
         @parser.once "end", =>
             # done parsing...
@@ -127,3 +130,7 @@ module.exports = class FileSource extends require("./base")
     #----------
 
     disconnect: ->
+        if @connected
+            @connected = false
+            @emit "disconnect"
+            clearInterval @_int
