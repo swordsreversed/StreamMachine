@@ -294,14 +294,15 @@ module.exports = class Stream extends require('events').EventEmitter
             # make sure it isn't already the active source, though
             if ns == @sources[0]
                 # it is.  nothing to be done.
-                cb? "Source is already active"
+                cb? null, msg:"Source is already active", uuid:uuid
             else
                 # it isn't. we can try to promote it
-                @useSource ns, (status) =>
-                    if status
-                        cb? null, msg:"Promoted source to active.", uuid:uuid
+                @useSource ns, (err) =>
+                    if err
+                        cb? err
                     else
-                        cb? "Source promotion hit five second timeout."
+                        cb? null, msg:"Promoted source to active.", uuid:uuid
+
         else
             cb? "Unable to find a source with that UUID on #{@key}"
 

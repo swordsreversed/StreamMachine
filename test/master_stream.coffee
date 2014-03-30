@@ -19,16 +19,20 @@ STREAM1 =
 
 describe "Master Stream", ->
     logger = new Logger {}
-    stream = new MasterStream null, "test1", logger, STREAM1
+
 
     describe "Startup", ->
+        stream = new MasterStream null, "test1", logger, STREAM1
+
         it "creates a Rewind Buffer", (done) ->
             expect(stream.rewind).to.be.an.instanceof RewindBuffer
             done()
 
     #----------
 
-    describe "Source Connection", ->
+    describe "Multiple Source Connections", ->
+        stream = new MasterStream null, "test1", logger, STREAM1
+
         source  = new FileSource stream, mp3
         source2 = new FileSource stream, mp3
 
@@ -49,6 +53,18 @@ describe "Master Stream", ->
                 expect(stream.source).to.equal source
                 expect(stream.sources[1]).to.equal source2
                 done()
+
+        it "promotes an alternative source when requested", (done) ->
+            expect(stream.source).to.equal source
+
+            stream.promoteSource source2.uuid, (err) ->
+                throw err if err
+                expect(stream.source).to.equal source2
+
+                stream.promoteSource source.uuid, (err) ->
+                    throw err if err
+                    expect(stream.source).to.equal source
+                    done()
 
         it "switches to the second source if the first disconnects", (done) ->
             stream.once "source", (s) ->
