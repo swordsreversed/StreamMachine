@@ -128,6 +128,8 @@ module.exports = class IcecastSource extends require("./base")
     #----------
     
     disconnect: ->
-        @sock.end()
-        @connected = false
-        @emit "disconnect"
+        if @connected
+            @sock.destroy()
+            @sock.removeAllListeners()
+            @connected = false
+            @emit "disconnect"
