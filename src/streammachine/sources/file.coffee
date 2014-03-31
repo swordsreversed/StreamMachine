@@ -68,6 +68,7 @@ module.exports = class FileSource extends require("./base")
                 ts:         (new Date)
                 duration:   duration
                 streamKey:  @streamKey
+                uuid:       @uuid
 
             @_emit_pos = @_emit_pos + 1
 

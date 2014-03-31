@@ -30,7 +30,7 @@ describe "Master Stream", ->
 
     #----------
 
-    describe "Multiple Source Connections", ->
+    describe "Typical Source Connections", ->
         stream = new MasterStream null, "test1", logger, STREAM1
 
         source  = new FileSource stream, mp3
@@ -72,3 +72,53 @@ describe "Master Stream", ->
                 done()
 
             source.disconnect()
+
+    describe "Source Connection Scenarios", ->
+        mp3a = $file "mp3/tone250Hz-44100-128-m.mp3"
+        mp3b = $file "mp3/tone440Hz-44100-128-m.mp3"
+        mp3c = $file "mp3/tone1kHz-44100-128-m.mp3"
+
+        stream  = null
+        source1 = null
+        source2 = null
+        source3 = null
+
+        beforeEach (done) ->
+            stream = new MasterStream null, "test1", logger, STREAM1
+            source1 = new FileSource stream, mp3a
+            source2 = new FileSource stream, mp3b
+            source3 = new FileSource stream, mp3c
+            done()
+
+        afterEach (done) ->
+            stream.removeAllListeners()
+            source1.removeAllListeners()
+            source2.removeAllListeners()
+            source3.removeAllListeners()
+            done()
+
+        it "doesn't get confused by simultaneous sources", (done) ->
+            this.timeout = 6000
+
+            stream.once "source", ->
+                # listen for five data emits.  they should all come from
+                # the same source uuid
+                emits = []
+
+                af = _.after 5, ->
+                    uuid = stream.source.uuid
+
+                    expect(emits[0].uuid).to.equal uuid
+                    expect(emits[1].uuid).to.equal uuid
+                    expect(emits[2].uuid).to.equal uuid
+                    expect(emits[3].uuid).to.equal uuid
+                    expect(emits[4].uuid).to.equal uuid
+
+                    done()
+
+                stream.on "data", (data) ->
+                    emits.push data
+                    af()
+
+            stream.addSource source1
+            stream.addSource source2
