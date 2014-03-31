@@ -97,8 +97,8 @@ describe "Master Stream", ->
             source3.removeAllListeners()
             done()
 
-        it "doesn't get confused by simultaneous sources", (done) ->
-            this.timeout = 6000
+        it "doesn't get confused by simultaneous addSource calls", (done) ->
+            this.timeout 6000
 
             stream.once "source", ->
                 # listen for five data emits.  they should all come from
@@ -122,3 +122,33 @@ describe "Master Stream", ->
 
             stream.addSource source1
             stream.addSource source2
+
+        it "doesn't get confused by quick promoteSource calls", (done) ->
+            this.timeout 6000
+
+            stream.addSource source1, ->
+                stream.addSource source2, ->
+                    stream.addSource source3, ->
+                        # listen for five data emits.  they should all come from
+                        # the same source uuid
+                        emits = []
+
+                        af = _.after 5, ->
+                            uuid = stream.source.uuid
+
+                            expect(emits[0].uuid).to.equal uuid
+                            expect(emits[1].uuid).to.equal uuid
+                            expect(emits[2].uuid).to.equal uuid
+                            expect(emits[3].uuid).to.equal uuid
+                            expect(emits[4].uuid).to.equal uuid
+
+                            done()
+
+                        stream.on "data", (data) ->
+                            emits.push data
+                            af()
+
+                        stream.promoteSource source2.uuid
+                        stream.promoteSource source3.uuid
+
+

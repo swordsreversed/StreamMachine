@@ -211,22 +211,28 @@ module.exports = class Stream extends require('events').EventEmitter
                 @log.event "Inactive source disconnected."
                 @emit "disconnect", active:false, count:@sources.length, source:@source
 
+        # -- Add the source to our list -- #
+
+        @sources.push source
+
+        # -- Should this source be made active? -- #
+
         # check whether this source should be made active. It should be if
         # the active source is defined as a fallback
 
-        if !@sources[0] || @sources[0]?.isFallback
-            # go to the front
+        if @sources[0] == source || @sources[0]?.isFallback
+            # our new source should be promoted
             @log.event "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
             @useSource source, cb
+
         else
             # add the source to the end of our list
             @log.event "Source connected.", source:(source.TYPE?() ? source.TYPE)
-            @sources.push source
 
             # and emit our source event
             @emit "add_source", source
 
-            cb?()
+            cb? null
 
     #----------
 
@@ -252,6 +258,16 @@ module.exports = class Stream extends require('events').EventEmitter
 
         # Look for a header before switching
         newsource.vitals (vitals) =>
+            if @source && old_source != @source
+                # source changed while we were waiting for vitals. we'll
+                # abort our change attempt
+                @log.event "Source changed while waiting for vitals.",
+                    new_source:     (newsource.TYPE?() ? newsource.TYPE)
+                    old_source:     (old_source?.TYPE?() ? old_source?.TYPE)
+                    current_source: (@source.TYPE?() ? @source.TYPE)
+
+                return cb? new Error "Source changed while waiting for vitals."
+
             if old_source
                 # unhook from the old source's events
                 @_disconnectSource(old_source)
