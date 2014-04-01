@@ -91,7 +91,6 @@ module.exports = class Stream extends require('events').EventEmitter
             # what type of a fallback is this?
             uri = URL.parse @opts.fallback
 
-            console.log "fallback uri is ", uri
             newsource = switch uri.protocol
                 when "file:"
                     new FileSource @, uri.path
@@ -145,14 +144,11 @@ module.exports = class Stream extends require('events').EventEmitter
 
     vitals: (cb) ->
         _vFunc = (v) =>
-            console.log "Emit vital info", v
             cb? null, v
 
         if @_vitals
-            console.log "Sending vitals now."
             _vFunc @_vitals
         else
-            console.log "Waiting for headers to send vitals"
             @once "vitals", _vFunc
 
     #----------
