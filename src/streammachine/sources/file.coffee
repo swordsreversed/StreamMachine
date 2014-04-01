@@ -109,8 +109,8 @@ module.exports = class FileSource extends require("./base")
                 framesPerSec:       @framesPerSec
                 emitDuration:       @emitDuration
 
-            @emit "connect"
             @connected = true
+            @emit "connect"
 
         @parser.once "end", =>
             # done parsing...

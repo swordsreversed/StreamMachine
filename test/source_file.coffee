@@ -30,3 +30,16 @@ describe "File Source", ->
             expect(data.duration).to.be.a.number
             expect(data.data).to.be.an.instanceof Buffer
             done()
+
+    it "should not emit data after disconnect", (done) ->
+        did_emit = false
+
+        setTimeout ->
+            expect(did_emit).to.equal false
+            done()
+        , 1000
+
+        source.disconnect()
+
+        stream.once "data", (data) ->
+            did_emit = true
