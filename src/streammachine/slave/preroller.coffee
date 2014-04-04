@@ -3,44 +3,33 @@ http = require "http"
 url = require "url"
 
 module.exports = class Preroller
-    DefaultOptions:
-        server:     null
-        path:       "/p"
-        
-    constructor: (@stream,@key,uri) ->
-        #@options = _u.defaults opts||{}, @DefaultOptions
-        
+    constructor: (@stream,@key,uri,cb) ->
         @_counter = 1
-        
+
         # make sure this is a valid URI
         @uri = url.parse uri
-        
+
         if @uri.protocol != "http:"
-            @stream.log.error("Preroller only supports HTTP connections.")
+            cb? "Preroller only supports HTTP connections."
             return false
-        
+
         # -- need to look at the stream to get characteristics -- #
-        
-        @stream.log.debug "waiting to call getStreamKey"
-        
-        _skFunc = (source) =>
-            source.getStreamKey (@streamKey) =>
-                @stream.log.debug "Preroller: Stream key is #{@streamKey}"
-            
-        if @stream.source
-            _skFunc(@stream.source)
-            
-        else
-            @stream.once "source", (source) => _skFunc(source)
-        
+
+        @stream.log.debug "Preroller calling getStreamKey"
+
+        @stream.getStreamKey (@streamKey) =>
+            @stream.log.debug "Preroller: Stream key is #{@streamKey}"
+
+        cb? null, @
+
     #----------
-    
+
     pump: (socket,writer,cb) ->
         # short-circuit if we haven't gotten a stream key yet
         if !@streamKey
             cb?()
             return true
-            
+
         # short-circuit if the socket has already disconnected
         if socket.destroyed
             cb?()
@@ -74,7 +63,7 @@ module.exports = class Preroller
                     cb?()
                     clearTimeout(prerollTimeout)
                     return true
-                    
+
             else
                 socket.removeListener "close", conn_pre_abort
                 socket.removeListener "end", conn_pre_abort
@@ -90,26 +79,26 @@ module.exports = class Preroller
             cb?()
             clearTimeout(prerollTimeout)
 
-        # attach a close listener to the response, to be fired if it gets 
+        # attach a close listener to the response, to be fired if it gets
         # shut down and we should abort the request
 
-        conn_pre_abort = => 
+        conn_pre_abort = =>
             clearTimeout(prerollTimeout)
             if socket.destroyed
                 @stream.log.debug "aborting preroll ", count
                 req.abort()
-        
+
         socket.once "close", conn_pre_abort
         socket.once "end", conn_pre_abort
-        
-    
+
+
     #----------
-    
+
     connect: ->
-        
-        
+
+
     #----------
-    
+
     disconnect: ->
-        
+
     #----------
