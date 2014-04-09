@@ -99,14 +99,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     getRewinder: (id,opts,cb) ->
-        # get a rewinder object (opts.offset will tell it where to connect)
-        rewind = new RewindBuffer.Rewinder @, id, opts
+        # create a rewinder object
+        rewind = new RewindBuffer.Rewinder @, id, opts, cb
 
         # add it to our list of listeners
         @_raddListener rewind unless opts.pumpOnly
-
-        # and return it
-        cb? null, rewind
 
     #----------
 
@@ -242,6 +239,23 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    # convert timestamp to an offset number, if the offset exists in our
+    # buffer.  If not, return an error
+    findTimestamp: (ts,cb) ->
+        req_ts      = Number(ts)
+        first_ts    = Number( @_rbuffer[0].ts )
+        last_ts     = Number( @_rbuffer[ @_rbuffer.length - 1].ts )
+
+        if first_ts <= req_ts <= last_ts
+            # it's in there...
+
+
+
+        else
+            cb new Error "Timestamp not found in buffer."
+
+    #----------
+
     pumpSeconds: (rewinder,seconds,concat,cb) ->
         # pump the most recent X seconds
         frames = @checkOffsetSecs seconds
@@ -342,63 +356,75 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #     requested and then send EOF
 
     class @Rewinder extends require("stream").Readable
-        constructor: (@rewind,@conn_id,opts={}) ->
+        constructor: (@rewind,@conn_id,opts={},cb) ->
             super highWaterMark:256*1024
 
             @_pumpOnly = false
 
             @_offset = -1
 
-            @_offset =
-                if opts.offsetSecs
-                    @rewind.checkOffsetSecs opts.offsetSecs
-                else if opts.offset
-                    @rewind.checkOffset opts.offset
-                else
-                    0
+            oFunc = (@_offset) =>
+                @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
 
-            @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
+                @_queue = []
+                @_queuedBytes = 0
 
-            @_queue = []
-            @_queuedBytes = 0
+                @_reading = false
 
-            @_reading = false
+                @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
 
-            @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
+                # -- What are we sending? -- #
 
-            # -- What are we sending? -- #
-
-            if opts?.pumpOnly
-                # we're just giving one pump of data, then EOF
-                @_pumpOnly = true
-                pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
-                @rewind.pumpFrom @, pumpFrames, @_offset, false, (err,info) =>
-                    @rewind.log.silly "Pump complete.", info:info
-                    if err
-                        @emit "error", err
-                        return false
-
-                    # we don't want to emit this until there's a listener ready
-                    process.nextTick =>
-                        @emit "pump", info
-
-            else if opts?.pump
-                if @_offset == 0
-                    # pump some data before we start regular listening
-                    @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
-                    @rewind.pumpSeconds @, @pumpSecs, true
-                else
-                    # we're offset, so we'll pump from the offset point forward instead of
-                    # back from live
-                    @rewind.burstFrom @, @_offset, @pumpSecs, (err,new_offset) =>
+                if opts?.pumpOnly
+                    # we're just giving one pump of data, then EOF
+                    @_pumpOnly = true
+                    pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
+                    @rewind.pumpFrom @, pumpFrames, @_offset, false, (err,info) =>
+                        @rewind.log.silly "Pump complete.", info:info
                         if err
-                            @rewind.log.error "burstFrom gave error of #{err}", error:err
+                            @emit "error", err
                             return false
 
-                        @_offset = new_offset
+                        # we don't want to emit this until there's a listener ready
+                        process.nextTick =>
+                            @emit "pump", info
 
-            # that's it... now RewindBuffer will call our @data directly
-            #@emit "readable"
+                else if opts?.pump
+                    if @_offset == 0
+                        # pump some data before we start regular listening
+                        @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                        @rewind.pumpSeconds @, @pumpSecs, true
+                    else
+                        # we're offset, so we'll pump from the offset point forward instead of
+                        # back from live
+                        @rewind.burstFrom @, @_offset, @pumpSecs, (err,new_offset) =>
+                            if err
+                                @rewind.log.error "burstFrom gave error of #{err}", error:err
+                                return false
+
+                            @_offset = new_offset
+
+                # that's it... now RewindBuffer will call our @data directly
+                cb null, @
+
+
+            if opts.timestamp
+                @rewind.findTimestamp opts.timestamp, (err,offset) =>
+                    return cb err if err
+                    oFunc offset
+
+            else
+                offset =
+                    if opts.offsetSecs
+                        @rewind.checkOffsetSecs opts.offsetSecs
+                    else if opts.offset
+                        @rewind.checkOffset opts.offset
+                    else
+                        0
+
+                oFunc offset
+
+
 
         #----------
 
