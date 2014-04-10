@@ -130,10 +130,11 @@ module.exports = class Stream extends require('../rewind_buffer')
 
             new Preroller @, key, opts.preroll, (err,pre) =>
                 if err
-                    @logger.error "Failed to create preroller: #{err}"
+                    @log.error "Failed to create preroller: #{err}"
                     return false
 
                 @preroll = pre
+                @log.debug "Preroller is created."
 
         # -- Should we be logging minutes? -- #
 
@@ -252,3 +253,5 @@ module.exports = class Stream extends require('../rewind_buffer')
                 time:       endTime
 
             true
+        else
+            console.error "disconnectListener called for #{id}, but no listener found."

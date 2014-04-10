@@ -44,8 +44,7 @@ describe "Preroller", ->
 
 
 
-        it "calls back immediately if it doesn't have a streamKey", (done) ->
-
+        it "calls back immediately if it doesn't have a streamKey"
 
         it "adds the stream key to requests"
 
