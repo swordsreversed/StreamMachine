@@ -4,7 +4,15 @@ module.exports = class LiveStreaming
     @secs_per_ts = 10
 
     constructor: (@stream,@opts) ->
+        @client = output:"live_streaming"
+
+        @client.ip          = @opts.req.connection.remoteAddress
+        @client.path        = @opts.req.url
+        @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+
         @chunks_per_ts = LiveStreaming.secs_per_ts / @stream._rsecsPerChunk
+
+        @socket = @opts.req.connection
 
         # we'll have received a sequence number in req.param("seq"). If we
         # multiply it by LiveStreaming.secs_per_ts and then by 1000, we'll
@@ -38,15 +46,17 @@ module.exports = class LiveStreaming
                     "Content-Length":       info.length
 
                 # write out our headers
-                @res.writeHead 200, headers
+                @opts.res.writeHead 200, headers
 
                 # send our pump buffer to the client
-                playHead.pipe(@res)
+                playHead.pipe(@opts.res)
 
-            @res.on "close",    => playHead.disconnect()
-            @res.on "end",      => playHead.disconnect()
+                @opts.res.on "finish", =>
+                    console.log "live ts finished. disconnect."
+                    playHead.disconnect()
 
-        @opts.res.status(200).end "OK"
+            @opts.res.on "close",    => playHead.disconnect()
+            @opts.res.on "end",      => playHead.disconnect()
 
     #----------
 
@@ -75,10 +85,10 @@ module.exports = class LiveStreaming
             # what's our newest segment?
             #console.log "last ts is ", @stream._rbuffer[ @stream._rbuffer.length - 1 ].ts
             last_chunk = Math.floor( Number(@stream._rbuffer[ @stream._rbuffer.length - 1 ].ts) / 1000 )
-            last_seq = Math.floor( last_chunk / LiveStreaming.secs_per_ts )
+            last_seq = Math.floor( last_chunk / LiveStreaming.secs_per_ts ) - 1
 
             @opts.res.writeHead 200,
-                "Content-type": "application/x-mpegURL"
+                "Content-type": "application/vnd.apple.mpegurl"
 
             @opts.res.write """
             #EXTM3U
@@ -91,7 +101,7 @@ module.exports = class LiveStreaming
             for seq in [first_seq..last_seq]
                 @opts.res.write """
                 #EXTINF:#{LiveStreaming.secs_per_ts}
-                http://#{@stream.host}/#{@stream.key}/ts/#{seq}
+                http://#{@stream.opts.host}/#{@stream.key}/ts/#{seq}
 
                 """
 

@@ -102,8 +102,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # create a rewinder object
         rewind = new RewindBuffer.Rewinder @, id, opts, cb
 
-        # add it to our list of listeners
-        @_raddListener rewind unless opts.pumpOnly
+        unless opts.pumpOnly
+            console.log "adding listener"
+            # add it to our list of listeners
+            @_raddListener rewind
 
     #----------
 
@@ -135,7 +137,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                             @buffer("data",@vars.data_length)
                                 .tap ->
                                     meta = JSON.parse @vars.meta.toString()
-                                    @push ts:meta.ts, meta:meta.meta, data:@vars.data
+                                    @push ts:new Date(meta.ts), meta:meta.meta, duration:meta.duration, data:@vars.data
                                     @vars = {}
 
         stream.pipe(parser)
@@ -249,7 +251,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         if first_ts <= req_ts <= last_ts
             # it's in there...
 
-
+            # how many seconds ago?
+            secs_ago = Math.ceil( (last_ts - req_ts) / 1000 )
+            offset = @secsToOffset secs_ago
+            cb null, offset
 
         else
             cb new Error "Timestamp not found in buffer."
@@ -378,8 +383,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 if opts?.pumpOnly
                     # we're just giving one pump of data, then EOF
                     @_pumpOnly = true
-                    pumpFrames = @rewind.checkOffsetSecs opts.pump || 0
-                    @rewind.pumpFrom @, pumpFrames, @_offset, false, (err,info) =>
+                    @rewind.pumpFrom @, @_offset, @rewind.secsToOffset(@pumpSecs), false, (err,info) =>
                         @rewind.log.silly "Pump complete.", info:info
                         if err
                             @emit "error", err
