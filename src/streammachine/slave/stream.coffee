@@ -94,6 +94,15 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     #----------
 
+    getStreamKey: (cb) ->
+        if @source
+            @source.getStreamKey cb
+        else
+            @once "source", =>
+                @source.getStreamKey cb
+
+    #----------
+
     _once_source_loaded: (cb) ->
         if @_sourceInitializing
             # wait for a source_init event
@@ -111,12 +120,17 @@ module.exports = class Stream extends require('../rewind_buffer')
 
         @log.debug "Preroll settings are ", preroll:opts.preroll
 
-        @preroll.disconnect() if @preroll
-
         if opts.preroll? && opts.preroll != ""
             # create a Preroller connection
-            key = if @opts.preroll_key == "" then @key else @opts.preroll_key
-            @preroll = new Preroller @, key, opts.preroll
+            key = if (opts.preroll_key && opts.preroll_key != "") then opts.preroll_key else @key
+
+            new Preroller @, key, opts.preroll, (err,pre) =>
+                if err
+                    @log.error "Failed to create preroller: #{err}"
+                    return false
+
+                @preroll = pre
+                @log.debug "Preroller is created."
 
         # -- Should we be logging minutes? -- #
 
@@ -235,3 +249,5 @@ module.exports = class Stream extends require('../rewind_buffer')
                 time:       endTime
 
             true
+        else
+            console.error "disconnectListener called for #{id}, but no listener found."
