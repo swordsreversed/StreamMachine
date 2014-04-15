@@ -41,5 +41,9 @@ module.exports = class Pumper
                 # send our pump buffer to the client
                 playHead.pipe(@res)
 
+                @opts.res.on "finish", =>
+                    console.log "live ts finished. disconnect."
+                    playHead.disconnect()
+
             @res.on "close",    => playHead.disconnect()
             @res.on "end",      => playHead.disconnect()
