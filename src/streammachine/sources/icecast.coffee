@@ -40,66 +40,55 @@ module.exports = class IcecastSource extends require("./base")
             @emit "frame", frame
 
             # -- queue up frames until we get to @emitDuration -- #
-            if @last_header
-                # -- recombine frame and header -- #
+            @_chunk_queue.push frame
 
-                fbuf = new Buffer( @last_header.length + frame.length )
-                @last_header.copy(fbuf,0)
-                frame.copy(fbuf,@last_header.length)
-                @_chunk_queue.push fbuf
+            if !@_chunk_queue_ts
+                @_chunk_queue_ts = (new Date)
 
-                if !@_chunk_queue_ts
-                    @_chunk_queue_ts = (new Date)
+            if @framesPerSec && ( @_chunk_queue.length / @framesPerSec > @emitDuration )
+                len = 0
+                len += b.length for b in @_chunk_queue
 
-                if @framesPerSec && ( @_chunk_queue.length / @framesPerSec > @emitDuration )
-                    len = 0
-                    len += b.length for b in @_chunk_queue
+                # make this into one buffer
+                buf = new Buffer(len)
+                pos = 0
 
-                    # make this into one buffer
-                    buf = new Buffer(len)
-                    pos = 0
+                for fb in @_chunk_queue
+                    fb.copy(buf,pos)
+                    pos += fb.length
 
-                    for fb in @_chunk_queue
-                        fb.copy(buf,pos)
-                        pos += fb.length
+                buf_ts = @_chunk_queue_ts
 
-                    buf_ts = @_chunk_queue_ts
+                duration = (@_chunk_queue.length / @framesPerSec)
 
-                    duration = (@_chunk_queue.length / @framesPerSec)
+                # reset chunk array
+                @_chunk_queue.length = 0
+                @_chunk_queue_ts = (new Date)
 
-                    # reset chunk array
-                    @_chunk_queue.length = 0
-                    @_chunk_queue_ts = (new Date)
-
-                    # emit new buffer
-                    @emit "data",
-                        data:       buf
-                        ts:         buf_ts
-                        duration:   duration
-                        streamKey:  @streamKey
-                        uuid:       @uuid
+                # emit new buffer
+                @emit "data",
+                    data:       buf
+                    ts:         buf_ts
+                    duration:   duration
+                    streamKey:  @streamKey
+                    uuid:       @uuid
 
         # we need to grab one frame to compute framesPerSec
-        @parser.on "header", (data,header) =>
-            if !@framesPerSec || !@streamKey
+        @parser.once "header", (header) =>
+            # -- compute frames per second and stream key -- #
 
-                # -- compute frames per second and stream key -- #
+            @framesPerSec   = header.frames_per_sec
+            @streamKey      = header.stream_key
 
-                @framesPerSec   = header.frames_per_sec
-                @streamKey      = header.stream_key
+            @log.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log.debug "first header is ", header
 
-                @log.debug "setting framesPerSec to ", frames:@framesPerSec
-                @log.debug "first header is ", header
+            # -- send out our stream vitals -- #
 
-                # -- send out our stream vitals -- #
-
-                @_setVitals
-                    streamKey:          @streamKey
-                    framesPerSec:       @framesPerSec
-                    emitDuration:       @emitDuration
-
-            @last_header = data
-            @emit "header", data, header
+            @_setVitals
+                streamKey:          @streamKey
+                framesPerSec:       @framesPerSec
+                emitDuration:       @emitDuration
 
         @sock.on "close", =>
             @connected = false

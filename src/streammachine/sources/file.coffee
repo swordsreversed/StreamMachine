@@ -75,25 +75,14 @@ module.exports = class FileSource extends require("./base")
         , @emitDuration * 1000
 
         @parser.on "frame", (frame) =>
-            if @last_header
-                # -- recombine frame and header -- #
+            @_current_chunk.push frame
 
-                fbuf = new Buffer( @last_header.length + frame.length )
-                @last_header.copy(fbuf,0)
-                frame.copy(fbuf,@last_header.length)
-
-                @_current_chunk.push fbuf
-
-                if @framesPerSec && ( @_current_chunk.length / @framesPerSec > @emitDuration )
-                    @_current_chunk = []
-                    @_chunks.push @_current_chunk
-
-        @parser.on "header", (data,header) =>
-            @last_header = data
-            #@emit "header", data, header
+            if @framesPerSec && ( @_current_chunk.length / @framesPerSec > @emitDuration )
+                @_current_chunk = []
+                @_chunks.push @_current_chunk
 
         # first header: set our stream key and speed
-        @parser.once "header", (data,header) =>
+        @parser.once "header", (header) =>
             # -- compute frames per second and stream key -- #
 
             @framesPerSec   = header.frames_per_sec
