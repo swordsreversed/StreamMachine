@@ -1,9 +1,15 @@
 _u = require "underscore"
 
 module.exports = class IcecastSource extends require("./base")
-    TYPE: -> "Icecast (#{[@sock.remoteAddress,@sock.remotePort].join(":")})"
+    TYPE: -> "Icecast (#{[@opts.sock.remoteAddress,@opts.sock.remotePort].join(":")})"
 
-    constructor: (@stream,@sock,@headers,@uuid) ->
+    # opts should include:
+    # format:   Format for Parser (aac or mp3)
+    # sock:     Socket for incoming data
+    # headers:  Headers from the source request
+    # uuid:     Source UUID, if this is a handoff source (optional)
+    # logger:   Logger (optional)
+    constructor: (@opts) ->
         super()
 
         @emitDuration  = 0.5
@@ -14,7 +20,7 @@ module.exports = class IcecastSource extends require("./base")
         # if it stops sending data
         @_pingData = _u.debounce =>
             # data has stopped flowing. kill the connection.
-            @log.info "Source data stopped flowing.  Killing connection."
+            @log?.info "Source data stopped flowing.  Killing connection."
             @disconnect()
 
         , 30*1000
@@ -22,17 +28,13 @@ module.exports = class IcecastSource extends require("./base")
         # data is going to start streaming in as data on req. We need to pipe
         # it into a parser to turn it into frames, headers, etc
 
-        @log.debug "New Icecast source."
-
-        @parser = @_new_parser()
+        @log?.debug "New Icecast source."
 
         @_chunk_queue = []
         @_chunk_queue_ts = null
 
-        @last_header = null
-
         # incoming -> Parser
-        @sock.pipe @parser
+        @opts.sock.pipe @parser
 
         # outgoing -> Stream
         @parser.on "frame", (frame) =>
@@ -80,8 +82,8 @@ module.exports = class IcecastSource extends require("./base")
             @framesPerSec   = header.frames_per_sec
             @streamKey      = header.stream_key
 
-            @log.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log.debug "first header is ", header
+            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log?.debug "first header is ", header
 
             # -- send out our stream vitals -- #
 
@@ -90,18 +92,18 @@ module.exports = class IcecastSource extends require("./base")
                 framesPerSec:       @framesPerSec
                 emitDuration:       @emitDuration
 
-        @sock.on "close", =>
+        @opts.sock.on "close", =>
             @connected = false
-            @log.debug "Icecast source got close event"
+            @log?.debug "Icecast source got close event"
             @emit "disconnect"
-            @sock.end()
+            @opts.sock.end()
 
-        @sock.on "end", =>
+        @opts.sock.on "end", =>
             @connected = false
-            @log.debug "Icecast source got end event"
+            @log?.debug "Icecast source got end event"
             # source has gone away
             @emit "disconnect"
-            @sock.end()
+            @opts.sock.end()
 
         # return with success
         @connected = true
@@ -111,7 +113,7 @@ module.exports = class IcecastSource extends require("./base")
     info: ->
         source:     @TYPE?() ? @TYPE
         connected:  @connected
-        url:        [@sock.remoteAddress,@sock.remotePort].join(":")
+        url:        [@opts.sock.remoteAddress,@opts.sock.remotePort].join(":")
         streamKey:  @streamKey
         uuid:       @uuid
 
@@ -119,7 +121,7 @@ module.exports = class IcecastSource extends require("./base")
 
     disconnect: ->
         if @connected
-            @sock.destroy()
-            @sock.removeAllListeners()
+            @opts.sock.destroy()
+            @opts.sock.removeAllListeners()
             @connected = false
             @emit "disconnect"

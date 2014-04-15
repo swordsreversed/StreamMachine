@@ -14,10 +14,16 @@ module.exports = class ProxyRoom extends require("./base")
     #----------
 
     TYPE: -> "Proxy (#{@url})"
-    constructor: (@stream,@url,_isFall) ->
+
+    # opts should include:
+    # format:   Format for Parser (aac or mp3)
+    # url:      URL for original stream
+    # fallback: Should we set the isFallback flag? (default false)
+    # logger:   Logger (optional)
+    constructor: (@opts) ->
         super()
 
-        @isFallback     = _isFall
+        @isFallback     = @opts.fallback || false
 
         @connected      = false
         @framesPerSec   = null
@@ -28,8 +34,6 @@ module.exports = class ProxyRoom extends require("./base")
 
         @_chunk_queue = []
         @_chunk_queue_ts = null
-
-        @last_header = null
 
         # connection drop handling
         # (FIXME: bouncing not yet implemented)
@@ -69,7 +73,7 @@ module.exports = class ProxyRoom extends require("./base")
     #----------
 
     connect: ->
-        @log.debug "connecting to #{@url}"
+        @log?.debug "connecting to #{@url}"
 
         # attach mp3 parser for rewind buffer
         @parser = @_new_parser()
@@ -85,7 +89,7 @@ module.exports = class ProxyRoom extends require("./base")
                 unless @_in_disconnect
                     setTimeout ( => @connect() ), 5000
 
-                    @log.debug "Lost connection to #{@url}. Retrying in 5 seconds"
+                    @log?.debug "Lost connection to #{@url}. Retrying in 5 seconds"
                     @connected = false
 
             @icecast.on "metadata", (data) =>
@@ -152,8 +156,8 @@ module.exports = class ProxyRoom extends require("./base")
             @framesPerSec   = header.frames_per_sec
             @streamKey      = header.stream_key
 
-            @log.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log.debug "first header is ", header
+            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log?.debug "first header is ", header
 
             # -- send out our stream vitals -- #
 

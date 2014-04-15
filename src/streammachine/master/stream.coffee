@@ -93,10 +93,17 @@ module.exports = class Stream extends require('events').EventEmitter
 
             newsource = switch uri.protocol
                 when "file:"
-                    new FileSource @, uri.path
+                    new FileSource
+                        format:     @opts.format
+                        filePath:   uri.path
+                        logger:     @log
 
                 when "http:"
-                    new ProxySource @, @opts.fallback, true
+                    new ProxySource
+                        format:     @opts.format
+                        url:        @opts.fallback
+                        fallback:   true
+                        logger:     @log
 
                 else
                     null

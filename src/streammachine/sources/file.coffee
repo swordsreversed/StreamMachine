@@ -5,9 +5,9 @@ _ = require "underscore"
 # loop at the correct audio speed.
 
 module.exports = class FileSource extends require("./base")
-    TYPE: -> "File (#{@filePath})"
+    TYPE: -> "File (#{@opts.filePath})"
 
-    constructor: (@stream,@filePath) ->
+    constructor: (@opts) ->
         super()
 
         @connected = false
@@ -16,14 +16,10 @@ module.exports = class FileSource extends require("./base")
 
         @_file = null
 
-        # open a parser based on our stream's format
-        @parser = @_new_parser()
-
         @_chunks = []
         @_current_chunk = []
         @_chunks.push @_current_chunk
 
-        @_last_header = null
         @_emit_pos = 0
 
         @_int = setInterval =>
@@ -88,8 +84,8 @@ module.exports = class FileSource extends require("./base")
             @framesPerSec   = header.frames_per_sec
             @streamKey      = header.stream_key
 
-            @log.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log.debug "first header is ", header
+            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log?.debug "first header is ", header
 
             # -- send out our stream vitals -- #
 
@@ -107,7 +103,7 @@ module.exports = class FileSource extends require("./base")
             @_current_chunk = null
 
         # pipe our file into the parser
-        @_file = fs.createReadStream @filePath
+        @_file = fs.createReadStream @opts.filePath
         @_file.pipe(@parser)
 
     #----------
