@@ -12,8 +12,6 @@ module.exports = class FileSource extends require("./base")
 
         @connected = false
 
-        @emitDuration  = 0.5
-
         @_file = null
 
         @_chunks = []
@@ -70,30 +68,10 @@ module.exports = class FileSource extends require("./base")
 
         , @emitDuration * 1000
 
-        @parser.on "frame", (frame) =>
-            @_current_chunk.push frame
+        @on "_chunk", (chunk) =>
+            @_chunks.push chunk
 
-            if @framesPerSec && ( @_current_chunk.length / @framesPerSec > @emitDuration )
-                @_current_chunk = []
-                @_chunks.push @_current_chunk
-
-        # first header: set our stream key and speed
         @parser.once "header", (header) =>
-            # -- compute frames per second and stream key -- #
-
-            @framesPerSec   = header.frames_per_sec
-            @streamKey      = header.stream_key
-
-            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log?.debug "first header is ", header
-
-            # -- send out our stream vitals -- #
-
-            @_setVitals
-                streamKey:          @streamKey
-                framesPerSec:       @framesPerSec
-                emitDuration:       @emitDuration
-
             @connected = true
             @emit "connect"
 

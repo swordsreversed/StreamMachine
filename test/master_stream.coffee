@@ -33,8 +33,8 @@ describe "Master Stream", ->
     describe "Typical Source Connections", ->
         stream = new MasterStream null, "test1", logger, STREAM1
 
-        source  = new FileSource stream, mp3
-        source2 = new FileSource stream, mp3
+        source  = new FileSource format:"mp3", filePath:mp3
+        source2 = new FileSource format:"mp3", filePath:mp3
 
         it "activates the first source to connect", (done) ->
             expect(stream.source).to.be.null
@@ -85,9 +85,9 @@ describe "Master Stream", ->
 
         beforeEach (done) ->
             stream = new MasterStream null, "test1", logger, STREAM1
-            source1 = new FileSource stream, mp3a
-            source2 = new FileSource stream, mp3b
-            source3 = new FileSource stream, mp3c
+            source1 = new FileSource format:"mp3", filePath:mp3a
+            source2 = new FileSource format:"mp3", filePath:mp3b
+            source3 = new FileSource format:"mp3", filePath:mp3c
             done()
 
         afterEach (done) ->
