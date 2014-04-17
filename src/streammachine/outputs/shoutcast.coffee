@@ -109,6 +109,14 @@ module.exports = class Shoutcast
                 startTime:  @opts.startTime,
                 minuteTime: @opts.minuteTime
                 (err,@source) =>
+                    if err
+                        if @opts.res?
+                            @opts.res.status(500).end err
+                        else
+                            @socket?.end()
+
+                        return false
+
                     # set our offset (in chunks) now that it's been checked for availability
                     @client.offset = @source.offset()
 

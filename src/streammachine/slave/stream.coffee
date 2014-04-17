@@ -13,8 +13,8 @@ module.exports = class Stream extends require('../rewind_buffer')
     constructor: (@core,@key,@log,@opts) ->
         @STATUS = "Initializing"
 
-        # initialize RewindBuffer
-        super()
+        # initialize RewindBuffer, with support for HTTP Live Streaming
+        super liveStreaming:true
 
         @StreamTitle  = @opts.metaTitle
         @StreamUrl    = ""
@@ -207,7 +207,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         # valid.
         @_once_source_loaded =>
             # get a rewinder (handles the actual broadcast)
-            @getRewinder lmeta.id, opts, (err,rewind) =>
+            @getRewinder lmeta.id, opts, (err,rewind,extra...) =>
                 if err
                     cb? err, null
                     return false
@@ -218,7 +218,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                 @_lmeta[ lmeta.id ] = lmeta
 
                 # return the rewinder (so that they can change offsets, etc)
-                cb? null, lmeta.rewind
+                cb? null, lmeta.rewind, extra...
 
     #----------
 

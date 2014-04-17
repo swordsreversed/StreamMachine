@@ -84,6 +84,14 @@ module.exports = class RawAudio
                 startTime:  @opts.startTime,
                 minuteTime: @opts.minuteTime
                 (err,@source) =>
+                    if err
+                        if @opts.res?
+                            @opts.res.status(500).end err
+                        else
+                            @socket?.end()
+
+                        return false
+
                     # update our offset now that it's been checked for availability
                     @client.offset = @source.offset()
 

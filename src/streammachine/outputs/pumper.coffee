@@ -25,25 +25,26 @@ module.exports = class Pumper
             pump:       @req.param("pump")
             pumpOnly:   true
         , (err,playHead) =>
-            playHead.once "pump", (info) =>
-                console.log "In pump readable. playHead queue is ", info
-                headers =
-                    "Content-Type":
-                        if @stream.opts.format == "mp3"         then "audio/mpeg"
-                        else if @stream.opts.format == "aac"    then "audio/aacp"
-                        else "unknown"
-                    "Connection":           "close"
-                    "Content-Length":       info.length
+            if err
+                @opts.res.status(500).end err
+                return false
 
-                # write out our headers
-                @res.writeHead 200, headers
+            headers =
+                "Content-Type":
+                    if @stream.opts.format == "mp3"         then "audio/mpeg"
+                    else if @stream.opts.format == "aac"    then "audio/aacp"
+                    else "unknown"
+                "Connection":           "close"
+                "Content-Length":       info.length
 
-                # send our pump buffer to the client
-                playHead.pipe(@res)
+            # write out our headers
+            @res.writeHead 200, headers
 
-                @opts.res.on "finish", =>
-                    console.log "live ts finished. disconnect."
-                    playHead.disconnect()
+            # send our pump buffer to the client
+            playHead.pipe(@res)
+
+            @opts.res.on "finish", =>
+                playHead.disconnect()
 
             @res.on "close",    => playHead.disconnect()
             @res.on "end",      => playHead.disconnect()

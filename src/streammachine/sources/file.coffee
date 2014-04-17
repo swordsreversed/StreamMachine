@@ -15,8 +15,6 @@ module.exports = class FileSource extends require("./base")
         @_file = null
 
         @_chunks = []
-        @_current_chunk = []
-        @_chunks.push @_current_chunk
 
         @_emit_pos = 0
 
@@ -25,42 +23,14 @@ module.exports = class FileSource extends require("./base")
 
             chunk = @_chunks[ @_emit_pos ]
 
-            buf = null
-            duration = null
+            return if !chunk
 
-            if _.isArray(chunk)
-
-                # -- create a new buffer -- #
-
-                len = 0
-                len += b.length for b in chunk
-
-                # make this into one buffer
-                buf = new Buffer(len)
-                pos = 0
-
-                for fb in chunk
-                    fb.copy(buf,pos)
-                    pos += fb.length
-
-                duration = (chunk.length / @framesPerSec)
-
-                # -- should we stash this in the chunks array? -- #
-
-                if chunk != @_current_chunk
-                    @_chunks[ @_emit_pos ] =
-                        buffer:     buf
-                        duration:   duration
-
-            else
-                # already prepared as a buffer
-                buf         = chunk.buffer
-                duration    = chunk.duration
+            console.log "NO DATA!!!! ", chunk if !chunk.data
 
             @emit "data",
-                data:       buf
+                data:       chunk.data
                 ts:         (new Date)
-                duration:   duration
+                duration:   chunk.duration
                 streamKey:  @streamKey
                 uuid:       @uuid
 
