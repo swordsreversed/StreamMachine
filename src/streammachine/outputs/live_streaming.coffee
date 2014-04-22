@@ -1,4 +1,5 @@
-_ = require "underscore"
+_   = require "underscore"
+tz  = require "timezone"
 
 module.exports = class LiveStreaming
     @secs_per_ts = 10
@@ -9,6 +10,7 @@ module.exports = class LiveStreaming
         @client.ip          = @opts.req.connection.remoteAddress
         @client.path        = @opts.req.url
         @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+        @client.session_id  = @opts.req.session?.sessionID
 
         @chunks_per_ts = LiveStreaming.secs_per_ts / @stream._rsecsPerChunk
 
@@ -65,12 +67,14 @@ module.exports = class LiveStreaming
             #EXT-X-VERSION:3
             #EXT-X-TARGETDURATION:#{LiveStreaming.secs_per_ts}
             #EXT-X-MEDIA-SEQUENCE:#{@stream.hls_segmenter.segments[0].id}
+            #EXT-X-ALLOW-CACHE:YES
 
             """
 
             for seg in @stream.hls_segmenter.segments
                 @opts.res.write """
-                #EXTINF:#{seg.duration}
+                #EXTINF:#{seg.duration},#{@stream.StreamTitle}
+                #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
                 http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
 
                 """

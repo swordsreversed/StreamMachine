@@ -244,6 +244,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                 path:       lmeta.obj.client.path
                 ip:         lmeta.obj.client.ip
                 ua:         lmeta.obj.client.ua
+                session_id: lmeta.obj.client.session_id
                 bytes:      lmeta.obj.socket?.bytesWritten
                 seconds:    seconds
                 time:       endTime

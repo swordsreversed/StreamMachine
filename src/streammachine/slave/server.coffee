@@ -1,9 +1,10 @@
-express = require "express"
-_u = require("underscore")
-util = require 'util'
-fs = require 'fs'
-path = require 'path'
-nconf = require 'nconf'
+express = require 'express'
+_u      = require 'underscore'
+util    = require 'util'
+fs      = require 'fs'
+path    = require 'path'
+nconf   = require 'nconf'
+uuid    = require 'node-uuid'
 
 module.exports = class Server extends require('events').EventEmitter
     DefaultOptions:
@@ -27,6 +28,20 @@ module.exports = class Server extends require('events').EventEmitter
         @app.httpAllowHalfOpen = true
         @app.useChunkedEncodingByDefault = false
 
+        # -- Set up sessions -- #
+
+        if nconf.get("session:secret") && nconf.get("session:key")
+            @app.use express.cookieParser()
+            @app.use express.cookieSession
+                key:    nconf.get("session:key")
+                secret: nconf.get("session:secret")
+
+            @app.use (req,res,next) =>
+                if !req.session.sessionID
+                    req.session.sessionID = uuid.v1()
+
+                next()
+
         # -- Shoutcast emulation -- #
 
         @_ua_skip = if nconf.get("ua_skip") then ///#{nconf.get("ua_skip").join("|")}/// else null
@@ -40,8 +55,6 @@ module.exports = class Server extends require('events').EventEmitter
                 next()
             else
                 res.status(404).end "Invalid stream.\n"
-
-        #@server.use (req,res,next) => @streamRouter(req,res,next)
 
         # -- Funky URL Rewriters -- #
 
