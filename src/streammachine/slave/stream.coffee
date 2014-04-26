@@ -267,14 +267,7 @@ module.exports = class Stream extends require('../rewind_buffer')
             if !@streams[ stream.key ]
                 console.log "SG #{@key}: Adding stream #{stream.key}"
 
-                @streams[ stream.key ] =
-                    stream:     stream
-                    bandwidth:  Number(stream.opts.bandwidth||0)
-                    codec:      switch stream.opts.format
-                        when "aac"
-                            "mp4a.40.2"
-                        when "mp3"
-                            ""
+                @streams[ stream.key ] = stream
 
                 # listen in case it goes away
                 delFunc = =>

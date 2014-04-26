@@ -94,8 +94,8 @@ module.exports = class LiveStreaming
 
             for key,s of @group.streams
                 @opts.res.write """
-                #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.bandwidth},CODECS="#{s.codec}"
-                http://#{s.stream.opts.host}/#{s.stream.key}.m3u8
+                #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
+                http://#{s.opts.host}/#{s.key}.m3u8
 
                 """
 

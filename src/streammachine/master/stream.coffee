@@ -34,6 +34,8 @@ module.exports = class Stream extends require('events').EventEmitter
         preroll_key:        ""
         root_route:         false
         group:              null
+        bandwidth:          null
+        codec:              null
 
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
