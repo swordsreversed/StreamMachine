@@ -56,6 +56,16 @@ module.exports = class Server extends require('events').EventEmitter
             else
                 res.status(404).end "Invalid stream.\n"
 
+        # -- Stream Group Finder -- #
+
+        @app.param "group", (req,res,next,key) =>
+            # make sure it's a valid stream key
+            if key? && s = @core.stream_groups[ key ]
+                req.group = s
+                next()
+            else
+                res.status(404).end "Invalid stream group.\n"
+
         # -- Funky URL Rewriters -- #
 
         @app.use (req,res,next) =>
@@ -111,6 +121,9 @@ module.exports = class Server extends require('events').EventEmitter
             res.status(200).end "[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{req.stream.key}/\n"
 
         # -- HTTP Live Streaming -- #
+
+        @app.get "/sg/:group.m3u8", (req,res) =>
+            new @core.Outputs.live_streaming.GroupIndex req.group, req:req, res:res
 
         @app.get "/:stream.m3u8", (req,res) =>
             new @core.Outputs.live_streaming.Index req.stream, req:req, res:res
