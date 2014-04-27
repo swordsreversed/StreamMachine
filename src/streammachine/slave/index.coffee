@@ -23,6 +23,7 @@ module.exports = class Slave extends require("events").EventEmitter
         @options = _u.defaults opts||{}, @DefaultOptions
 
         @streams = {}
+        @stream_groups = {}
         @root_route = null
 
         @connected = false
@@ -165,10 +166,16 @@ module.exports = class Slave extends require("events").EventEmitter
                 @log.debug "Passing updated config to source: #{key}", opts:opts
                 @streams[key].configure opts
             else
-                @log.debug "Starting up source: #{key}", opts:opts
+                @log.debug "Starting up stream: #{key}", opts:opts
 
                 slog = @log.child stream:key
                 @streams[key] = new Stream @, key, slog, opts
+
+            # part of a stream group?
+            if g = @streams[key].opts.group
+                # do we have a matching group?
+                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g )
+                sg.addStream @streams[key]
 
             # should this stream accept requests to /?
             if opts.root_route

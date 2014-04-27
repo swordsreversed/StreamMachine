@@ -177,6 +177,8 @@ module.exports = class Stream extends require('../rewind_buffer')
             @log.debug "All buffers: #{all_buf}"
         , 60*1000
 
+        @emit "config"
+
     #----------
 
     disconnect: ->
@@ -186,6 +188,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         # if we have a source, disconnect it
         if @source
             @source.disconnect()
+
+        @emit "disconnect"
 
     #----------
 
@@ -252,3 +256,26 @@ module.exports = class Stream extends require('../rewind_buffer')
             true
         else
             console.error "disconnectListener called for #{id}, but no listener found."
+
+    #----------
+
+    class @StreamGroup extends require("events").EventEmitter
+        constructor: (@key) ->
+            @streams = {}
+
+        addStream: (stream) ->
+            if !@streams[ stream.key ]
+                console.log "SG #{@key}: Adding stream #{stream.key}"
+
+                @streams[ stream.key ] = stream
+
+                # listen in case it goes away
+                delFunc = =>
+                    console.log "SG #{@key}: Stream disconnected: #{ stream.key }"
+                    delete @streams[ stream.key ]
+
+
+                stream.on "disconnect", delFunc
+
+                stream.on "config", =>
+                    delFunc() if stream.opts.group != @key

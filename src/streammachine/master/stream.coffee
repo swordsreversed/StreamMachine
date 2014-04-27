@@ -26,13 +26,16 @@ module.exports = class Stream extends require('events').EventEmitter
         fallback:           null
         acceptSourceMeta:   false
         log_minutes:        true
-        monitored:          true
+        monitored:          false
         metaTitle:          ""
         metaUrl:            ""
         format:             "mp3"
         preroll:            ""
         preroll_key:        ""
         root_route:         false
+        group:              null
+        bandwidth:          0
+        codec:              null
 
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
@@ -81,6 +84,10 @@ module.exports = class Stream extends require('events').EventEmitter
         @vitalsFunc = (vitals) =>
             @_vitals = vitals
             @emit "vitals", vitals
+
+        # -- Stream Variants -- #
+
+
 
         # -- Hardcoded Source -- #
 

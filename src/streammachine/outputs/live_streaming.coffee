@@ -80,3 +80,23 @@ module.exports = class LiveStreaming
                 """
 
             @opts.res.end()
+
+    class @GroupIndex
+        constructor: (@group,@opts) ->
+            @opts.res.writeHead 200,
+                "Content-type": "application/vnd.apple.mpegurl"
+
+
+            @opts.res.write """
+            #EXTM3U
+
+            """
+
+            for key,s of @group.streams
+                @opts.res.write """
+                #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
+                http://#{s.opts.host}/#{s.key}.m3u8
+
+                """
+
+            @opts.res.end()
