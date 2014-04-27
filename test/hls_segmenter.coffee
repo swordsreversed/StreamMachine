@@ -7,7 +7,7 @@ describe "HTTP Live Streaming Segmenter", ->
     start_ts = 1397692684196
 
     b_chunks = []
-    _(100).times (i) ->
+    _(120).times (i) ->
         chunk =
             ts:         new Date(start_ts - i*500)
             duration:   0.5
@@ -16,7 +16,7 @@ describe "HTTP Live Streaming Segmenter", ->
         b_chunks.push(chunk)
 
     f_chunks = []
-    _(100).times (i) ->
+    _(121).times (i) ->
         chunk =
             ts:         new Date(start_ts + i*500)
             duration:   0.5
@@ -30,7 +30,7 @@ describe "HTTP Live Streaming Segmenter", ->
     rewind      = null
     beforeEach (done) ->
         rewind = new RewindBuffer liveStreaming:true
-        rewind._rmax = 100
+        rewind._rmax = 120
         done()
 
     it "creates the Live Streaming Segmenter", (done) ->
@@ -38,7 +38,7 @@ describe "HTTP Live Streaming Segmenter", ->
         expect(rewind.hls_segmenter).to.be.an.instanceof(HLSSegmenter)
         done()
 
-    it "correctly segments forward-facing data", (done) ->
+    it "segments forward-facing data", (done) ->
         # we'll inject 100 chunks of fake 0.5 second audio data
 
         for c in f_chunks
@@ -48,8 +48,8 @@ describe "HTTP Live Streaming Segmenter", ->
         # (four whole ones, plus some change)
 
         #console.log "segments is ", rewind.hls_segmenter._segments
-        expect(rewind.hls_segmenter._segments).to.have.length 6
-        expect(rewind.hls_segmenter.segments).to.have.length 4
+        expect(rewind.hls_segmenter._segments).to.have.length 7
+        expect(rewind.hls_segmenter.segments).to.have.length 5
 
         for seg in rewind.hls_segmenter._segments
             if seg.data
@@ -65,12 +65,12 @@ describe "HTTP Live Streaming Segmenter", ->
         done()
 
 
-    it "correctly segments injected buffer data", (done) ->
+    it "segments injected buffer data", (done) ->
         for c in b_chunks
             rewind._insertBuffer c
 
-        expect(rewind.hls_segmenter._segments).to.have.length 6
-        expect(rewind.hls_segmenter.segments).to.have.length 4
+        expect(rewind.hls_segmenter._segments).to.have.length 7
+        expect(rewind.hls_segmenter.segments).to.have.length 5
 
         for seg in rewind.hls_segmenter._segments
             if seg.data
@@ -80,11 +80,11 @@ describe "HTTP Live Streaming Segmenter", ->
 
         done()
 
-    it "correctly segments mixed data", (done) ->
+    it "segments mixed data", (done) ->
         _(f_chunks).each (c) -> rewind._rdataFunc c
         _(b_chunks).each (c) -> rewind._insertBuffer c
 
-        expect(rewind.hls_segmenter._segments).to.have.length 11
+        expect(rewind.hls_segmenter._segments).to.have.length 13
 
         for seg in rewind.hls_segmenter._segments
             if seg.data
@@ -92,4 +92,15 @@ describe "HTTP Live Streaming Segmenter", ->
             else
                 expect(seg.buffers).to.have.length.below 20
 
+        done()
+
+    it "removes segments as needed", (done) ->
+        rewind._rmax = 50
+
+        for c in f_chunks
+            rewind._rdataFunc c
+
+        expect(rewind._rbuffer).to.have.length 51
+        expect(rewind.hls_segmenter.segments).to.have.length 2
+        expect(rewind.hls_segmenter._segments).to.have.length 3
         done()

@@ -56,6 +56,12 @@ module.exports = class HLSSegmenter
             # Data is being removed from the rewind buffer.  we should
             # clean up our segments as needed
 
+            if (f_s = @_segments[0])? && chunk.ts > f_s.ts
+                @_segments.shift()
+                if (i = @segments.indexOf(f_s)) > -1
+                    @segments.splice(i,1)
+
+
     #----------
 
     _createSegment: (ts) ->
