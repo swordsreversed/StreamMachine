@@ -30,6 +30,7 @@ describe "HTTP Live Streaming Segmenter", ->
     rewind      = null
     beforeEach (done) ->
         rewind = new RewindBuffer liveStreaming:true
+        rewind._rmax = 100
         done()
 
     it "creates the Live Streaming Segmenter", (done) ->
@@ -48,10 +49,10 @@ describe "HTTP Live Streaming Segmenter", ->
 
         #console.log "segments is ", rewind.hls_segmenter._segments
         expect(rewind.hls_segmenter._segments).to.have.length 6
-        expect(rewind.hls_segmenter.segments()).to.have.length 4
+        expect(rewind.hls_segmenter.segments).to.have.length 4
 
         for seg in rewind.hls_segmenter._segments
-            if seg.buffer
+            if seg.data
                 expect(seg.duration).to.be.equal 10
             else
                 expect(seg.buffers).to.have.length.below 20
@@ -69,10 +70,10 @@ describe "HTTP Live Streaming Segmenter", ->
             rewind._insertBuffer c
 
         expect(rewind.hls_segmenter._segments).to.have.length 6
-        expect(rewind.hls_segmenter.segments()).to.have.length 4
+        expect(rewind.hls_segmenter.segments).to.have.length 4
 
         for seg in rewind.hls_segmenter._segments
-            if seg.buffer
+            if seg.data
                 expect(seg.duration).to.be.equal 10
             else
                 expect(seg.buffers).to.have.length.below 20
@@ -86,7 +87,7 @@ describe "HTTP Live Streaming Segmenter", ->
         expect(rewind.hls_segmenter._segments).to.have.length 11
 
         for seg in rewind.hls_segmenter._segments
-            if seg.buffer
+            if seg.data
                 expect(seg.duration).to.be.equal 10
             else
                 expect(seg.buffers).to.have.length.below 20
