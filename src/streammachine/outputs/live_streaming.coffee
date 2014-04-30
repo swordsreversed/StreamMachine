@@ -1,5 +1,6 @@
 _   = require "underscore"
 tz  = require "timezone"
+uuid = require "node-uuid"
 
 module.exports = class LiveStreaming
     @secs_per_ts = 10
@@ -10,7 +11,8 @@ module.exports = class LiveStreaming
         @client.ip          = @opts.req.connection.remoteAddress
         @client.path        = @opts.req.url
         @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-        @client.session_id  = @opts.req.session?.sessionID
+        @client.user_id     = @opts.req.user_id
+        @client.session_id  = @opts.req.param("session")
 
         @chunks_per_ts = LiveStreaming.secs_per_ts / @stream._rsecsPerChunk
 
@@ -59,6 +61,12 @@ module.exports = class LiveStreaming
                 @opts.res.end "No data."
                 return false
 
+            # requests for a stream index should hopefully come in with a
+            # session id attached.  If so, we'll proxy it through to the URLs
+            # for the ts files.
+
+            session_id = @opts.req.param("session")
+
             @opts.res.writeHead 200,
                 "Content-type": "application/vnd.apple.mpegurl"
 
@@ -67,7 +75,7 @@ module.exports = class LiveStreaming
             #EXT-X-VERSION:3
             #EXT-X-TARGETDURATION:#{LiveStreaming.secs_per_ts}
             #EXT-X-MEDIA-SEQUENCE:#{@stream.hls_segmenter.segments[0].id}
-            #EXT-X-ALLOW-CACHE:YES
+            #EXT-X-ALLOW-CACHE:NO
 
             """
 
@@ -75,17 +83,23 @@ module.exports = class LiveStreaming
                 @opts.res.write """
                 #EXTINF:#{seg.duration},#{@stream.StreamTitle}
                 #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
-                http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+                http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}?session=#{session_id}
 
                 """
 
             @opts.res.end()
+
+    #----------
 
     class @GroupIndex
         constructor: (@group,@opts) ->
             @opts.res.writeHead 200,
                 "Content-type": "application/vnd.apple.mpegurl"
 
+
+            # we'll generate and attach a session id to each master playlist
+            # request, so that we can keep track of the course of the play
+            session_id = uuid.v4()
 
             @opts.res.write """
             #EXTM3U
@@ -95,7 +109,7 @@ module.exports = class LiveStreaming
             for key,s of @group.streams
                 @opts.res.write """
                 #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
-                http://#{s.opts.host}/#{s.key}.m3u8
+                http://#{s.opts.host}/#{s.key}.m3u8?session=#{session_id}
 
                 """
 

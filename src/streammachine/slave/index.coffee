@@ -54,9 +54,6 @@ module.exports = class Slave extends require("events").EventEmitter
         # init our server
         @server = new Server core:@, logger:@log.child(subcomponent:"server")
 
-        # start up the socket manager on the listener
-        #@sockets = new @Outputs.sockets server:@server.server, core:@
-
         # -- Listener Counts -- #
 
         # once every 10 seconds, count all listeners and send them on to the master
@@ -169,7 +166,11 @@ module.exports = class Slave extends require("events").EventEmitter
                 @log.debug "Starting up stream: #{key}", opts:opts
 
                 slog = @log.child stream:key
-                @streams[key] = new Stream @, key, slog, opts
+                stream = @streams[key] = new Stream @, key, slog, opts
+
+                if @master
+                    source = @socketSource stream
+                    stream.useSource source
 
             # part of a stream group?
             if g = @streams[key].opts.group

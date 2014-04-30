@@ -37,8 +37,10 @@ module.exports = class Server extends require('events').EventEmitter
                 secret: nconf.get("session:secret")
 
             @app.use (req,res,next) =>
-                if !req.session.sessionID
-                    req.session.sessionID = uuid.v1()
+                if !req.session.userID
+                    req.session.userID = uuid.v4()
+
+                req.user_id = req.session.userID
 
                 next()
 

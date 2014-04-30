@@ -50,12 +50,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         if rewind_opts.liveStreaming
             @hls_segmenter = new HLSSegmenter @, nconf.get("live_streaming:segment_duration")
 
-        #@_rls_segmenter = new LiveStreamSegmenter @, 10
-
         # -- set up header and frame functions -- #
 
         @_rdataFunc = (chunk) =>
-            #@log.debug "Rewind data func", length:@_rbuffer.length
             # if we're at max length, shift off a chunk (or more, if needed)
             while @_rbuffer.length > @_rmax
                 b = @_rbuffer.shift()
@@ -123,7 +120,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         rewind = new Rewinder @, id, opts, cb
 
         unless opts.pumpOnly
-            console.log "adding listener"
             # add it to our list of listeners
             @_raddListener rewind
 
@@ -361,7 +357,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     _rremoveListener: (obj) ->
         @_rlisteners = _u(@_rlisteners).without obj
-        @disconnectListener? obj.conn_id
         return true
 
     #----------

@@ -15,21 +15,50 @@
 
 module.exports = class Rewinder extends require("stream").Readable
     constructor: (@rewind,@conn_id,opts={},cb) ->
+        # allow up to 256k in our read buffer before pausing
         super highWaterMark:256*1024
+
+        # keep track of the duration of the segments we have pushed
+        # Note that for non-pump requests, these will be reset periodically
+        # as we report listening segments
+        @_sentDuration  = 0
+        @_sentBytes     = 0
 
         @_pumpOnly = false
 
         @_offset = -1
 
+        @_queue = []
+        @_queuedBytes = 0
+
+        @_reading = false
+
+        @_segTimer = null
+
+        @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
+
+        finalizeFunc = (args...) =>
+            # Logging
+            if !@_pumpOnly
+                # for non-pump requests, we want to set a timer that will
+                # log a segment every 30 seconds. This allows us to use the
+                # same analytics pipeline as we do for HLS pumped data
+                @_segTimer = setInterval =>
+                    @rewind.recordListen
+                        id:         @conn_id
+                        bytes:      @_sentBytes
+                        seconds:    @_sentDuration
+
+                    # reset our stats
+                    @_sentBytes     = 0
+                    @_sentDuration  = 0
+
+                , 30*1000
+
+            cb null, @, args...
+
         oFunc = (@_offset) =>
             @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
-
-            @_queue = []
-            @_queuedBytes = 0
-
-            @_reading = false
-
-            @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
 
             # -- What are we sending? -- #
 
@@ -43,7 +72,7 @@ module.exports = class Rewinder extends require("stream").Readable
 
                     # return pump information
                     @rewind.log.debug "Pumping Live segment with ", duration:segment.duration, length:segment.data.length
-                    cb null, @, duration:segment.duration, length:segment.data.length
+                    finalizeFunc duration:segment.duration, length:segment.data.length
 
             else if opts?.pumpOnly
                 # we're just giving one pump of data, then EOF
@@ -52,7 +81,7 @@ module.exports = class Rewinder extends require("stream").Readable
                     return cb err if err
 
                     # return pump information
-                    cb null, @, info
+                    finalizeFunc info
 
             else if opts?.pump
                 if @_offset == 0
@@ -60,7 +89,7 @@ module.exports = class Rewinder extends require("stream").Readable
                     @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
                     @rewind.pumpSeconds @, @pumpSecs, true
 
-                    cb null, @
+                    finalizeFunc()
                 else
                     # we're offset, so we'll pump from the offset point forward instead of
                     # back from live
@@ -69,11 +98,7 @@ module.exports = class Rewinder extends require("stream").Readable
 
                         @_offset = new_offset
 
-                        cb null, @
-
-            # that's it... now RewindBuffer will call our @data directly
-            #cb null, @
-
+                        finalizeFunc()
 
         if opts.timestamp
             @rewind.findTimestamp opts.timestamp, (err,offset) =>
@@ -90,8 +115,6 @@ module.exports = class Rewinder extends require("stream").Readable
                     0
 
             oFunc offset
-
-
 
     #----------
 
@@ -154,11 +177,13 @@ module.exports = class Rewinder extends require("stream").Readable
             # Grab a chunk off of the queued up buffer
             next_buf = @_queue.shift()
 
-            @_queuedBytes -= next_buf.data.length
-
             # This shouldn't happen...
             if !next_buf
                 @rewind.log.error "Shifted queue but got null", length:@_queue.length
+
+            @_queuedBytes   -= next_buf.data.length
+            @_sentBytes     += next_buf.data.length
+            @_sentDuration  += next_buf.duration
 
             # Not all chunks will contain metadata, but go ahead and send
             # ours out if it does
@@ -235,5 +260,17 @@ module.exports = class Rewinder extends require("stream").Readable
 
     disconnect: ->
         @rewind._rremoveListener @
+
+        # This just takes the listener out of lmeta. This will probably go
+        # away at some point or be rolled into the function above
+        @rewind.disconnectListener @conn_id
+
+        # Record either a) our full listening session (pump requests) or
+        # b) the portion of the request that we haven't already recorded
+        # (non-pump requests)
+        @rewind.recordListen
+            id:         @conn_id
+            bytes:      @_sentBytes
+            seconds:    @_sentDuration
 
 #----------
