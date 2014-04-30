@@ -222,6 +222,21 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     #----------
 
+    startSession: (client,cb) ->
+        # we'll generate and attach a session id to each master playlist
+        # request, so that we can keep track of the course of the play
+        session_id = uuid.v4()
+
+        @log.interaction "",
+            type:       "session_start"
+            client:     _u.extend {}, client, session_id:session_id
+            start_time: new Date(),
+            id:         session_id
+
+        cb null, session_id
+
+    #----------
+
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
             @streams = {}

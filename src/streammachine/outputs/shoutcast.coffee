@@ -39,7 +39,9 @@ module.exports = class Shoutcast extends BaseOutput
             @opts.res.writeHead 200, @headers
             @opts.res._send ''
 
-            process.nextTick => @_startAudio(true)
+            @stream.startSession @client, (err,session_id) =>
+                @client.session_id = session_id
+                process.nextTick => @_startAudio(true)
 
         else if @opts.socket
             # -- socket mode... just data -- #

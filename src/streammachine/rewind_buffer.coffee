@@ -322,7 +322,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         if concat
           cbuf = Buffer.concat(buffers)
-          rewinder._insert { data:cbuf, meta:meta }
+          rewinder._insert { data:cbuf, meta:meta, duration:duration }
 
         @log.silly "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
 
