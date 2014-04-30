@@ -1,7 +1,9 @@
-_u = require "underscore"
+_u      = require "underscore"
+uuid    = require "node-uuid"
 
-Preroller = require "./preroller"
-Rewind = require "../rewind_buffer"
+
+Preroller   = require "./preroller"
+Rewind      = require "../rewind_buffer"
 
 # Streams are the endpoints that listeners connect to.
 
@@ -206,8 +208,9 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     # Log a partial listening segment
     recordListen: (opts) ->
-        if lmeta = @_lmeta[opts.conn_id]
-            @log.request "",
+        if lmeta = @_lmeta[opts.id]
+            @log.interaction "",
+                type:       "listen"
                 output:     lmeta.obj.client.output
                 path:       lmeta.obj.client.path
                 ip:         lmeta.obj.client.ip
@@ -220,18 +223,18 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
 
     class @StreamGroup extends require("events").EventEmitter
-        constructor: (@key) ->
+        constructor: (@key,@log) ->
             @streams = {}
 
         addStream: (stream) ->
             if !@streams[ stream.key ]
-                console.log "SG #{@key}: Adding stream #{stream.key}"
+                @log.debug "SG #{@key}: Adding stream #{stream.key}"
 
                 @streams[ stream.key ] = stream
 
                 # listen in case it goes away
                 delFunc = =>
-                    console.log "SG #{@key}: Stream disconnected: #{ stream.key }"
+                    @log.debug "SG #{@key}: Stream disconnected: #{ stream.key }"
                     delete @streams[ stream.key ]
 
 
@@ -239,3 +242,17 @@ module.exports = class Stream extends require('../rewind_buffer')
 
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
+
+        startSession: (client,cb) ->
+            # we'll generate and attach a session id to each master playlist
+            # request, so that we can keep track of the course of the play
+            session_id = uuid.v4()
+
+            @log.interaction "",
+                type:       "session_start"
+                client:     _u.extend {}, client, session_id:session_id
+                start_time: new Date(),
+                id:         session_id
+
+            cb null, session_id
+

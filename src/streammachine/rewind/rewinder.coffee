@@ -261,10 +261,6 @@ module.exports = class Rewinder extends require("stream").Readable
     disconnect: ->
         @rewind._rremoveListener @
 
-        # This just takes the listener out of lmeta. This will probably go
-        # away at some point or be rolled into the function above
-        @rewind.disconnectListener @conn_id
-
         # Record either a) our full listening session (pump requests) or
         # b) the portion of the request that we haven't already recorded
         # (non-pump requests)
@@ -272,5 +268,10 @@ module.exports = class Rewinder extends require("stream").Readable
             id:         @conn_id
             bytes:      @_sentBytes
             seconds:    @_sentDuration
+
+        # This just takes the listener out of lmeta. This will probably go
+        # away at some point or be rolled into the function above
+        @rewind.disconnectListener @conn_id
+
 
 #----------

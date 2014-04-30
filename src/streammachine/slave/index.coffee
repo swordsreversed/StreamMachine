@@ -175,7 +175,7 @@ module.exports = class Slave extends require("events").EventEmitter
             # part of a stream group?
             if g = @streams[key].opts.group
                 # do we have a matching group?
-                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g )
+                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
                 sg.addStream @streams[key]
 
             # should this stream accept requests to /?

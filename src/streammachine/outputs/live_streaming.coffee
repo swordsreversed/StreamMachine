@@ -97,22 +97,17 @@ module.exports = class LiveStreaming extends BaseOutput
                 "Content-type": "application/vnd.apple.mpegurl"
 
             # who do we ask for the session id?
-            @group.startSession
-
-            # we'll generate and attach a session id to each master playlist
-            # request, so that we can keep track of the course of the play
-            session_id = uuid.v4()
-
-            @opts.res.write """
-            #EXTM3U
-
-            """
-
-            for key,s of @group.streams
+            @group.startSession @client, (err,session_id) =>
                 @opts.res.write """
-                #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
-                http://#{s.opts.host}/#{s.key}.m3u8?session=#{session_id}
+                #EXTM3U
 
                 """
 
-            @opts.res.end()
+                for key,s of @group.streams
+                    @opts.res.write """
+                    #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
+                    http://#{s.opts.host}/#{s.key}.m3u8?session=#{session_id}
+
+                    """
+
+                @opts.res.end()
