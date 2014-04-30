@@ -1,7 +1,9 @@
 _u      = require 'underscore'
 icecast = require "icecast"
 
-module.exports = class Shoutcast
+BaseOutput = require "./base"
+
+module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
         @id = null
@@ -9,7 +11,8 @@ module.exports = class Shoutcast
 
         @stream.log.debug "request is in Shoutcast output", stream:@stream.key
 
-        @client = output:"shoutcast"
+        super "shoutcast"
+
         @pump = true
 
         @_lastMeta = null
@@ -17,9 +20,6 @@ module.exports = class Shoutcast
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #
 
-            @client.ip          = @opts.req.connection.remoteAddress
-            @client.path        = @opts.req.url
-            @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
             @client.offsetSecs  = @opts.req.param("offset") || -1
             @client.meta_int    = @stream.opts.meta_interval
 
@@ -39,15 +39,11 @@ module.exports = class Shoutcast
             @opts.res.writeHead 200, @headers
             @opts.res._send ''
 
-            @socket = @opts.req.connection
-
             process.nextTick => @_startAudio(true)
 
         else if @opts.socket
             # -- socket mode... just data -- #
 
-            @client = @opts.client
-            @socket = @opts.socket
             @pump = false
             process.nextTick => @_startAudio(false)
 

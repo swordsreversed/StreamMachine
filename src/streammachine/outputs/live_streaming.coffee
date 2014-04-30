@@ -2,21 +2,16 @@ _   = require "underscore"
 tz  = require "timezone"
 uuid = require "node-uuid"
 
-module.exports = class LiveStreaming
+BaseOutput = require "./base"
+
+module.exports = class LiveStreaming extends BaseOutput
     @secs_per_ts = 10
 
     constructor: (@stream,@opts) ->
-        @client = output:"live_streaming"
 
-        @client.ip          = @opts.req.connection.remoteAddress
-        @client.path        = @opts.req.url
-        @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-        @client.user_id     = @opts.req.user_id
-        @client.session_id  = @opts.req.param("session")
+        super "live_streaming"
 
         @chunks_per_ts = LiveStreaming.secs_per_ts / @stream._rsecsPerChunk
-
-        @socket = @opts.req.connection
 
         # we'll have received a sequence number in req.param("seq"). If we
         # multiply it by LiveStreaming.secs_per_ts and then by 1000, we'll
@@ -54,12 +49,14 @@ module.exports = class LiveStreaming
 
     #----------
 
-    class @Index
+    class @Index extends BaseOutput
         constructor: (@stream,@opts) ->
             if @stream.hls_segmenter.segments.length == 0
                 @opts.res.writeHead 500, {}
                 @opts.res.end "No data."
                 return false
+
+            super "live_streaming"
 
             # requests for a stream index should hopefully come in with a
             # session id attached.  If so, we'll proxy it through to the URLs
@@ -91,11 +88,16 @@ module.exports = class LiveStreaming
 
     #----------
 
-    class @GroupIndex
+    class @GroupIndex extends BaseOutput
         constructor: (@group,@opts) ->
+
+            super "live_streaming"
+
             @opts.res.writeHead 200,
                 "Content-type": "application/vnd.apple.mpegurl"
 
+            # who do we ask for the session id?
+            @group.startSession
 
             # we'll generate and attach a session id to each master playlist
             # request, so that we can keep track of the course of the play
