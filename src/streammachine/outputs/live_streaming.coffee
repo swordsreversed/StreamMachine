@@ -106,7 +106,7 @@ module.exports = class LiveStreaming extends BaseOutput
 
                 for key,s of @group.streams
                     @opts.res.write """
-                    #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
+                    #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
                     http://#{s.opts.host}/#{s.key}.m3u8?session_id=#{session_id}
 
                     """
