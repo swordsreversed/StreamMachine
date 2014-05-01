@@ -7,9 +7,6 @@ module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
         @id = null
-        @socket = null
-
-        @stream.log.debug "request is in Shoutcast output", stream:@stream.key
 
         super "shoutcast"
 
@@ -67,6 +64,7 @@ module.exports = class Shoutcast extends BaseOutput
         # about timing
         @ice = new icecast.Writer @client.bytesToNextMeta||@client.meta_int
         @ice.metaint = @client.meta_int
+        delete @client.bytesToNextMeta
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
             @stream.preroll.pump @socket, @ice, => @connectToStream()
@@ -105,7 +103,6 @@ module.exports = class Shoutcast extends BaseOutput
                 offset:     @client.offset,
                 pump:       @pump,
                 startTime:  @opts.startTime,
-                minuteTime: @opts.minuteTime
                 (err,@source) =>
                     if err
                         if @opts.res?

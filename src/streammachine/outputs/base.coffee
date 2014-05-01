@@ -5,6 +5,7 @@ module.exports = class BaseOutput
         # turn @opts into @client
 
         @client = output:output
+        @socket = null
 
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #

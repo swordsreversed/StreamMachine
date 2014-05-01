@@ -1,17 +1,16 @@
 _u = require 'underscore'
 
-module.exports = class RawAudio
+BaseOutput = require "./base"
+
+module.exports = class RawAudio extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
-        @id = null
 
-        @client = output:"raw"
+        super "raw"
+
         @pump = true
 
         if @opts.req && @opts.res
-            @client.ip          = @opts.req.connection.remoteAddress
-            @client.path        = @opts.req.url
-            @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
             @client.offsetSecs  = @opts.req.param("offset") || -1
 
             @opts.res.chunkedEncoding = false
@@ -27,22 +26,21 @@ module.exports = class RawAudio
             @opts.res.writeHead 200, headers
             @opts.res._send ''
 
-            @socket = @opts.req.connection
-
             process.nextTick =>
-                # -- send a preroll if we have one -- #
+                @stream.startSession @client, (err,session_id) =>
+                    @client.session_id = session_id
 
-                if @stream.preroll && !@opts.req.param("preskip")
-                    @stream.log.debug "making preroll request", stream:@stream.key
-                    @stream.preroll.pump @socket, @socket, => @connectToStream()
-                else
-                    @connectToStream()
+                    # -- send a preroll if we have one -- #
+
+                    if @stream.preroll && !@opts.req.param("preskip")
+                        @stream.log.debug "making preroll request", stream:@stream.key
+                        @stream.preroll.pump @socket, @socket, => @connectToStream()
+                    else
+                        @connectToStream()
 
         else if @opts.socket
             # -- just the data -- #
 
-            @client = @opts.client
-            @socket = @opts.socket
             @pump = false
             process.nextTick => @connectToStream()
 
@@ -82,7 +80,6 @@ module.exports = class RawAudio
                 offset:     @client.offset,
                 pump:       @pump,
                 startTime:  @opts.startTime,
-                minuteTime: @opts.minuteTime
                 (err,@source) =>
                     if err
                         if @opts.res?

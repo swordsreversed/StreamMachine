@@ -100,6 +100,9 @@ module.exports = class Rewinder extends require("stream").Readable
 
                         finalizeFunc()
 
+            else
+                finalizeFunc()
+
         if opts.timestamp
             @rewind.findTimestamp opts.timestamp, (err,offset) =>
                 return cb err if err
