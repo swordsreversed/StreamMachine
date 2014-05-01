@@ -16,7 +16,6 @@ module.exports = class Slave extends require("events").EventEmitter
         pumper:         require "../outputs/pumper"
         shoutcast:      require "../outputs/shoutcast"
         raw:            require "../outputs/raw_audio"
-        sockets:        require "../outputs/sockets"
         live_streaming: require "../outputs/live_streaming"
 
     constructor: (opts) ->
@@ -250,7 +249,6 @@ module.exports = class Slave extends require("events").EventEmitter
                                 stream:     stream.key
                                 id:         l.id
                                 startTime:  l.startTime
-                                minuteTime: l.minuteTime
                                 client:     l.obj.client
 
                         # there's a chance that the connection could end
@@ -311,7 +309,6 @@ module.exports = class Slave extends require("events").EventEmitter
                         socket:     socket
                         client:     obj.client
                         startTime:  new Date(obj.startTime)
-                        minuteTime: new Date(obj.minuteTime)
 
                 @_seen[obj.key] = 1
 
