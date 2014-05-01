@@ -62,7 +62,7 @@ module.exports = class LiveStreaming extends BaseOutput
             # session id attached.  If so, we'll proxy it through to the URLs
             # for the ts files.
 
-            session_id = @opts.req.param("session")
+            session_id = @opts.req.param("session_id")
 
             @opts.res.writeHead 200,
                 "Content-type": "application/vnd.apple.mpegurl"
@@ -83,7 +83,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                 """
 
-                @opts.res.write seg_record + ( session_id && "?session_id=#{session_id}" ) + "\n"
+                @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
 
             @opts.res.end()
 
@@ -107,7 +107,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 for key,s of @group.streams
                     @opts.res.write """
                     #EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
-                    http://#{s.opts.host}/#{s.key}.m3u8?session=#{session_id}
+                    http://#{s.opts.host}/#{s.key}.m3u8?session_id=#{session_id}
 
                     """
 
