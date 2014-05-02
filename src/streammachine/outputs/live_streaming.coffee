@@ -84,7 +84,7 @@ module.exports = class LiveStreaming extends BaseOutput
                     seg_record = seg.index_record ||= """
                     #EXTINF:#{seg.duration},#{@stream.StreamTitle}
                     #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
-                    http://#{s.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+                    http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                     """
 
                     @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
