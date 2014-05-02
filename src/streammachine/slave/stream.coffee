@@ -49,7 +49,14 @@ module.exports = class Stream extends require('../rewind_buffer')
 
         # -- Wait to Load Rewind Buffer -- #
 
+        @_sourceInitializing = true
+        @_sourceInitT = setTimeout =>
+            @_sourceInitializing = false
+            @emit "_source_init"
+        , 5*1000
+
         @once "source", (source) =>
+            clearTimeout @_sourceInitT
             @_sourceInitializing = true
             source.getRewind (err,stream,req) =>
                 if err

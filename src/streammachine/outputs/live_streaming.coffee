@@ -24,7 +24,7 @@ module.exports = class LiveStreaming extends BaseOutput
             pumpOnly:       true
         , (err,playHead,info) =>
             if err
-                @opts.res.status(500).end err
+                @opts.res.status(404).end "Segment not found."
                 return false
 
             headers =
@@ -51,41 +51,45 @@ module.exports = class LiveStreaming extends BaseOutput
 
     class @Index extends BaseOutput
         constructor: (@stream,@opts) ->
-            if @stream.hls_segmenter.segments.length == 0
-                @opts.res.writeHead 500, {}
-                @opts.res.end "No data."
-                return false
+            @stream._once_source_loaded =>
+                if @stream.hls_segmenter.segments.length <= 3
+                    @opts.res.status(500).end "No data."
+                    return false
 
-            super "live_streaming"
+                segments = @stream.hls_segmenter.segments[2..-1]
 
-            # requests for a stream index should hopefully come in with a
-            # session id attached.  If so, we'll proxy it through to the URLs
-            # for the ts files.
+                super "live_streaming"
 
-            session_id = @opts.req.param("session_id")
+                # requests for a stream index should hopefully come in with a
+                # session id attached.  If so, we'll proxy it through to the URLs
+                # for the ts files.
 
-            @opts.res.writeHead 200,
-                "Content-type": "application/vnd.apple.mpegurl"
+                session_id = @opts.req.param("session_id")
 
-            @opts.res.write """
-            #EXTM3U
-            #EXT-X-VERSION:3
-            #EXT-X-TARGETDURATION:#{LiveStreaming.secs_per_ts}
-            #EXT-X-MEDIA-SEQUENCE:#{@stream.hls_segmenter.segments[0].id}
-            #EXT-X-ALLOW-CACHE:NO
+                @opts.res.writeHead 200,
+                    "Content-type": "application/vnd.apple.mpegurl"
 
-            """
+                @opts.res.write """
+                #EXTM3U
+                #EXT-X-VERSION:3
+                #EXT-X-TARGETDURATION:#{LiveStreaming.secs_per_ts}
+                #EXT-X-MEDIA-SEQUENCE:#{segments[0].id}
+                #EXT-X-ALLOW-CACHE:NO
 
-            for seg in @stream.hls_segmenter.segments
-                seg_record = seg.index_record ||= """
-                #EXTINF:#{seg.duration},#{@stream.StreamTitle}
-                #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
-                #{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                 """
 
-                @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
+                # List all segments, skipping the first three (so that we don't
+                # deliver an index and then expire the segment a second later)
+                for seg in segments
+                    seg_record = seg.index_record ||= """
+                    #EXTINF:#{seg.duration},#{@stream.StreamTitle}
+                    #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
+                    #{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+                    """
 
-            @opts.res.end()
+                    @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
+
+                @opts.res.end()
 
     #----------
 

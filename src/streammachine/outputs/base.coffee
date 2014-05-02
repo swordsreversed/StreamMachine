@@ -14,7 +14,7 @@ module.exports = class BaseOutput
             @client.path        = @opts.req.url
             @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
             @client.user_id     = @opts.req.user_id
-            @client.session_id  = @opts.req.param("session")
+            @client.session_id  = @opts.req.param("session_id")
 
             @socket = @opts.req.connection
 
