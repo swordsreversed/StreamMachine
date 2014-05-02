@@ -87,7 +87,7 @@ module.exports = class HLSSegmenter
         segment.data        = Buffer.concat( _(segment.buffers).chain().sortBy("ts").collect((b) -> b.data).value() )
         segment.header      = null
 
-        segment.buffers.length = 0
+        #segment.buffers.length = 0
         delete segment.buffers
 
         # add the segment to our finalized list
