@@ -25,7 +25,7 @@ module.exports = class HLSSegmenter
                 # in our chunk going backward
                 first_seg.buffers.unshift chunk
 
-            else if !last_seg || (chunk.ts > last_seg.end_ts)
+            else if !last_seg || (chunk.ts >= last_seg.end_ts)
                 # create a new segment for it
                 seg = @_createSegment chunk.ts
                 seg.buffers.push chunk
@@ -47,7 +47,14 @@ module.exports = class HLSSegmenter
                 @_finalizeSegment @_segments[1] if @_segments.length > 2
 
             else
-                console.log "Not sure where to place segment!!! ", chunk, first_seg.ts, last_seg.ts
+                console.log "Not sure where to place segment!!! ",
+                    chunk:chunk
+                    first:
+                        start:  first_seg.ts
+                        end:    first_seg.end_ts
+                    last:
+                        start:  last_seg.ts
+                        end:    last_seg.end_ts
 
         @rewind.on "rpush",     @injectFunc
         @rewind.on "runshift",  @injectFunc
@@ -60,6 +67,7 @@ module.exports = class HLSSegmenter
                 @_segments.shift()
                 if (i = @segments.indexOf(f_s)) > -1
                     @segments.splice(i,1)
+                    delete @segment_idx[f_s.id]
 
 
     #----------
@@ -79,7 +87,8 @@ module.exports = class HLSSegmenter
         segment.data        = Buffer.concat( _(segment.buffers).chain().sortBy("ts").collect((b) -> b.data).value() )
         segment.header      = null
 
-        delete segment["buffers"]
+        segment.buffers.length = 0
+        delete segment.buffers
 
         # add the segment to our finalized list
         if !@segments[0] || segment.ts < @segments[0].ts

@@ -103,4 +103,5 @@ describe "HTTP Live Streaming Segmenter", ->
         expect(rewind._rbuffer).to.have.length 51
         expect(rewind.hls_segmenter.segments).to.have.length 2
         expect(rewind.hls_segmenter._segments).to.have.length 3
+        expect(Object.keys(rewind.hls_segmenter.segment_idx)).to.have.length 2
         done()
