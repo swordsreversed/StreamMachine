@@ -84,7 +84,7 @@ module.exports = class LiveStreaming extends BaseOutput
                     seg_record = seg.index_record ||= """
                     #EXTINF:#{seg.duration},#{@stream.StreamTitle}
                     #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
-                    http://#{@stream.opts.host}/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+                    /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                     """
 
                     @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
@@ -111,7 +111,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 for key,s of @group.streams
                     @opts.res.write """
                     #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
-                    http://#{s.opts.host}/#{s.key}.m3u8?session_id=#{session_id}
+                    /#{s.key}.m3u8?session_id=#{session_id}
 
                     """
 

@@ -69,7 +69,6 @@ module.exports = class HLSSegmenter
                     @segments.splice(i,1)
                     delete @segment_idx[f_s.id]
 
-
     #----------
 
     _createSegment: (ts) ->
@@ -83,8 +82,9 @@ module.exports = class HLSSegmenter
     #----------
 
     _finalizeSegment: (segment) ->
-        segment.duration    = _.reduce segment.buffers, ( (d,b) -> d += b.duration ), 0
-        segment.data        = Buffer.concat( _(segment.buffers).chain().sortBy("ts").collect((b) -> b.data).value() )
+        duration = 0
+        segment.data        = Buffer.concat( _(segment.buffers).chain().sortBy("ts").collect((b) -> duration += b.duration; b.data).value() )
+        segment.duration    = duration
         segment.header      = null
 
         #segment.buffers.length = 0
