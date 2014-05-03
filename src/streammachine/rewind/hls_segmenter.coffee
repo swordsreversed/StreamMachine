@@ -12,52 +12,11 @@ module.exports = class HLSSegmenter
         # as an runshift and will go backward in time. We need to listen
         # and construct segments for each.
 
-        @injectFunc = (chunk) =>
-            # do we have a segment that this chunk should go into?
-            last_seg    = @_segments[ @_segments.length - 1 ]
-            first_seg   = @_segments[ 0 ]
+        @_qRunning = false
+        @_q = []
 
-            if last_seg && ( last_seg.ts <= chunk.ts < last_seg.end_ts )
-                # in our chunk going forward
-                last_seg.buffers.push chunk
-
-            else if first_seg && ( first_seg.ts <= chunk.ts < first_seg.end_ts )
-                # in our chunk going backward
-                first_seg.buffers.unshift chunk
-
-            else if !last_seg || (chunk.ts >= last_seg.end_ts)
-                # create a new segment for it
-                seg = @_createSegment chunk.ts
-                seg.buffers.push chunk
-
-                @_segments.push seg
-
-                # check whether the segment before ours should be finalized
-                l = @_segments.length
-                @_finalizeSegment @_segments[l-2] if l > 2
-
-            else if chunk.ts < first_seg.ts
-                # create a new segment for it
-                seg = @_createSegment chunk.ts
-                seg.buffers.push chunk
-
-                @_segments.unshift seg
-
-                # check whether the segment after ours should be finalized
-                @_finalizeSegment @_segments[1] if @_segments.length > 2
-
-            else
-                console.log "Not sure where to place segment!!! ",
-                    chunk:chunk
-                    first:
-                        start:  first_seg.ts
-                        end:    first_seg.end_ts
-                    last:
-                        start:  last_seg.ts
-                        end:    last_seg.end_ts
-
-        @rewind.on "rpush",     @injectFunc
-        @rewind.on "runshift",  @injectFunc
+        @rewind.on "rpush",     (c) => @_queueChunk c
+        @rewind.on "runshift",  (c) => @_queueChunk c
 
         @rewind.on "rshift", (chunk) =>
             # Data is being removed from the rewind buffer.  we should
@@ -71,6 +30,82 @@ module.exports = class HLSSegmenter
 
     #----------
 
+    _queueChunk: (c) ->
+        @_q.push c
+        @_runQueue()
+
+    #----------
+
+    _runQueue: ->
+        @_qRunning = true
+
+        if @_q.length > 0
+            c = @_q.shift()
+            @_inject c, => @_runQueue
+        else
+            @_qRunning = false
+
+    #----------
+
+    _inject: (chunk,cb) ->
+        # do we have a segment that this chunk should go into?
+        last_seg    = @_segments[ @_segments.length - 1 ]
+        first_seg   = @_segments[ 0 ]
+
+        if last_seg && ( last_seg.ts <= chunk.ts < last_seg.end_ts )
+            # in our chunk going forward
+            last_seg.buffers.push chunk
+            return cb()
+
+        else if first_seg && ( first_seg.ts <= chunk.ts < first_seg.end_ts )
+            # in our chunk going backward
+            first_seg.buffers.unshift chunk
+            return cb()
+
+        else if !last_seg || (chunk.ts >= last_seg.end_ts)
+            # create a new segment for it
+            seg = @_createSegment chunk.ts
+            seg.buffers.push chunk
+
+            @_segments.push seg
+
+            # check whether the segment before ours should be finalized
+            l = @_segments.length
+
+            if l > 2
+                @_finalizeSegment @_segments[l-2], cb
+            else
+                cb()
+
+            return true
+
+        else if chunk.ts < first_seg.ts
+            # create a new segment for it
+            seg = @_createSegment chunk.ts
+            seg.buffers.push chunk
+
+            @_segments.unshift seg
+
+            # check whether the segment after ours should be finalized
+            if @_segments.length > 2
+                @_finalizeSegment @_segments[1], cb
+            else
+                cb()
+
+            return true
+
+        else
+            console.log "Not sure where to place segment!!! ",
+                chunk:chunk
+                first:
+                    start:  first_seg.ts
+                    end:    first_seg.end_ts
+                last:
+                    start:  last_seg.ts
+                    end:    last_seg.end_ts
+
+    #----------
+
     _createSegment: (ts) ->
         seg_id = Math.floor( Number(ts) / 1000 / @segment_length )
 
@@ -81,13 +116,12 @@ module.exports = class HLSSegmenter
 
     #----------
 
-    _finalizeSegment: (segment) ->
+    _finalizeSegment: (segment,cb) ->
         duration = 0
         segment.data        = Buffer.concat( _(segment.buffers).chain().sortBy("ts").collect((b) -> duration += b.duration; b.data).value() )
         segment.duration    = duration
         segment.header      = null
 
-        #segment.buffers.length = 0
         delete segment.buffers
 
         # add the segment to our finalized list
@@ -98,6 +132,8 @@ module.exports = class HLSSegmenter
 
         # add the segment to our index lookup
         @segment_idx[ segment.id ] = segment
+
+        cb()
 
     #----------
 
