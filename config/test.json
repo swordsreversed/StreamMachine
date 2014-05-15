@@ -9,5 +9,9 @@
 	},
 	"redis": {
 		"server":     "redis://localhost:6379"
-	}
+	},
+  "analytics": {
+    "influx":         "influx://stream:machine@localhost:8086/streammachine_test",
+    "finalize_secs":  300
+  }
 }

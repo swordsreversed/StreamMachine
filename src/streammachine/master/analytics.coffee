@@ -137,6 +137,10 @@ module.exports = class Analytics
                         @log.error err
                         return cb? err
 
+                    if !totals
+                        @log.debug "No totals found for session #{ id }"
+                        return false
+
                     @_selectLastListen id, (err,ll) =>
                         if err
                             @log.error err
