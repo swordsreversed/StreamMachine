@@ -72,7 +72,7 @@ module.exports = class Analytics
         switch obj.type
             when "session_start"
                 @influx.writePoint "starts",
-                    time:           new Date(obj.start_time)
+                    time:           new Date(obj.time)
                     output:         obj.client.output
                     session_id:     obj.client.session_id
                     client_ip:      obj.client.ip

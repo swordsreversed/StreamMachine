@@ -31,6 +31,8 @@ module.exports = class AAC extends require("stream").Writable
         # create an internal stream to pass to strtok
         @istream = new (require("events").EventEmitter)
 
+        @_flushing = false
+
         # set up status
         @frameSize = -1
         @beginning = true
@@ -46,6 +48,20 @@ module.exports = class AAC extends require("stream").Writable
         @_finishingId3v2 = false
         @_id3v2_1 = null
         @_id3v2_2 = null
+
+        @once "finish", =>
+            @_flushing = setTimeout =>
+                @emit "end"
+            , 500
+
+        _emitAndMaybeEnd = (args...) =>
+            @emit args...
+
+            if @_flushing
+                clearTimeout @_flushing
+                @_flushing = setTimeout =>
+                    @emit "end"
+                , 500
 
         strtok.parse @istream, (v,cb) =>
             # -- initial request -- #
@@ -70,7 +86,7 @@ module.exports = class AAC extends require("stream").Writable
 
                 @frameHeader    = h
                 @frameHeaderBuf = v
-                @emit "header", h
+                _emitAndMaybeEnd "header", h
                 @frameSize = @frameHeader.frame_length
 
                 if @frameSize == 1
@@ -104,7 +120,7 @@ module.exports = class AAC extends require("stream").Writable
 
                 @frameHeader    = h
                 @frameHeaderBuf = buf
-                @emit "header", h
+                _emitAndMaybeEnd "header", h
                 @frameSize = @frameHeader.frame_length
 
                 @isCRC = h.crc
@@ -154,7 +170,7 @@ module.exports = class AAC extends require("stream").Writable
                 frame = new Buffer( @frameHeaderBuf.length + v.length )
                 @frameHeaderBuf.copy(frame,0)
                 v.copy(frame,@frameHeaderBuf.length)
-                @emit "frame", frame
+                _emitAndMaybeEnd "frame", frame, @frameHeader
 
             @frameSize = -1
 
@@ -166,11 +182,6 @@ module.exports = class AAC extends require("stream").Writable
     _write: (chunk,encoding,callback) ->
         @istream.emit "data", chunk
         callback?()
-
-    #----------
-
-    _flush: (cb) ->
-        console.log "Parser: got flush."
 
     #----------
 
@@ -223,6 +234,7 @@ module.exports = class AAC extends require("stream").Writable
             buffer_fullness:    buffer_full
             number_of_frames:   num_frames
             frames_per_sec:     SAMPLE_FREQUENCIES[sample_freq] / 1024
+            duration:           1 / (SAMPLE_FREQUENCIES[sample_freq] / 1024) * 1000
 
         header.stream_key = ['aac',header.sample_freq,header.profile,header.channels].join("-")
 

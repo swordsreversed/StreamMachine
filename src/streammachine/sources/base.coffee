@@ -35,62 +35,38 @@ module.exports = class Source extends require("events").EventEmitter
             , 30*1000
 
 
-        # -- Pull vitals from first header -- #
+        if !source_opts.skipParser
+            # -- Pull vitals from first header -- #
 
-        @parser.once "header", (header) =>
-            # -- compute frames per second and stream key -- #
+            @parser.once "header", (header) =>
+                # -- compute frames per second and stream key -- #
 
-            @framesPerSec   = header.frames_per_sec
-            @streamKey      = header.stream_key
+                @framesPerSec   = header.frames_per_sec
+                @streamKey      = header.stream_key
 
-            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log?.debug "first header is ", header
+                @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+                @log?.debug "first header is ", header
 
-            # -- send out our stream vitals -- #
+                # -- send out our stream vitals -- #
 
-            @_setVitals
-                streamKey:          @streamKey
-                framesPerSec:       @framesPerSec
-                emitDuration:       @emitDuration
+                @_setVitals
+                    streamKey:          @streamKey
+                    framesPerSec:       @framesPerSec
+                    emitDuration:       @emitDuration
 
-        # -- Turn data frames into chunks -- #
+            # -- Turn data frames into chunks -- #
 
-        @parser.on "frame", (frame) =>
-            # heartbeat?
-            @_pingData?()
+            @chunker = new Source.FrameChunker @emitDuration * 1000
 
-            # -- queue up frames until we get to @emitDuration -- #
-            @_chunk_queue.push frame
+            @parser.on "frame", (frame,header) =>
+                # heartbeat?
+                @_pingData?()
 
-            if !@_chunk_queue_ts
-                @_chunk_queue_ts = (new Date)
+                @chunker.write frame:frame, header:header
 
-            if @framesPerSec && ( @_chunk_queue.length / @framesPerSec > @emitDuration )
-                len = 0
-                len += b.length for b in @_chunk_queue
-
-                # make this into one buffer
-                buf = new Buffer(len)
-                pos = 0
-
-                for fb in @_chunk_queue
-                    fb.copy(buf,pos)
-                    pos += fb.length
-
-                buf_ts = @_chunk_queue_ts
-
-                duration = (@_chunk_queue.length / @framesPerSec)
-
-                # reset chunk array
-                @_chunk_queue.length = 0
-                @_chunk_queue_ts = (new Date)
-
-                @emit "_chunk",
-                    data:       buf
-                    ts:         (new Date)
-                    duration:   duration
-                    streamKey:  @streamKey
-                    uuid:       @uuid
+            @chunker.on "readable", =>
+                while c = @chunker.read()
+                    @emit "_chunk", c
 
     #----------
 
@@ -99,11 +75,6 @@ module.exports = class Source extends require("events").EventEmitter
             cb? @streamKey
         else
             @once "vitals", => cb? @_vitals.streamKey
-
-    #----------
-
-    _chunkFrames: ->
-
 
     #----------
 
@@ -116,3 +87,60 @@ module.exports = class Source extends require("events").EventEmitter
             cb? @_vitals
         else
             @once "vitals", => cb? @_vitals
+
+    #----------
+
+    class @FrameChunker extends require("stream").Transform
+        constructor: (@duration) ->
+            @_chunk_queue       = []
+            @_queue_duration    = 0
+
+            @_last_ts           = null
+
+            super objectMode:true
+
+        #----------
+
+        _transform: (obj,encoding,cb) ->
+            @_chunk_queue.push obj
+            @_queue_duration += obj.header.duration
+
+            if @_queue_duration > @duration
+                # what's the total data length?
+                len = 0
+                len += o.frame.length for o in @_chunk_queue
+
+                # how many frames?
+                frames = @_chunk_queue.length
+
+                # make one buffer
+                buf = Buffer.concat (o.frame for o in @_chunk_queue)
+
+                duration = @_queue_duration
+
+                # reset queue
+                @_chunk_queue.length    = 0
+                @_queue_duration        = 0
+
+                # what's the timestamp for this chunk? If it seems reasonable
+                # to attach it to the last chunk, let's do so.
+
+                # FIXME: Implement logic to handle resetting timestamp during
+                # source discontinuities
+
+                ts =
+                    if @_last_ts
+                        new Date( Number(@_last_ts) + duration )
+                    else
+                        new Date( Number(new Date()) - duration )
+
+                @push
+                    data:       buf
+                    ts:         ts
+                    duration:   duration
+                    frames:     frames
+                    streamKey:  obj.header.stream_key
+
+                @_last_ts = ts
+
+            cb()

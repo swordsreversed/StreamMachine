@@ -82,7 +82,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 # deliver an index and then expire the segment a second later)
                 for seg in segments
                     seg_record = seg.index_record ||= """
-                    #EXTINF:#{seg.duration},#{@stream.StreamTitle}
+                    #EXTINF:#{seg.duration / 1000},#{@stream.StreamTitle}
                     #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
                     /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                     """

@@ -2,9 +2,10 @@ _u      = require "underscore"
 uuid    = require "node-uuid"
 URL     = require "url"
 
-Rewind      = require '../rewind_buffer'
-FileSource  = require "../sources/file"
-ProxySource = require '../sources/proxy_room'
+Rewind              = require '../rewind_buffer'
+FileSource          = require "../sources/file"
+ProxySource         = require '../sources/proxy_room'
+TranscodingSource   = require "../sources/transcoding"
 
 # Master streams are about source management.
 
@@ -379,3 +380,48 @@ module.exports = class Stream extends require('events').EventEmitter
         s.disconnect() for s in @sources
         @emit "destroy"
         true
+
+    #----------
+
+    class @StreamGroup extends require("events").EventEmitter
+        constructor: (@key,@log) ->
+            @streams = {}
+
+            @_stream = null
+
+        addStream: (stream) ->
+            if !@streams[ stream.key ]
+                @log.debug "SG #{@key}: Adding stream #{stream.key}"
+
+                @streams[ stream.key ] = stream
+
+                @_cloneStream(stream) if !@_stream
+
+                # listen in case it goes away
+                delFunc = =>
+                    @log.debug "SG #{@key}: Stream disconnected: #{ stream.key }"
+                    delete @streams[ stream.key ]
+
+                stream.on "disconnect", delFunc
+
+                stream.on "config", =>
+                    delFunc() if stream.opts.group != @key
+
+                # -- create a transcoding source -- #
+
+                tsource = new TranscodingSource
+                    stream:         @_stream
+                    ffmpeg_args:    stream.opts.ffmpeg_args
+                    format:         stream.opts.format
+                    stream_key:     stream.opts.stream_key
+
+                stream.addSource tsource
+
+        #----------
+
+        _cloneStream: (stream) ->
+            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts
+
+        #----------
+
+        shareSource: (source) ->

@@ -52,6 +52,8 @@ module.exports = class MP3 extends require("stream").Writable
 
         @outbuf = []
 
+        @_flushing = false
+
         # set up status
         @frameSize = -1
         @beginning = true
@@ -70,8 +72,19 @@ module.exports = class MP3 extends require("stream").Writable
 
         @_id3v1_1 = null
 
-        #@on "frame", (frame) =>
-        #    @outbuf.push frame
+        @once "finish", =>
+            @_flushing = setTimeout =>
+                @emit "end"
+            , 500
+
+        _emitAndMaybeEnd = (args...) =>
+            @emit args...
+
+            if @_flushing
+                clearTimeout @_flushing
+                @_flushing = setTimeout =>
+                    @emit "end"
+                , 500
 
         strtok.parse @istream, (v,cb) =>
             # -- initial request -- #
@@ -85,7 +98,7 @@ module.exports = class MP3 extends require("stream").Writable
             if @_parsingId3v1
                 # our first byte is in @_id3v1_1
                 id3 = @parseId3V1(Buffer.concat([@_id3v1_1,v]))
-                @emit "id3v1", id3
+                _emitAndMaybeEnd "id3v1", id3
 
                 @_id3v1_1 = null
                 @_parsingId3v1 = false
@@ -123,7 +136,7 @@ module.exports = class MP3 extends require("stream").Writable
             if @_finishingId3v2
                 # step 3 in the ID3v2 parse...
                 b = Buffer.concat([@_id3v2_1, @_id3v2_2, v])
-                @emit 'id3v2', b
+                _emitAndMaybeEnd 'id3v2', b
 
                 @_finishingId3v2 = false
 
@@ -138,7 +151,7 @@ module.exports = class MP3 extends require("stream").Writable
 
                 if tag == 'ID3'
                     # parse ID3v2 tag
-                    @emit "debug", "got an ID3"
+                    _emitAndMaybeEnd "debug", "got an ID3"
                     @_parsingId3v2 = true
                     @id3v2 = versionMajor:v[3]
                     @_id3v2_1 = v
@@ -159,18 +172,18 @@ module.exports = class MP3 extends require("stream").Writable
                         h = @parseFrame(v)
                     catch e
                         # uh oh...  bad news
-                        @emit "debug", "invalid header... ", v, tag, @frameHeader
+                        _emitAndMaybeEnd "debug", "invalid header... ", v, tag, @frameHeader
                         @frameHeader = null
                         return FIRST_BYTE
 
                     @frameHeader    = h
                     @frameHeaderBuf = v
-                    @emit "header", v, h
+                    _emitAndMaybeEnd "header", v, h
                     @frameSize = @frameHeader.frameSize
 
                     if @frameSize == 1
                         # problem...  just start over
-                        @emit "debug", "Invalid frame header: ", h
+                        _emitAndMaybeEnd "debug", "Invalid frame header: ", h
                         return FIRST_BYTE
                     else
                         return new strtok.BufferType(@frameSize - MPEG_HEADER_LENGTH);
@@ -189,7 +202,7 @@ module.exports = class MP3 extends require("stream").Writable
 
                 catch e
                     # invalid header...  chuck everything and try again
-                    @emit "debug", "chucking invalid try at header: ", buf
+                    _emitAndMaybeEnd "debug", "chucking invalid try at header: ", buf
                     @gotFF = false
                     @byteTwo = null
                     return FIRST_BYTE
@@ -201,17 +214,17 @@ module.exports = class MP3 extends require("stream").Writable
 
                 @frameHeader    = h
                 @frameHeaderBuf = buf
-                @emit "header", h
+                _emitAndMaybeEnd "header", h
 
                 @frameSize = @frameHeader.frameSize
 
                 if @frameSize == 1
                     # problem...  just start over
-                    @emit "debug", "Invalid frame header: ", h
+                    _emitAndMaybeEnd "debug", "Invalid frame header: ", h
 
                     return FIRST_BYTE
                 else
-                    @emit "debug", "On-tracking with frame of: ", @frameSize - MPEG_HEADER_LENGTH
+                    _emitAndMaybeEnd "debug", "On-tracking with frame of: ", @frameSize - MPEG_HEADER_LENGTH
                     return new strtok.BufferType(@frameSize - MPEG_HEADER_LENGTH);
 
             if @gotFF
@@ -238,21 +251,19 @@ module.exports = class MP3 extends require("stream").Writable
                 frame = new Buffer( @frameHeaderBuf.length + v.length )
                 @frameHeaderBuf.copy(frame,0)
                 v.copy(frame,@frameHeaderBuf.length)
-                @emit "frame", frame
+                _emitAndMaybeEnd "frame", frame, @frameHeader
 
             @frameSize = -1
             return MPEG_HEADER
 
     #----------
 
-    _write: (chunk,encoding,callback) ->
+    _write: (chunk,encoding,cb) ->
+        if @_flushing
+            throw new Error "MP3 write while flushing."
+
         @istream.emit "data", chunk
-        callback?()
-
-    #----------
-
-    _flush: (cb) ->
-        @emit "debug", "Parser: got flush."
+        cb?()
 
     #----------
 
@@ -350,7 +361,8 @@ module.exports = class MP3 extends require("stream").Writable
 
         # -- compute StreamMachine-specific header bits -- #
 
-        r.frames_per_sec = r.samplingRateHz / r.samplesPerFrame
-        r.stream_key = ['mp3',r.samplingRateHz,r.bitrateKBPS,(if r.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
+        r.frames_per_sec    = r.samplingRateHz / r.samplesPerFrame
+        r.duration          = (1 / r.frames_per_sec) * 1000
+        r.stream_key        = ['mp3',r.samplingRateHz,r.bitrateKBPS,(if r.modeName in ["Stereo","J-Stereo"] then "s" else "m")].join("-")
 
         r

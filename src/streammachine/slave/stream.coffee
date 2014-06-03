@@ -268,7 +268,7 @@ module.exports = class Stream extends require('../rewind_buffer')
             @log.interaction "",
                 type:       "session_start"
                 client:     _u.extend {}, client, session_id:session_id
-                start_time: new Date(),
+                time:       new Date(),
                 id:         session_id
 
             cb null, session_id

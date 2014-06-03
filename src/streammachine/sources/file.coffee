@@ -49,6 +49,7 @@ module.exports = class FileSource extends require("./base")
             # done parsing...
             @parser.removeAllListeners()
             @_current_chunk = null
+            @emit "_loaded"
 
         # pipe our file into the parser
         @_file = fs.createReadStream @opts.filePath

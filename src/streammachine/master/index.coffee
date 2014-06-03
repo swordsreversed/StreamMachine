@@ -20,9 +20,10 @@ module.exports = class Master extends require("events").EventEmitter
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
 
-        @slaves     = {}
-        @streams    = {}
-        @proxies    = {}
+        @slaves         = {}
+        @streams        = {}
+        @stream_groups  = {}
+        @proxies        = {}
 
         @listeners = slaves:{}, streams:{}, total:0
 
@@ -210,6 +211,12 @@ module.exports = class Master extends require("events").EventEmitter
             else
                 @log.debug "Starting up master stream: #{key}", opts:opts
                 @_startStream key, opts
+
+            # part of a stream group?
+            if g = @streams[key].opts.group
+                # do we have a matching group?
+                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
+                sg.addStream @streams[key]
 
         @emit "streams", @streams
 

@@ -186,7 +186,7 @@ module.exports = class Rewinder extends require("stream").Readable
 
             @_queuedBytes   -= next_buf.data.length
             @_sentBytes     += next_buf.data.length
-            @_sentDuration  += next_buf.duration
+            @_sentDuration  += (next_buf.duration / 1000)
 
             # Not all chunks will contain metadata, but go ahead and send
             # ours out if it does

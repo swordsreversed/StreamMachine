@@ -44,17 +44,12 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
 
     _trySource: (sock,info) =>
-        # source request... is the endpoint one that we recognize?
-        if m = ///^/(#{_u(@core.streams).keys().join("|")})///.exec info.url
-            stream = @core.streams[ m[1] ]
-
-            # cool, now make sure we have the headers we need
-
+        _authFunc = (stream) =>
             # first, make sure the authorization header contains the right password
             @log.debug "Trying to authenticate ICY source for #{stream.key}"
-            if info.headers.authorization && @_authorize(stream,info.headers.authorization)
+            if info.headers.authorization && @_authorize(stream.opts.source_password,info.headers.authorization)
                 sock.write "HTTP/1.0 200 OK\n\n"
-                @log.debug "ICY source authenticated for #{stream.key}"
+                @log.debug "ICY source authenticated for #{stream.key}."
 
                 # now create a new source
                 source = new IcecastSource
@@ -64,10 +59,23 @@ module.exports = class SourceIn extends require("events").EventEmitter
                     logger:     stream.log
 
                 stream.addSource source
+
             else
                 @log.debug "ICY source failed to authenticate for #{stream.key}."
                 sock.write "HTTP/1.0 401 Unauthorized\r\n"
                 sock.end "Invalid source or password.\r\n"
+
+
+        # -- source request... is the endpoint one that we recognize? -- #
+
+        # stream groups
+        if m = ///^/(#{Object.keys(@core.stream_groups).join("|")})///.exec info.url
+            sg = @core.stream_groups[ m[1] ]
+            _authFunc sg._stream
+
+        else if m = ///^/(#{Object.keys(@core.streams).join("|")})///.exec info.url
+            stream = @core.streams[ m[1] ]
+            _authFunc stream
 
         else
             @log.debug "ICY source attempted to connect to bad URL.", url:info.url
@@ -86,7 +94,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
     #----------
 
-    _authorize: (stream,header) ->
+    _authorize: (stream_passwd,header) ->
         # split the auth type from the value
         [type,value] = header.split " "
 
@@ -94,7 +102,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
             value = new Buffer(value, 'base64').toString('ascii')
             [user,pass] = value.split ":"
 
-            if pass == stream.opts.source_password
+            if pass == stream_passwd
                 true
             else
                 false
