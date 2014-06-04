@@ -22,13 +22,11 @@ module.exports = class TranscodingSource extends require("./base")
         @ffmpeg = new FFmpeg( source:@_buf ).addOptions @opts.ffmpeg_args.split("|")
 
         @ffmpeg.on "start", (cmd) =>
-            console.log "ffmpeg started with ", cmd
+            @log?.info "ffmpeg started with #{ cmd }"
 
         @ffmpeg.on "error", (err) =>
-            console.log "ffmpeg err is ", err
-
-        @ffmpeg.once "codecData", (data) =>
-            #console.log "trans codec data is ", data
+            @log?.error "ffmpeg transcoding error: #{ err }"
+            # FIXME: What do we do to restart the transcoder?
 
         @ffmpeg.writeToStream @parser
 
@@ -41,7 +39,6 @@ module.exports = class TranscodingSource extends require("./base")
 
             @parser.on "frame", (frame,header) =>
                 # we need to re-apply our chunking logic to the output
-                #console.log "trans p -> c"
                 @chunker.write frame:frame, header:header
 
             @chunker.on "readable", =>

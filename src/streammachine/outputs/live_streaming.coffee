@@ -5,19 +5,9 @@ uuid = require "node-uuid"
 BaseOutput = require "./base"
 
 module.exports = class LiveStreaming extends BaseOutput
-    @secs_per_ts = 10
-
     constructor: (@stream,@opts) ->
 
         super "live_streaming"
-
-        @chunks_per_ts = LiveStreaming.secs_per_ts / @stream._rsecsPerChunk
-
-        # we'll have received a sequence number in req.param("seq"). If we
-        # multiply it by LiveStreaming.secs_per_ts and then by 1000, we'll
-        # have a timestamp in ms. We need to check if that ts is in our
-        # rewind buffer.  If so, we need to find it and return a chunk of
-        # data @chunks_per_ts chunks long.
 
         @stream.listen @,
             live_segment:   @opts.req.param("seg")
@@ -56,15 +46,11 @@ module.exports = class LiveStreaming extends BaseOutput
                     @opts.res.status(500).end "No data."
                     return false
 
+                # skip the first three segments to provide a little cushion
+                # against them getting expired before playback
                 segments = @stream.hls_segmenter.segments[2..-1]
 
                 super "live_streaming"
-
-                # requests for a stream index should hopefully come in with a
-                # session id attached.  If so, we'll proxy it through to the URLs
-                # for the ts files.
-
-                session_id = @opts.req.param("session_id")
 
                 @opts.res.writeHead 200,
                     "Content-type": "application/vnd.apple.mpegurl"
@@ -72,7 +58,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 @opts.res.write """
                 #EXTM3U
                 #EXT-X-VERSION:3
-                #EXT-X-TARGETDURATION:#{LiveStreaming.secs_per_ts}
+                #EXT-X-TARGETDURATION:#{@stream.hls_segmenter.segment_length}
                 #EXT-X-MEDIA-SEQUENCE:#{segments[0].id}
                 #EXT-X-ALLOW-CACHE:NO
 
@@ -80,6 +66,7 @@ module.exports = class LiveStreaming extends BaseOutput
 
                 # List all segments, skipping the first three (so that we don't
                 # deliver an index and then expire the segment a second later)
+
                 for seg in segments
                     seg_record = seg.index_record ||= """
                     #EXTINF:#{seg.duration / 1000},#{@stream.StreamTitle}
@@ -87,7 +74,12 @@ module.exports = class LiveStreaming extends BaseOutput
                     /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                     """
 
-                    @opts.res.write seg_record + ( (session_id && "?session_id=#{session_id}") || "" ) + "\n"
+                    @opts.res.write seg_record
+
+                    if @client.session_id && @client.pass_session
+                       @opts.res.write "?session_id=#{@client.session_id}"
+
+                    @opts.res.write "\n"
 
                 @opts.res.end()
 
@@ -102,7 +94,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 "Content-type": "application/vnd.apple.mpegurl"
 
             # who do we ask for the session id?
-            @group.startSession @client, (err,session_id) =>
+            @group.startSession @client, (err) =>
                 @opts.res.write """
                 #EXTM3U
 
@@ -110,9 +102,14 @@ module.exports = class LiveStreaming extends BaseOutput
 
                 for key,s of @group.streams
                     @opts.res.write """
-                    #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
-                    /#{s.key}.m3u8?session_id=#{session_id}
-
+                    #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"\n
                     """
+                    url =
+                        if @client.pass_session
+                            "/#{s.key}.m3u8?session_id=#{@client.session_id}"
+                        else
+                            "/#{s.key}.m3u8"
+
+                    @opts.res.write url + "\n"
 
                 @opts.res.end()

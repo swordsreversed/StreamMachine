@@ -35,7 +35,6 @@ module.exports = class Master extends require("events").EventEmitter
 
         if @options.streams
             process.nextTick =>
-                console.log "options.streams is ", @options.streams
                 @configureStreams @options.streams
 
         # -- load our streams configuration from redis -- #
@@ -102,7 +101,6 @@ module.exports = class Master extends require("events").EventEmitter
             @analytics = new Analytics opts.analytics, @log.child(module:"analytics")
 
             # add a log transport
-            console.log "log is ", @log.logger
             @log.logger.add new Analytics.LogTransport(@analytics), {}, true
 
     #----------

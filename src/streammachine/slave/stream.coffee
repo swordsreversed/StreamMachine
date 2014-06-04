@@ -225,23 +225,21 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
 
     startSession: (client,cb) ->
-        # we'll generate and attach a session id to each master playlist
-        # request, so that we can keep track of the course of the play
-        session_id = uuid.v4()
-
         @log.interaction "",
             type:       "session_start"
-            client:     _u.extend {}, client, session_id:session_id
+            client:     client
             time:       new Date()
-            session_id: session_id
+            session_id: client.session_id
 
-        cb null, session_id
+        cb null, client.session_id
 
     #----------
 
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
             @streams = {}
+
+        #----------
 
         addStream: (stream) ->
             if !@streams[ stream.key ]
@@ -260,16 +258,13 @@ module.exports = class Stream extends require('../rewind_buffer')
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
 
-        startSession: (client,cb) ->
-            # we'll generate and attach a session id to each master playlist
-            # request, so that we can keep track of the course of the play
-            session_id = uuid.v4()
+        #----------
 
+        startSession: (client,cb) ->
             @log.interaction "",
                 type:       "session_start"
-                client:     _u.extend {}, client, session_id:session_id
-                time:       new Date(),
-                id:         session_id
+                client:     client
+                time:       new Date()
+                id:         client.session_id
 
-            cb null, session_id
-
+            cb null, client.session_id
