@@ -18,8 +18,8 @@ module.exports = class TranscodingSource extends require("./base")
         # comes back through our parser to re-chunk it. We count chunks to
         # attach the right timing information to the chunks that come out
 
-        buf = new PassThrough
-        @ffmpeg = new FFmpeg( source:buf ).addOptions @opts.ffmpeg_args.split("|")
+        @_buf = new PassThrough
+        @ffmpeg = new FFmpeg( source:@_buf ).addOptions @opts.ffmpeg_args.split("|")
 
         @ffmpeg.on "start", (cmd) =>
             console.log "ffmpeg started with ", cmd
@@ -34,25 +34,24 @@ module.exports = class TranscodingSource extends require("./base")
 
         # -- chunking -- #
 
-        @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000
+        @source.once "data", (first_chunk) =>
+            @emit "connected"
 
-        @parser.on "frame", (frame,header) =>
-            # we need to re-apply our chunking logic to the output
-            #console.log "trans p -> c"
-            @chunker.write frame:frame, header:header
+            @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
 
-        @chunker.on "readable", =>
-            while c = @chunker.read()
-                #console.log "transcoding chunk read"
-                o_c = @_queue.shift()
-                c.ts = o_c.ts
-                # re-attach the timestamp from the original data chunk
-                @emit "data", c
+            @parser.on "frame", (frame,header) =>
+                # we need to re-apply our chunking logic to the output
+                #console.log "trans p -> c"
+                @chunker.write frame:frame, header:header
 
-        @source.on "data", (chunk) =>
-            #console.log "trans s -> ff"
-            @_queue.push chunk
-            buf.write chunk.data
+            @chunker.on "readable", =>
+                while c = @chunker.read()
+                    @emit "data", c
+
+            @source.on "data", (chunk) =>
+                @_buf.write chunk.data
+
+            @_buf.write first_chunk.data
 
         # -- go ahead and emit vitals -- #
 

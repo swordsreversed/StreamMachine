@@ -91,7 +91,7 @@ module.exports = class Source extends require("events").EventEmitter
     #----------
 
     class @FrameChunker extends require("stream").Transform
-        constructor: (@duration) ->
+        constructor: (@duration,@initialTime = new Date()) ->
             @_chunk_queue       = []
             @_queue_duration    = 0
 
@@ -132,7 +132,7 @@ module.exports = class Source extends require("events").EventEmitter
                     if @_last_ts
                         new Date( Number(@_last_ts) + duration )
                     else
-                        new Date( Number(new Date()) - duration )
+                        @initialTime
 
                 @push
                     data:       buf
