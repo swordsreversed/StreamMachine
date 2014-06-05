@@ -414,6 +414,7 @@ module.exports = class Stream extends require('events').EventEmitter
                     ffmpeg_args:    stream.opts.ffmpeg_args
                     format:         stream.opts.format
                     stream_key:     stream.opts.stream_key
+                    logger:         stream.log
 
                 stream.addSource tsource
 

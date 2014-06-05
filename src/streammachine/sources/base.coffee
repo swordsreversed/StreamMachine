@@ -101,6 +101,12 @@ module.exports = class Source extends require("events").EventEmitter
 
         #----------
 
+        resetTime: (ts) ->
+            @_last_ts       = null
+            @initialTime    = ts
+
+        #----------
+
         _transform: (obj,encoding,cb) ->
             @_chunk_queue.push obj
             @_queue_duration += obj.header.duration
@@ -124,9 +130,6 @@ module.exports = class Source extends require("events").EventEmitter
 
                 # what's the timestamp for this chunk? If it seems reasonable
                 # to attach it to the last chunk, let's do so.
-
-                # FIXME: Implement logic to handle resetting timestamp during
-                # source discontinuities
 
                 ts =
                     if @_last_ts

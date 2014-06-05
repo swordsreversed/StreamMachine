@@ -10,7 +10,7 @@ module.exports = class TranscodingSource extends require("./base")
 
         @_queue = []
 
-        @source = @opts.stream
+        @o_stream = @opts.stream
 
         # we start up an ffmpeg transcoder and then listen for data events
         # from our source. Each time we get a chunk of audio data, we feed
@@ -30,9 +30,21 @@ module.exports = class TranscodingSource extends require("./base")
 
         @ffmpeg.writeToStream @parser
 
+        # -- watch for discontinuities -- #
+
+        @_pingData = _.debounce =>
+            # data has stopped flowing. mark a discontinuity in the chunker.
+            @log?.info "Transcoder data interupted. Marking discontinuity."
+
+            @o_stream.once "data", (chunk) =>
+                @log?.info "Transcoder data resumed. Reseting time to #{chunk.ts}."
+                @chunker.resetTime chunk.ts
+
+        , 30*1000
+
         # -- chunking -- #
 
-        @source.once "data", (first_chunk) =>
+        @o_stream.once "data", (first_chunk) =>
             @emit "connected"
 
             @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
@@ -45,7 +57,8 @@ module.exports = class TranscodingSource extends require("./base")
                 while c = @chunker.read()
                     @emit "data", c
 
-            @source.on "data", (chunk) =>
+            @o_stream.on "data", (chunk) =>
+                @_pingData()
                 @_buf.write chunk.data
 
             @_buf.write first_chunk.data
