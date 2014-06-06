@@ -37,6 +37,7 @@ module.exports = class Stream extends require('events').EventEmitter
         group:              null
         bandwidth:          0
         codec:              null
+        ffmpeg_args:        null
 
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
@@ -385,7 +386,8 @@ module.exports = class Stream extends require('events').EventEmitter
 
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
-            @streams = {}
+            @streams        = {}
+            @transcoders    = {}
 
             @_stream = null
 
@@ -407,16 +409,30 @@ module.exports = class Stream extends require('events').EventEmitter
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
 
-                # -- create a transcoding source -- #
+                    if stream.opts.ffmpeg_args && !@transcoders[ stream.key ]
+                        tsource = @_startTranscoder stream
+                        @transcoders[ stream.key ] = tsource
 
-                tsource = new TranscodingSource
-                    stream:         @_stream
-                    ffmpeg_args:    stream.opts.ffmpeg_args
-                    format:         stream.opts.format
-                    stream_key:     stream.opts.stream_key
-                    logger:         stream.log
+                if stream.opts.ffmpeg_args
+                    tsource = @_startTranscoder stream
+                    @transcoders[ stream.key ] = tsource
 
-                stream.addSource tsource
+        #----------
+
+        _startTranscoder: (stream) ->
+            @log.debug "SG #{@key}: Setting up transcoding source for #{ stream.key }"
+
+            # -- create a transcoding source -- #
+
+            tsource = new TranscodingSource
+                stream:         @_stream
+                ffmpeg_args:    stream.opts.ffmpeg_args
+                format:         stream.opts.format
+                logger:         stream.log
+
+            stream.addSource tsource
+
+            tsource
 
         #----------
 

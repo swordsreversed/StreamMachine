@@ -111,6 +111,14 @@
           String that should be sent as the "CODECS" attribute in an HTTP
           Live Streaming master playlist.
 
+    .control-group
+      %label.control-label FFMpeg Arguments
+      .controls
+        %input(type="text" name="ffmpeg_args")
+        %span.help-block
+          Arguments to use for transcoding. Arguments should be separated by
+          "|" pipe characters.
+
 
 .modal-footer
   %button.btn.btn-primary.save Save

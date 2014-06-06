@@ -3,7 +3,7 @@ FFmpeg          = require "fluent-ffmpeg"
 PassThrough     = require("stream").PassThrough
 
 module.exports = class TranscodingSource extends require("./base")
-    TYPE: -> "Transcoding"
+    TYPE: -> "Transcoding (#{if @connected then "Connected" else "Waiting"})"
 
     constructor: (@opts) ->
         super skipParser:true
@@ -63,9 +63,29 @@ module.exports = class TranscodingSource extends require("./base")
 
             @_buf.write first_chunk.data
 
-        # -- go ahead and emit vitals -- #
+        # -- watch for vitals -- #
 
-        process.nextTick =>
+        @parser.once "header", (header) =>
+            # -- compute frames per second and stream key -- #
+
+            @framesPerSec   = header.frames_per_sec
+            @streamKey      = header.stream_key
+
+            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log?.debug "first header is ", header
+
+            # -- send out our stream vitals -- #
+
             @_setVitals
-                emitDuration:   @emitDuration
-                streamKey:      @opts.stream_key
+                streamKey:          @streamKey
+                framesPerSec:       @framesPerSec
+                emitDuration:       @emitDuration
+
+    #----------
+
+    info: ->
+        source:     @TYPE?() ? @TYPE
+        connected:  @connected
+        url:        "N/A"
+        streamKey:  @streamKey
+        uuid:       @uuid
