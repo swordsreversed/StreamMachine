@@ -202,7 +202,7 @@ module.exports = class AAC extends require("stream").Writable
         # -- AAC Stream Info -- #
 
         obj_type        = b[2] >> 6
-        sample_freq     = b[2] >> 2 & 0xE
+        sample_freq     = b[2] >> 2 & 0xF
 
         channels        = (b[2] & 1) << 2 | b[3] >> 6
 
