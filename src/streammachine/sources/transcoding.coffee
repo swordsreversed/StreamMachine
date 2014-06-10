@@ -46,6 +46,7 @@ module.exports = class TranscodingSource extends require("./base")
 
         @o_stream.once "data", (first_chunk) =>
             @emit "connected"
+            @connected = true
 
             @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
 
