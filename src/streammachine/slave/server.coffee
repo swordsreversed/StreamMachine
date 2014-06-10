@@ -5,6 +5,7 @@ fs      = require 'fs'
 path    = require 'path'
 nconf   = require 'nconf'
 uuid    = require 'node-uuid'
+tz      = require 'timezone'
 
 module.exports = class Server extends require('events').EventEmitter
     DefaultOptions:
@@ -17,6 +18,8 @@ module.exports = class Server extends require('events').EventEmitter
 
         @core = @opts.core
         @logger = @opts.logger
+
+        @local = tz(require "timezone/zones")(nconf.get("timezone")||"UTC")
 
         # -- set up our express app -- #
 
@@ -124,7 +127,7 @@ module.exports = class Server extends require('events').EventEmitter
             new @core.Outputs.live_streaming.GroupIndex req.group, req:req, res:res
 
         @app.get "/:stream.m3u8", (req,res) =>
-            new @core.Outputs.live_streaming.Index req.stream, req:req, res:res
+            new @core.Outputs.live_streaming.Index req.stream, req:req, res:res, local:@local
 
         @app.get "/:stream/ts/:seg.(:format)", (req,res) =>
             new @core.Outputs.live_streaming req.stream, req:req, res:res, format:req.param("format")

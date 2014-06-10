@@ -42,6 +42,8 @@ module.exports = class LiveStreaming extends BaseOutput
     class @Index extends BaseOutput
         constructor: (@stream,@opts) ->
             @stream._once_source_loaded =>
+                @local = @opts.local || tz
+
                 if @stream.hls_segmenter.segments.length <= 3
                     @opts.res.status(500).end "No data."
                     return false
@@ -70,7 +72,7 @@ module.exports = class LiveStreaming extends BaseOutput
                 for seg in segments
                     seg_record = seg.index_record ||= """
                     #EXTINF:#{seg.duration / 1000},#{@stream.StreamTitle}
-                    #EXT-X-PROGRAM-DATE-TIME:#{tz(seg.ts,"%FT%T.%3N%:z")}
+                    #EXT-X-PROGRAM-DATE-TIME:#{@local(seg.ts,"%FT%T.%3N%:z")}
                     /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                     """
 
