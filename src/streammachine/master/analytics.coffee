@@ -2,6 +2,8 @@ _       = require "underscore"
 Influx  = require "influx"
 URL     = require "url"
 winston = require "winston"
+tz      = require "timezone"
+nconf   = require "nconf"
 
 pointsToObjects = (res) ->
     return null if !res
@@ -32,6 +34,8 @@ module.exports = class Analytics
 
         # track open sessions
         @sessions = {}
+
+        @local = tz(require "timezone/zones")(nconf.get("timezone")||"UTC")
 
         # -- are there any sessions that should be finalized? -- #
 
@@ -132,14 +136,20 @@ module.exports = class Analytics
                     @log.error err
                     return cb? err
 
+                if !start
+                    err = "Failed to query session start for #{id}."
+                    @log.error err
+                    return cb? err
+
                 @_selectListenTotals id, ts, (err,totals) =>
                     if err
                         @log.error err
                         return cb? err
 
                     if !totals
-                        @log.debug "No totals found for session #{ id }"
-                        return false
+                        err = "No totals found for session #{ id }"
+                        @log.debug err
+                        return cb? err
 
                     @_selectLastListen id, (err,ll) =>
                         if err
@@ -226,6 +236,26 @@ module.exports = class Analytics
                 cb null, new Date(res[0].points[0][0])
             else
                 cb null, null
+
+    #----------
+
+    countListeners: (cb) ->
+        # -- Query recent listeners -- #
+
+        @influx.query "SELECT SUM(duration) AS seconds FROM listens GROUP BY time(1m) fill(0) LIMIT 15", (err,res) =>
+            return cb new Error "Failed to query listens: #{err}" if err
+
+            if res.length == 1
+                timepoints = for p in res[0].points[1..-1]
+                    tp =
+                        time:       @local(p[0],"%F %T%^z")
+                        listeners:  Math.round(p[1] / 60)
+
+                console.log "calling back with ", timepoints
+                cb null, timepoints
+
+            else
+                cb "Unknown error querying listening time."
 
     #----------
 
