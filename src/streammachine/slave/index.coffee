@@ -28,12 +28,6 @@ module.exports = class Slave extends require("events").EventEmitter
         @connected = false
 
         @_retrying = null
-        @_retryConnection = =>
-            @log.debug "Failed to connect to master. Trying again in 5 seconds."
-            @_retrying = setTimeout =>
-                @log.debug "Retrying connection to master."
-                @_connectMaster()
-            , 5000
 
         # -- Set up logging -- #
 
@@ -92,15 +86,26 @@ module.exports = class Slave extends require("events").EventEmitter
 
     _connectMaster: ->
         @log.info "Slave trying connection to master."
-        @master = Socket.connect @options.slave.master, "connect timeout":5000
+        @master = Socket.connect @options.slave.master, "connect timeout":5000, "force new connection":true
+
+        # -- set a connect timer for retry -- #
+
+        @_retrying = setTimeout =>
+            @log.debug "Failed to connect to master in 5 seconds. Resetting to try again."
+            @master.removeAllListeners()
+            @master = null
+            @_connectMaster()
+        , 5000
 
         @master.on "connect", => @_onConnect()
         @master.on "reconnect", => @_onConnect()
 
-        @master.on "connect_failed", @_retryConnection
+        #@master.on "connect_failed", @_retryConnection
+
         @master.on "error", (err) =>
             if err.code =~ /ECONNREFUSED/
-                @_retryConnection()
+                #@_retryConnection()
+                @log.info "Slave connection refused."
             else
                 @log.info "Slave got connection error of #{err}", error:err
                 console.log "got connection error of ", err
