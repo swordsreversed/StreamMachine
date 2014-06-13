@@ -4,6 +4,7 @@ URL     = require "url"
 winston = require "winston"
 tz      = require "timezone"
 nconf   = require "nconf"
+elasticsearch = require "elasticsearch"
 
 pointsToObjects = (res) ->
     return null if !res
@@ -28,26 +29,55 @@ pointsToObjects = (res) ->
 
 module.exports = class Analytics
     constructor: (@opts,@log) ->
-        influx_uri = URL.parse @opts.influx
-        influx_auth = influx_uri.auth?.split(":")
-        @influx = new Influx influx_uri.hostname, influx_uri.port, influx_auth?[0], influx_auth?[1], influx_uri.path.substr(1)
+        @_uri = URL.parse @opts.es_uri
+
+        @es = new elasticsearch.Client
+            host:       "http://#{@_uri.hostname}:#{@_uri.port||9200}"
+            apiVersion: "1.1"
 
         # track open sessions
         @sessions = {}
 
         @local = tz(require "timezone/zones")(nconf.get("timezone")||"UTC")
 
+        # -- Load our Templates -- #
+
+        @_loadTemplates (err) =>
+            if err
+                console.error err
+            else
+                # do something...
+
+
         # -- are there any sessions that should be finalized? -- #
 
         # when was our last finalized session?
-        last_session = @influx.query "SELECT max(time) from sessions", (err,res) =>
-            console.log "last session is ", err, res
+        #last_session = @influx.query "SELECT max(time) from sessions", (err,res) =>
+        #    console.log "last session is ", err, res
 
         # what sessions have we seen since then?
 
-    _log: (obj,cb) ->
-        #console.log "Analytics: ", obj
+    #----------
 
+    _loadTemplates: (cb) ->
+        errors = []
+
+        _loaded = _.after Object.keys(Analytics.EStemplates).length, =>
+            if errors.length > 0
+                cb new Error "Failed to load index templates: #{ errors.join(" | ") }"
+            else
+                cb null
+
+        for t,obj of Analytics.EStemplates
+            console.log "Loading mappings for #{t}"
+            tmplt = _.extend {}, obj, template:"#{t}-*"
+            @es.indices.putTemplate name:"#{t}_template", body:tmplt, (err) =>
+                errors.push err if err
+                _loaded()
+
+    #----------
+
+    _log: (obj,cb) ->
         session_id = null
 
         if !obj.client?.session_id
@@ -73,43 +103,36 @@ module.exports = class Analytics
 
             cb? null
 
+        index_date = tz(obj.time,"%F")
+
         switch obj.type
             when "session_start"
-                @influx.writePoint "starts",
-                    time:           new Date(obj.time)
-                    output:         obj.client.output
-                    session_id:     obj.client.session_id
-                    client_ip:      obj.client.ip
-                    client_ua:      obj.client.ua
-                    client_uid:     obj.client.user_id
-                    path:           obj.client.path
-                    stream:         obj.stream_group || obj.stream
+                @es.index index:"listens-#{index_date}", type:"start", body:
+                    time:       new Date(obj.time)
+                    session_id: obj.client.session_id
+                    stream:     obj.stream_group || obj.stream
+                    client:     obj.client
                 , (err) =>
                     if err
-                        @log.error "Influx write error: #{err}"
+                        @log.error "ES write error: #{err}"
                         return cb? err
 
-                    setFinalizeTimer()
-
+                    #setFinalizeTimer()
 
             when "listen"
-                @influx.writePoint "listens",
-                    time:           new Date(obj.time)
-                    output:         obj.client.output
-                    session_id:     obj.client.session_id
-                    client_ip:      obj.client.ip
-                    client_ua:      obj.client.ua
-                    client_uid:     obj.client.user_id
-                    path:           obj.client.path
-                    bytes:          obj.bytes
-                    duration:       obj.duration
-                    stream:         obj.stream
+                @es.index index:"listens-#{index_date}", type:"listen", body:
+                    session_id: obj.client.session_id
+                    time:       new Date(obj.time)
+                    bytes:      obj.bytes
+                    duration:   obj.duration
+                    stream:     obj.stream
+                    client:     obj.client
                 , (err) =>
                     if err
-                        @log.error "Influx write error: #{err}"
+                        @log.error "ES write error: #{err}"
                         return cb? err
 
-                    setFinalizeTimer()
+                    #setFinalizeTimer()
 
     #----------
 
@@ -269,4 +292,69 @@ module.exports = class Analytics
             if level == "interaction"
                 @a._log meta
                 cb?()
+
+    #----------
+
+    @EStemplates:
+        listens:
+            mappings:
+                start:
+                    properties:
+                        time:
+                            type:   "date"
+                            format: "date_time"
+                        stream:
+                            type:   "string"
+                            index:  "not_analyzed"
+                        session_id:
+                            type:   "string"
+                            index:  "not_analyzed"
+                        client:
+                            type:   "object"
+                            properties:
+                                user_id:
+                                    type:   "string"
+                                    index:  "not_analyzed"
+                                output:
+                                    type:   "string"
+                                    index:  "not_analyzed"
+                                ip:
+                                    type:   "ip"
+                                ua:
+                                    type:   "string"
+                                path:
+                                    type:   "string"
+
+                listen:
+                    properties:
+                        time:
+                            type:   "date"
+                            format: "date_time"
+                        stream:
+                            type:   "string"
+                            index:  "not_analyzed"
+                        session_id:
+                            type:   "string"
+                            index:  "not_analyzed"
+                        duration:
+                            type:   "float"
+                            include_in_all: false
+                        bytes:
+                            type:   "integer"
+                        client:
+                            type:   "object"
+                            properties:
+                                user_id:
+                                    type:   "string"
+                                    index:  "not_analyzed"
+                                output:
+                                    type:   "string"
+                                    index:  "not_analyzed"
+                                ip:
+                                    type:   "ip"
+                                ua:
+                                    type:   "string"
+                                path:
+                                    type:   "string"
+
 
