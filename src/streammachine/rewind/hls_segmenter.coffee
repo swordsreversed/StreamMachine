@@ -1,7 +1,7 @@
 _ = require "underscore"
 
 module.exports = class HLSSegmenter
-    constructor: (@rewind,@segment_length) ->
+    constructor: (@rewind,@segment_length,@log) ->
         @segments       = []
         @_segments      = []
         @segment_idx    = {}
@@ -95,14 +95,7 @@ module.exports = class HLSSegmenter
             return true
 
         else
-            console.log "Not sure where to place segment!!! ",
-                chunk:chunk
-                first:
-                    start:  first_seg.ts
-                    end:    first_seg.end_ts
-                last:
-                    start:  last_seg.ts
-                    end:    last_seg.end_ts
+            @log.error "Not sure where to place segment!!! ", chunk_ts: chunk.ts
 
     #----------
 

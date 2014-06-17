@@ -115,19 +115,14 @@ module.exports = class Master extends require("events").EventEmitter
         @_attachIOProxy(s) for key,s of @streams
 
         # add our authentication
-        @io.configure =>
-            # don't bombard us with stream data
-            @io.disable "log"
-
-            @io.set "authorization", (data,cb) =>
-                @log.debug "In authorization for slave connection."
-                # look for password
-                if @options.master.password == data.query?.password
-                    @log.debug "Slave password is valid."
-                    cb null, true
-                else
-                    @log.debug "Slave password is incorrect."
-                    cb "Invalid slave password.", false
+        @io.use (socket,next) =>
+            @log.debug "Authenticating slave connection."
+            if @options.master.password == socket.request._query?.password
+                @log.debug "Slave password is valid."
+                next()
+            else
+                @log.debug "Slave password is incorrect."
+                next new Error "Invalid slave password."
 
         # look for slave connections
         @io.on "connection", (sock) =>
@@ -141,13 +136,10 @@ module.exports = class Master extends require("events").EventEmitter
             @slaves[sock.id] = sock
 
             # attach event handler for log reporting
-            socklogger = @log.child slave:sock.handshake.address.address
+
+            socklogger = @log.child slave:sock.id
             sock.on "log", (obj = {}) =>
                 socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
-
-            # look for listener counts
-            sock.on "listeners", (obj = {}) =>
-                @_recordListeners sock.id, obj
 
             sock.on "stream_stats", (key, cb) =>
                 # respond with the stream's vitals
@@ -176,12 +168,6 @@ module.exports = class Master extends require("events").EventEmitter
         return config
 
     #----------
-
-    _recordListeners: (slave,obj) ->
-        @log.debug "slave #{slave} sent #{obj.total} listeners"
-        @listeners.slaves[ slave ] = obj.total
-        for k,c of obj.counts
-            @streams[k]?.recordSlaveListeners slave, c
 
     # configureStreams can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.

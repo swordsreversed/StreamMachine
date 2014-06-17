@@ -47,28 +47,6 @@ module.exports = class Slave extends require("events").EventEmitter
         # init our server
         @server = new Server core:@, logger:@log.child(subcomponent:"server")
 
-        # -- Listener Counts -- #
-
-        # once every 10 seconds, count all listeners and send them on to the master
-
-        @_listeners_interval = setInterval =>
-            return if !@connected?
-
-            counts = {}
-            total = 0
-
-            for k,s of @streams
-                l = s.listeners()
-                counts[k] = l
-                total += l
-
-            @log.debug "sending listeners: #{total}", counts
-
-            @emit "listeners", counts:counts, total:total
-            @master?.emit "listeners", counts:counts, total:total
-
-        , 10 * 1000
-
         # -- Buffer Stats -- #
 
         @_buffer_interval = setInterval =>
@@ -86,21 +64,9 @@ module.exports = class Slave extends require("events").EventEmitter
 
     _connectMaster: ->
         @log.info "Slave trying connection to master."
-        @master = Socket.connect @options.slave.master, "connect timeout":5000, "force new connection":true
-
-        # -- set a connect timer for retry -- #
-
-        @_retrying = setTimeout =>
-            @log.debug "Failed to connect to master in 5 seconds. Resetting to try again."
-            @master.removeAllListeners()
-            @master = null
-            @_connectMaster()
-        , 5000
+        @master = Socket.connect @options.slave.master, reconnection:true, timeout:0
 
         @master.on "connect", => @_onConnect()
-        @master.on "reconnect", => @_onConnect()
-
-        #@master.on "connect_failed", @_retryConnection
 
         @master.on "error", (err) =>
             if err.code =~ /ECONNREFUSED/
@@ -112,6 +78,9 @@ module.exports = class Slave extends require("events").EventEmitter
 
         @master.on "config", (config) =>
             @configureStreams config.streams
+
+        @master.on "status", (cb) =>
+            @_streamStatus cb
 
         @master.on "disconnect", =>
             @_onDisconnect()
@@ -143,6 +112,8 @@ module.exports = class Slave extends require("events").EventEmitter
         #@server?.stopListening()
 
         @log.proxyToMaster()
+
+        # FIXME: Exit?
 
         true
 
@@ -189,6 +160,11 @@ module.exports = class Slave extends require("events").EventEmitter
         # emit a streams event for any components under us that might
         # need to know
         @emit "streams", @streams
+
+    #----------
+
+    _streamStatus: (cb) ->
+        cb true
 
     #----------
 
@@ -332,7 +308,7 @@ module.exports = class Slave extends require("events").EventEmitter
             @log.debug "created SocketSource for #{@stream.key}"
 
             @slave.master.on "streamdata:#{@stream.key}",    (chunk) =>
-                # our data gets converted into an octet array to go over the
+                # our data gets converted into an ArrayBuffer to go over the
                 # socket. convert it back before insertion
                 chunk.data = new Buffer(chunk.data)
 
@@ -346,9 +322,6 @@ module.exports = class Slave extends require("events").EventEmitter
             @slave.master.emit "stream_stats", @stream.key, (err,obj) =>
                 @_streamKey = obj.streamKey
                 @emit "vitals", obj
-
-            #@slave.master.on "disconnect", =>
-            #    @emit "disconnect"
 
         #----------
 
@@ -370,13 +343,13 @@ module.exports = class Slave extends require("events").EventEmitter
             # connect to: @master.options.host:@master.options.port
 
             # GET request for rewind buffer
-            @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.master.socket.sessionid
+            @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.master.io.engine.id
             req = HTTP.request
-                hostname:   @slave.master.socket.options.host
-                port:       @slave.master.socket.options.port
+                hostname:   @slave.master.io.opts.host
+                port:       @slave.master.io.opts.port
                 path:       "/s/#{@stream.key}/rewind"
                 headers:
-                    'stream-slave-id':    @slave.master.socket.sessionid
+                    'stream-slave-id':    @slave.master.io.engine.id
             , (res) =>
                 clearTimeout gRT
 
