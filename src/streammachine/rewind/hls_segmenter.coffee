@@ -30,6 +30,16 @@ module.exports = class HLSSegmenter
 
     #----------
 
+    status: ->
+        status =
+            hls_segments:       @segments.length
+            hls_first_seg_id:   @segments[0]?.id
+            hls_first_seg_ts:   @segments[0]?.ts
+            hls_last_seg_id:    @segments[ @segments.length - 1 ]?.id
+            hls_last_seg_ts:    @segments[ @segments.length - 1 ]?.ts
+
+    #----------
+
     _queueChunk: (c) ->
         @_q.push c
         @_runQueue()

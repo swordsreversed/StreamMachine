@@ -25,8 +25,6 @@ module.exports = class Master extends require("events").EventEmitter
         @stream_groups  = {}
         @proxies        = {}
 
-        @listeners = slaves:{}, streams:{}, total:0
-
         # -- set up logging -- #
 
         @log = @options.logger
@@ -42,8 +40,8 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.redis?
             _slaveUpdate = =>
                 # pass config on to any connected slaves
-                for id,sock of @slaves
-                    sock.emit "config", @config()
+                for id,s of @slaves
+                    s.sock.emit "config", @config()
 
             @log.debug "initializing redis config"
             @redis = new Redis @options.redis
@@ -86,14 +84,14 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Buffer Stats -- #
 
-        @_buffer_interval = setInterval =>
-            counts = []
-            for k,s of @streams
-                counts.push [s.key,s.rewind._rbuffer?.length].join(":")
+        #@_buffer_interval = setInterval =>
+        #    counts = []
+        #    for k,s of @streams
+        #        counts.push [s.key,s.rewind._rbuffer?.length].join(":")
 
-            @log.debug "Rewind buffers: " + counts.join(" -- ")
+        #    @log.debug "Rewind buffers: " + counts.join(" -- ")
 
-        , 5 * 1000
+        #, 5 * 1000
 
         # -- Analytics -- #
 
@@ -126,37 +124,75 @@ module.exports = class Master extends require("events").EventEmitter
 
         # look for slave connections
         @io.on "connection", (sock) =>
-            @log.debug "slave connection is #{sock.id}"
+            # a slave may make multiple connections to test transports. we're
+            # only interested in the one that gives us the OK
+            sock.once "ok", (cb) =>
+                # ping back to let the slave know we're here
+                cb "OK"
 
-            if @options.streams
-                # emit our configuration
-                @log.debug "Sending config information to slave."
-                sock.emit "config", @config()
+                @log.debug "slave connection is #{sock.id}"
 
-            @slaves[sock.id] = sock
+                if @options.streams
+                    # emit our configuration
+                    @log.debug "Sending config information to slave."
+                    sock.emit "config", @config()
 
-            # attach event handler for log reporting
+                @slaves[sock.id] =
+                    sock:           sock
+                    connected_at:   new Date()
+                    status:         null
 
-            socklogger = @log.child slave:sock.id
-            sock.on "log", (obj = {}) =>
-                socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
+                # attach event handler for log reporting
 
-            sock.on "stream_stats", (key, cb) =>
-                # respond with the stream's vitals
-                @streams[key].vitals cb
+                socklogger = @log.child slave:sock.id
+                sock.on "log", (obj = {}) =>
+                    socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
 
-            # attach disconnect handler
-            sock.on "disconnect", =>
-                @log.debug "slave disconnect from #{sock.id}"
+                sock.on "stream_stats", (key, cb) =>
+                    # respond with the stream's vitals
+                    @streams[key].vitals cb
 
-                # need to unregister this slave's listeners
-                s.recordSlaveListeners sock.id, 0 for k,s of @streams
-
-                delete @slaves[sock.id]
+                # attach disconnect handler
+                sock.on "disconnect", =>
+                    connected = Math.round( (Number(new Date()) - Number(@slaves[sock.id].connected_at)) / 1000 )
+                    @log.debug "Slave disconnect from #{sock.id}. Connected for #{ connected } seconds."
+                    delete @slaves[sock.id]
 
         @on "config_update", =>
             config = @config()
-            s.emit "config", config for id,s of @slaves
+            s.sock.emit "config", config for id,s of @slaves
+
+        # -- Poll for Slave Status -- #
+
+        @_slaveStatus = setInterval =>
+            # -- what is our status? -- #
+
+            mstatus = @_rewindStatus()
+
+            # -- now check the slaves -- #
+
+            for s,obj of @slaves
+                do (s,obj) =>
+                    pollTimeout = setTimeout =>
+                        @log.error "Slave #{s} failed to respond to status."
+                        # FIXME: What else should we do?
+                    , 1000
+
+                    obj.sock.emit "status", (err,status) =>
+                        clearTimeout pollTimeout
+
+                        if err
+                            @log.error "Slave #{s} reported status error: #{err}"
+                            return false
+
+                        obj.status = status
+
+                        # -- are the rewind buffers synced to ours? -- #
+
+                        #for key,mobj of mstatus
+                        #    sobj = status[key]
+
+        , 5 * 1000
 
     #----------
 
@@ -289,9 +325,17 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    # Get a status snapshot by looping through each stream to get buffer stats
+    _rewindStatus: ->
+        status = {}
+        status[ key ] = s.rewind._rStatus() for key,s of @streams
+        status
+
+    #----------
+
     slavesInfo: ->
         slaveCount: Object.keys(@slaves).length
-        slaves: { id:k, listeners:@listeners.slaves[k]||0 } for k in Object.keys(@slaves)
+        slaves: ( { id:k, status:s.status } for k,s of @slaves )
 
     #----------
 
@@ -438,7 +482,7 @@ module.exports = class Master extends require("events").EventEmitter
 
             @dataFunc = (chunk) =>
                 for id,s of @master.slaves
-                    s.emit "streamdata:#{@key}", chunk
+                    s.sock.emit "streamdata:#{@key}", chunk
 
             @stream.on "data", @dataFunc
 

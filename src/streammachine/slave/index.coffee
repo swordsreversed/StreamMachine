@@ -49,16 +49,16 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # -- Buffer Stats -- #
 
-        @_buffer_interval = setInterval =>
-            return if !@connected?
+        #@_buffer_interval = setInterval =>
+        #    return if !@connected?
 
-            counts = []
-            for k,s of @streams
-                counts.push [s.key,s._rbuffer?.length].join(":")
+        #    counts = []
+        #    for k,s of @streams
+        #        counts.push [s.key,s._rbuffer?.length].join(":")
 
-            @log.debug "Rewind buffers: " + counts.join(" -- ")
+        #    @log.debug "Rewind buffers: " + counts.join(" -- ")
 
-        , 5 * 1000
+        #, 5 * 1000
 
     #----------
 
@@ -100,9 +100,23 @@ module.exports = class Slave extends require("events").EventEmitter
         @connected = true
 
         if @master
-            # connect up our logging proxy
-            @log.debug "Connected to master."
-            @log.proxyToMaster @master
+            # make sure our connection is valid with a ping
+            pingTimeout = setTimeout =>
+                @log.error "Failed to get master OK ping."
+                # FIXME: exit?
+            , 1000
+
+            @master.emit "ok", (res) =>
+                clearTimeout pingTimeout
+
+                if res == "OK"
+                    # connect up our logging proxy
+                    @log.debug "Connected to master."
+                    @log.proxyToMaster @master
+
+                else
+                    @log.error "Master OK ping response invalid: #{res}"
+                    # FIXME: exit?
 
         true
 
@@ -163,8 +177,15 @@ module.exports = class Slave extends require("events").EventEmitter
 
     #----------
 
+    # Get a status snapshot by looping through each stream to return buffer
+    # stats. Lets master know that we're still listening and current
     _streamStatus: (cb) ->
-        cb true
+        status = {}
+
+        for key,s of @streams
+            status[ key ] = s._rStatus()
+
+        cb null, status
 
     #----------
 

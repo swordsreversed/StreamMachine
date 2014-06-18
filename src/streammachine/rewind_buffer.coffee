@@ -98,6 +98,20 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    # Return rewind buffer status, including HTTP Live Streaming if enabled
+    _rStatus: ->
+        status =
+            buffer_length:      @_rbuffer.length
+            first_buffer_ts:    @_rbuffer[0]?.ts
+            last_buffer_ts:     @_rbuffer[ @_rbuffer.length - 1 ]?.ts
+
+        if @hls_segmenter
+            _u.extend status, @hls_segmenter.status()
+
+        status
+
+    #----------
+
     _rChunkLength: (vitals) ->
         if @_rstreamKey != vitals.streamKey
             if @_rstreamKey
