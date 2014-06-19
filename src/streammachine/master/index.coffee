@@ -141,6 +141,7 @@ module.exports = class Master extends require("events").EventEmitter
                     sock:           sock
                     connected_at:   new Date()
                     status:         null
+                    errors:         0
 
                 # attach event handler for log reporting
 
@@ -156,7 +157,15 @@ module.exports = class Master extends require("events").EventEmitter
                 sock.on "disconnect", =>
                     connected = Math.round( (Number(new Date()) - Number(@slaves[sock.id].connected_at)) / 1000 )
                     @log.debug "Slave disconnect from #{sock.id}. Connected for #{ connected } seconds."
+
                     delete @slaves[sock.id]
+
+                    # set this in a timeout just in case we're mid-status at the time
+                    setTimeout =>
+                        # mark any alerts as cleared
+                        for k in ["slave_unsynced","slave_unresponsive"]
+                            @alerts.update k, sock.id, false
+                    , 3000
 
         @on "config_update", =>
             config = @config()
@@ -169,17 +178,20 @@ module.exports = class Master extends require("events").EventEmitter
 
             mstatus = @_rewindStatus()
 
+            #console.log "mstatus is ", mstatus
+
             # -- now check the slaves -- #
 
             for s,obj of @slaves
                 do (s,obj) =>
                     pollTimeout = setTimeout =>
                         @log.error "Slave #{s} failed to respond to status."
-                        # FIXME: What else should we do?
+                        @alerts.update "slave_unresponsive", s, true
                     , 1000
 
                     obj.sock.emit "status", (err,status) =>
                         clearTimeout pollTimeout
+                        @alerts.update "slave_unresponsive", s, false
 
                         if err
                             @log.error "Slave #{s} reported status error: #{err}"
@@ -189,8 +201,28 @@ module.exports = class Master extends require("events").EventEmitter
 
                         # -- are the rewind buffers synced to ours? -- #
 
-                        #for key,mobj of mstatus
-                        #    sobj = status[key]
+                        # For this we need to run through each stream, and then
+                        # through each value inside to see if it is within an
+                        # acceptable range
+
+                        unsynced = false
+
+                        for key,mobj of mstatus
+                            if sobj = status[key]
+                                for ts in ["first_buffer_ts","last_buffer_ts"]
+                                    sts = Number(new Date(sobj[ts]))
+                                    mts = Number(mobj[ts])
+
+                                    if ( sts == NaN && ets == NaN) || (mts - 10*1000) < sts < (mts + 10*1000)
+                                        # ok
+                                    else
+                                        @log.info "Slave #{s} sync unhealthy on #{key}:#{ts}", sts, mts
+                                        unsynced = true
+
+                            else
+                                unsynced = true
+
+                        @alerts.update "slave_unsynced", s, unsynced
 
         , 5 * 1000
 
