@@ -2,6 +2,7 @@ _u = require "underscore"
 
 Stream = require "./stream"
 Server = require "./server"
+Alerts = require "../alerts"
 
 Socket = require "socket.io-client"
 
@@ -33,6 +34,10 @@ module.exports = class Slave extends require("events").EventEmitter
 
         @log = @options.logger
 
+        # -- create an alerts object -- #
+
+        @alerts = new Alerts logger:@log.child(module:"alerts")
+
         # -- Make sure we have the proper slave config options -- #
 
         if @options.slave?.master
@@ -41,6 +46,12 @@ module.exports = class Slave extends require("events").EventEmitter
             @log.debug "Connecting to master at ", master:@options.slave.master
 
             @_connectMaster()
+
+            # -- set an alert on our connection status -- #
+
+            setInterval =>
+                @alerts.update "slave_disconnected", process.pid, !@connected
+            , 5*1000
 
         # -- set up our stream server -- #
 

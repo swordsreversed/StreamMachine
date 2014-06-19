@@ -9,7 +9,7 @@ ALERT_TYPES =
         description:    "A monitored stream has lost its only source connection."
         wait_for:       30
 
-    disconnected:
+    slave_disconnected:
         description:    "A slave server has lost its connection to the master server."
         wait_for:       30
 
