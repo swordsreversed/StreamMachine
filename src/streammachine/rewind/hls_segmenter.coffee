@@ -1,7 +1,7 @@
 _ = require "underscore"
 
 module.exports = class HLSSegmenter
-    constructor: (@rewind,@segment_length) ->
+    constructor: (@rewind,@segment_length,@log) ->
         @segments       = []
         @_segments      = []
         @segment_idx    = {}
@@ -27,6 +27,16 @@ module.exports = class HLSSegmenter
                 if (i = @segments.indexOf(f_s)) > -1
                     @segments.splice(i,1)
                     delete @segment_idx[f_s.id]
+
+    #----------
+
+    status: ->
+        status =
+            hls_segments:       @segments.length
+            hls_first_seg_id:   @segments[0]?.id
+            hls_first_seg_ts:   @segments[0]?.ts
+            hls_last_seg_id:    @segments[ @segments.length - 1 ]?.id
+            hls_last_seg_ts:    @segments[ @segments.length - 1 ]?.ts
 
     #----------
 
@@ -95,14 +105,7 @@ module.exports = class HLSSegmenter
             return true
 
         else
-            console.log "Not sure where to place segment!!! ",
-                chunk:chunk
-                first:
-                    start:  first_seg.ts
-                    end:    first_seg.end_ts
-                last:
-                    start:  last_seg.ts
-                    end:    last_seg.end_ts
+            @log.error "Not sure where to place segment!!! ", chunk_ts: chunk.ts
 
     #----------
 

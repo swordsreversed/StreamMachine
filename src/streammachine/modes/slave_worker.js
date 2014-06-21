@@ -1,4 +1,4 @@
-require("coffee-script")
+require("coffee-script/register")
 
 cluster         = require("cluster")
 nconf           = require("nconf")

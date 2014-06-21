@@ -58,7 +58,7 @@ module.exports = class Rewinder extends require("stream").Readable
             cb null, @, args...
 
         oFunc = (@_offset) =>
-            @rewind.log.debug "Rewinder: creation with ", opts:opts, offset:@_offset
+            @rewind.log.silly "Rewinder: creation with ", opts:opts, offset:@_offset
 
             # -- What are we sending? -- #
 
@@ -71,7 +71,7 @@ module.exports = class Rewinder extends require("stream").Readable
                     @_insert segment
 
                     # return pump information
-                    @rewind.log.debug "Pumping Live segment with ", duration:segment.duration, length:segment.data.length
+                    @rewind.log.silly "Pumping Live segment with ", duration:segment.duration, length:segment.data.length
                     finalizeFunc duration:segment.duration, length:segment.data.length
 
             else if opts?.pumpOnly
@@ -164,7 +164,6 @@ module.exports = class Rewinder extends require("stream").Readable
 
             _handleEmpty = =>
                 if @_pumpOnly
-                    @rewind.log.debug "pumpOnly reached end of queue. Sending EOF"
                     @push null
 
                 else

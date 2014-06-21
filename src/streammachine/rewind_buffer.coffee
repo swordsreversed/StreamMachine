@@ -48,7 +48,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # -- set up Live Streaming segments -- #
 
         if rewind_opts.liveStreaming
-            @hls_segmenter = new HLSSegmenter @, nconf.get("live_streaming:segment_duration")
+            @hls_segmenter = new HLSSegmenter @, nconf.get("live_streaming:segment_duration"), @log
 
         # -- set up header and frame functions -- #
 
@@ -95,6 +95,20 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
                 # keep track of our source
                 @_rsource = newsource
+
+    #----------
+
+    # Return rewind buffer status, including HTTP Live Streaming if enabled
+    _rStatus: ->
+        status =
+            buffer_length:      @_rbuffer.length
+            first_buffer_ts:    @_rbuffer[0]?.ts
+            last_buffer_ts:     @_rbuffer[ @_rbuffer.length - 1 ]?.ts
+
+        if @hls_segmenter
+            _u.extend status, @hls_segmenter.status()
+
+        status
 
     #----------
 

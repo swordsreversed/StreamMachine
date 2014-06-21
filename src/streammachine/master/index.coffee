@@ -25,8 +25,6 @@ module.exports = class Master extends require("events").EventEmitter
         @stream_groups  = {}
         @proxies        = {}
 
-        @listeners = slaves:{}, streams:{}, total:0
-
         # -- set up logging -- #
 
         @log = @options.logger
@@ -42,8 +40,8 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.redis?
             _slaveUpdate = =>
                 # pass config on to any connected slaves
-                for id,sock of @slaves
-                    sock.emit "config", @config()
+                for id,s of @slaves
+                    s.sock.emit "config", @config()
 
             @log.debug "initializing redis config"
             @redis = new Redis @options.redis
@@ -86,14 +84,14 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Buffer Stats -- #
 
-        @_buffer_interval = setInterval =>
-            counts = []
-            for k,s of @streams
-                counts.push [s.key,s.rewind._rbuffer?.length].join(":")
+        #@_buffer_interval = setInterval =>
+        #    counts = []
+        #    for k,s of @streams
+        #        counts.push [s.key,s.rewind._rbuffer?.length].join(":")
 
-            @log.debug "Rewind buffers: " + counts.join(" -- ")
+        #    @log.debug "Rewind buffers: " + counts.join(" -- ")
 
-        , 5 * 1000
+        #, 5 * 1000
 
         # -- Analytics -- #
 
@@ -115,56 +113,118 @@ module.exports = class Master extends require("events").EventEmitter
         @_attachIOProxy(s) for key,s of @streams
 
         # add our authentication
-        @io.configure =>
-            # don't bombard us with stream data
-            @io.disable "log"
-
-            @io.set "authorization", (data,cb) =>
-                @log.debug "In authorization for slave connection."
-                # look for password
-                if @options.master.password == data.query?.password
-                    @log.debug "Slave password is valid."
-                    cb null, true
-                else
-                    @log.debug "Slave password is incorrect."
-                    cb "Invalid slave password.", false
+        @io.use (socket,next) =>
+            @log.debug "Authenticating slave connection."
+            if @options.master.password == socket.request._query?.password
+                @log.debug "Slave password is valid."
+                next()
+            else
+                @log.debug "Slave password is incorrect."
+                next new Error "Invalid slave password."
 
         # look for slave connections
         @io.on "connection", (sock) =>
-            @log.debug "slave connection is #{sock.id}"
+            # a slave may make multiple connections to test transports. we're
+            # only interested in the one that gives us the OK
+            sock.once "ok", (cb) =>
+                # ping back to let the slave know we're here
+                cb "OK"
 
-            if @options.streams
-                # emit our configuration
-                @log.debug "Sending config information to slave."
-                sock.emit "config", @config()
+                @log.debug "slave connection is #{sock.id}"
 
-            @slaves[sock.id] = sock
+                if @options.streams
+                    # emit our configuration
+                    @log.debug "Sending config information to slave."
+                    sock.emit "config", @config()
 
-            # attach event handler for log reporting
-            socklogger = @log.child slave:sock.handshake.address.address
-            sock.on "log", (obj = {}) =>
-                socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
+                @slaves[sock.id] =
+                    sock:           sock
+                    connected_at:   new Date()
+                    status:         null
+                    errors:         0
 
-            # look for listener counts
-            sock.on "listeners", (obj = {}) =>
-                @_recordListeners sock.id, obj
+                # attach event handler for log reporting
 
-            sock.on "stream_stats", (key, cb) =>
-                # respond with the stream's vitals
-                @streams[key].vitals cb
+                socklogger = @log.child slave:sock.id
+                sock.on "log", (obj = {}) =>
+                    socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
 
-            # attach disconnect handler
-            sock.on "disconnect", =>
-                @log.debug "slave disconnect from #{sock.id}"
+                sock.on "stream_stats", (key, cb) =>
+                    # respond with the stream's vitals
+                    @streams[key].vitals cb
 
-                # need to unregister this slave's listeners
-                s.recordSlaveListeners sock.id, 0 for k,s of @streams
+                # attach disconnect handler
+                sock.on "disconnect", =>
+                    connected = Math.round( (Number(new Date()) - Number(@slaves[sock.id].connected_at)) / 1000 )
+                    @log.debug "Slave disconnect from #{sock.id}. Connected for #{ connected } seconds."
 
-                delete @slaves[sock.id]
+                    delete @slaves[sock.id]
+
+                    # set this in a timeout just in case we're mid-status at the time
+                    setTimeout =>
+                        # mark any alerts as cleared
+                        for k in ["slave_unsynced","slave_unresponsive"]
+                            @alerts.update k, sock.id, false
+                    , 3000
 
         @on "config_update", =>
             config = @config()
-            s.emit "config", config for id,s of @slaves
+            s.sock.emit "config", config for id,s of @slaves
+
+        # -- Poll for Slave Status -- #
+
+        @_slaveStatus = setInterval =>
+            # -- what is our status? -- #
+
+            mstatus = @_rewindStatus()
+
+            #console.log "mstatus is ", mstatus
+
+            # -- now check the slaves -- #
+
+            for s,obj of @slaves
+                do (s,obj) =>
+                    pollTimeout = setTimeout =>
+                        @log.error "Slave #{s} failed to respond to status."
+                        @alerts.update "slave_unresponsive", s, true
+                    , 1000
+
+                    obj.sock.emit "status", (err,status) =>
+                        clearTimeout pollTimeout
+                        @alerts.update "slave_unresponsive", s, false
+
+                        if err
+                            @log.error "Slave #{s} reported status error: #{err}"
+                            return false
+
+                        obj.status = status
+
+                        # -- are the rewind buffers synced to ours? -- #
+
+                        # For this we need to run through each stream, and then
+                        # through each value inside to see if it is within an
+                        # acceptable range
+
+                        unsynced = false
+
+                        for key,mobj of mstatus
+                            if sobj = status[key]
+                                for ts in ["first_buffer_ts","last_buffer_ts"]
+                                    sts = Number(new Date(sobj[ts]))
+                                    mts = Number(mobj[ts])
+
+                                    if ( sts == NaN && ets == NaN) || (mts - 10*1000) < sts < (mts + 10*1000)
+                                        # ok
+                                    else
+                                        @log.info "Slave #{s} sync unhealthy on #{key}:#{ts}", sts, mts
+                                        unsynced = true
+
+                            else
+                                unsynced = true
+
+                        @alerts.update "slave_unsynced", s, unsynced
+
+        , 5 * 1000
 
     #----------
 
@@ -176,12 +236,6 @@ module.exports = class Master extends require("events").EventEmitter
         return config
 
     #----------
-
-    _recordListeners: (slave,obj) ->
-        @log.debug "slave #{slave} sent #{obj.total} listeners"
-        @listeners.slaves[ slave ] = obj.total
-        for k,c of obj.counts
-            @streams[k]?.recordSlaveListeners slave, c
 
     # configureStreams can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
@@ -303,9 +357,17 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    # Get a status snapshot by looping through each stream to get buffer stats
+    _rewindStatus: ->
+        status = {}
+        status[ key ] = s.rewind._rStatus() for key,s of @streams
+        status
+
+    #----------
+
     slavesInfo: ->
         slaveCount: Object.keys(@slaves).length
-        slaves: { id:k, listeners:@listeners.slaves[k]||0 } for k in Object.keys(@slaves)
+        slaves: ( { id:k, status:s.status } for k,s of @slaves )
 
     #----------
 
@@ -452,7 +514,7 @@ module.exports = class Master extends require("events").EventEmitter
 
             @dataFunc = (chunk) =>
                 for id,s of @master.slaves
-                    s.emit "streamdata:#{@key}", chunk
+                    s.sock.emit "streamdata:#{@key}", chunk
 
             @stream.on "data", @dataFunc
 
