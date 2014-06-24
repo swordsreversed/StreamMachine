@@ -28,12 +28,19 @@ pointsToObjects = (res) ->
 # * Produce old-style w3c output for listener stats
 
 module.exports = class Analytics
-    constructor: (@opts,@log) ->
-        @_uri = URL.parse @opts.es_uri
+    constructor: (@opts,cb) ->
+        @_uri = URL.parse @opts.config.es_uri
+
+        @log = @opts.log
+
+        if @opts.redis
+            @redis = @opts.redis.client
 
         @es = new elasticsearch.Client
             host:       "http://#{@_uri.hostname}:#{@_uri.port||9200}"
             apiVersion: "1.1"
+
+        @idx_prefix = @_uri.pathname.substr(1)
 
         # track open sessions
         @sessions = {}
@@ -45,9 +52,10 @@ module.exports = class Analytics
         @_loadTemplates (err) =>
             if err
                 console.error err
+                cb err
             else
                 # do something...
-
+                cb? null, @
 
         # -- are there any sessions that should be finalized? -- #
 
@@ -70,8 +78,8 @@ module.exports = class Analytics
 
         for t,obj of Analytics.EStemplates
             console.log "Loading mappings for #{t}"
-            tmplt = _.extend {}, obj, template:"#{t}-*"
-            @es.indices.putTemplate name:"#{t}_template", body:tmplt, (err) =>
+            tmplt = _.extend {}, obj, template:"#{@idx_prefix}-#{t}-*"
+            @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
                 _loaded()
 
@@ -84,30 +92,12 @@ module.exports = class Analytics
             cb? new Error "Object does not contain a session ID"
             return false
 
-        setFinalizeTimer = =>
-            if t = @sessions[ obj.client.session_id ]
-                clearTimeout t
-
-            @sessions[ obj.client.session_id ] = setTimeout =>
-                @_finalizeSession obj.client.session_id, (err,session) =>
-                    if err
-                        @log.error "Failed to finalize session: #{err}"
-                        return false
-
-                    @_storeSession session, (err) =>
-                        if err
-                            @log.error "Failed to store session: #{err}"
-                            return false
-
-            , 60*1000
-
-            cb? null
-
+        # write one index per day of data
         index_date = tz(obj.time,"%F")
 
         switch obj.type
             when "session_start"
-                @es.index index:"listens-#{index_date}", type:"start", body:
+                @es.index index:"#{@idx_prefix}-listens-#{index_date}", type:"start", body:
                     time:       new Date(obj.time)
                     session_id: obj.client.session_id
                     stream:     obj.stream_group || obj.stream
@@ -117,22 +107,49 @@ module.exports = class Analytics
                         @log.error "ES write error: #{err}"
                         return cb? err
 
-                    #setFinalizeTimer()
+                    cb? null
+
+                # -- start tracking the session -- #
 
             when "listen"
-                @es.index index:"listens-#{index_date}", type:"listen", body:
-                    session_id: obj.client.session_id
-                    time:       new Date(obj.time)
-                    bytes:      obj.bytes
-                    duration:   obj.duration
-                    stream:     obj.stream
-                    client:     obj.client
-                , (err) =>
-                    if err
-                        @log.error "ES write error: #{err}"
-                        return cb? err
+                # do we know of other duration for this session?
+                @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
 
-                    #setFinalizeTimer()
+                    @es.index index:"#{@idx_prefix}-listens-#{index_date}", type:"listen", body:
+                        session_id:         obj.client.session_id
+                        time:               new Date(obj.time)
+                        bytes:              obj.bytes
+                        duration:           obj.duration
+                        session_duration:   dur
+                        stream:             obj.stream
+                        client:             obj.client
+                    , (err) =>
+                        if err
+                            @log.error "ES write error: #{err}"
+                            return cb? err
+
+                        cb? null
+
+
+    #----------
+
+    # Given a session id and duration, add the given duration to any
+    # existing cached duration and return the accumulated number
+    _getStashedDurationFor: (session,duration,cb) ->
+        if @redis
+            # use redis stash
+            @redis.incrby session, duration, cb
+
+        else
+            # use memory stash
+            s = @_ensureMemorySession session
+            s.duration += duration
+            cb null, s.duration
+
+    #----------
+
+    _ensureMemorySession: (session) ->
+        @sessions[ session ] ||= duration:0, last_seen_at:Number(new Date())
 
     #----------
 
@@ -174,48 +191,49 @@ module.exports = class Analytics
                         @log.debug err
                         return cb? err
 
-                    @_selectLastListen id, (err,ll) =>
-                        if err
-                            @log.error err
-                            return cb? err
+                    # -- build session -- #
 
-                        # -- build session -- #
+                    session =
+                        session_id: id
+                        output:     start.output
+                        stream:     start.stream
+                        time:       ts || start.time
+                        client:     start.client
+                        bytes:      totals.bytes
+                        duration:   totals.duration
+                        connected:  ( Number(totals.last_listen) - Number(ts||start.time) ) / 1000
 
-                        session =
-                            id:         id
-                            output:     start.output
-                            stream:     start.stream
-                            time:       ts || start.time
-                            client_ip:  start.client_ip
-                            client_ua:  start.client_ua
-                            client_uid: start.client_uid
-                            bytes:      totals.bytes
-                            duration:   totals.duration
-                            connected:  ( Number(ll) - Number(ts||start.time) ) / 1000
-
-                        cb null, session
+                    cb null, session
 
     #----------
 
     _storeSession: (session,cb) ->
-        @influx.writePoint "sessions", session, (err) =>
-            if err
-                @log.error "Influx write error: #{err}"
-                return cb? err
+        # write one index per day of data
+        index_date = tz(session.time,"%F")
 
-            cb? null
+        @es.index index:"#{@idx_prefix}-sessions-#{index_date}", type:"session", body:session, (err) =>
+            cb err
 
     #----------
 
     _selectSessionStart: (id,cb) ->
         # -- Look up user information from session_start -- #
 
-        @influx.query "SELECT stream,output,client_ip,client_ua,client_uid FROM starts WHERE session_id = '#{id}' LIMIT 1", (err,res) =>
+        body =
+            query:
+                constant_score:
+                    filter:
+                        term:
+                            "session_id":id
+            sort:
+                time:{order:"desc"}
+            size:1
+
+        @es.search type:"start", body:body, index:"#{@idx_prefix}-listens-*", (err,res) =>
             return cb new Error "Error querying session start for #{id}: #{err}" if err
-            if res.length == 1
-                start = pointsToObjects(res[0])[0]
-                start.time = new Date(start.time)
-                cb null, start
+
+            if res.hits.hits.length > 0
+                cb null, _.extend {}, res.hits.hits[0]._source, time:new Date(res.hits.hits[0]._source.time)
             else
                 cb null, null
 
@@ -224,39 +242,61 @@ module.exports = class Analytics
     _selectPreviousSession: (id,cb) ->
         # -- Have we ever finalized this session id? -- #
 
-        @influx.query "SELECT time from sessions where session_id = '#{ id }' LIMIT 1", (err,res) =>
+        body =
+            query:
+                constant_score:
+                    filter:
+                        term:
+                            "session_id":id
+            sort:
+                time:{order:"desc"}
+            size:1
+
+
+        @es.search type:"session", body:body, index:"#{@idx_prefix}-sessions-*", (err,res) =>
             return cb new Error "Error querying for old session #{id}: #{err}" if err
 
-            if res.length == 1
-                cb null, res[0].points[0][0]
-            else
+            if res.hits.hits.length == 0
                 cb null, null
+            else
+                cb null, new Date(res.hits.hits[0]._source.time)
 
     #----------
 
     _selectListenTotals: (id,ts,cb) ->
         # -- Query total duration and bytes sent -- #
 
-        query = "SELECT SUM(duration) as duration, SUM(bytes) as bytes FROM listens WHERE session_id = '#{ id }'"
-        query += " AND time > #{ ts }" if ts
-
-        @influx.query query, (err,res) =>
-            return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
-            if res.length == 1
-                cb null, pointsToObjects(res[0])[0]
+        filter =
+            if ts
+                "and":
+                    filters:[
+                        { range:{ time:{ gt:ts } } },
+                        { term:{session_id:id} }
+                    ]
             else
-                cb null, null
+               term:{session_id:id}
 
-    #----------
+        body =
+            query:
+                constant_score:
+                    filter:filter
+            aggs:
+                duration:
+                    sum:{ field:"duration" }
+                bytes:
+                    sum:{ field:"bytes" }
+                last_listen:
+                    max:{ field:"time" }
 
-    _selectLastListen: (id,cb) ->
-        # -- Query time of last listen event -- #
+        @es.search type:"listen", index:"#{@idx_prefix}-listens-*", body:body, (err,res) =>
+            return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
 
-        @influx.query "SELECT time FROM listens WHERE session_id = '#{id}' LIMIT 1", (err,res) =>
-            return cb new Error "Error querying last listen for #{id}: #{err}" if err
-
-            if res.length == 1
-                cb null, new Date(res[0].points[0][0])
+            if res.hits.total > 0
+                cb null,
+                    requests:       res.hits.total
+                    duration:       res.aggregations.duration.value
+                    bytes:          res.aggregations.bytes.value
+                    last_listen:    new Date(res.aggregations.last_listen.value)
             else
                 cb null, null
 
@@ -264,6 +304,8 @@ module.exports = class Analytics
 
     countListeners: (cb) ->
         # -- Query recent listeners -- #
+
+        return cb new Error "Not implemented."
 
         @influx.query "SELECT SUM(duration) AS seconds FROM listens GROUP BY time(1m) fill(0) LIMIT 15", (err,res) =>
             return cb new Error "Failed to query listens: #{err}" if err
@@ -295,66 +337,60 @@ module.exports = class Analytics
 
     #----------
 
-    @EStemplates:
-        listens:
-            mappings:
-                start:
-                    properties:
-                        time:
-                            type:   "date"
-                            format: "date_time"
-                        stream:
-                            type:   "string"
-                            index:  "not_analyzed"
-                        session_id:
-                            type:   "string"
-                            index:  "not_analyzed"
-                        client:
-                            type:   "object"
-                            properties:
-                                user_id:
-                                    type:   "string"
-                                    index:  "not_analyzed"
-                                output:
-                                    type:   "string"
-                                    index:  "not_analyzed"
-                                ip:
-                                    type:   "ip"
-                                ua:
-                                    type:   "string"
-                                path:
-                                    type:   "string"
+    @ESobjcore:
+        time:
+            type:   "date"
+            format: "date_time"
+        stream:
+            type:   "string"
+            index:  "not_analyzed"
+        session_id:
+            type:   "string"
+            index:  "not_analyzed"
+        client:
+            type:   "object"
+            properties:
+                session_id:
+                    type:   "string"
+                    index:  "not_analyzed"
+                user_id:
+                    type:   "string"
+                    index:  "not_analyzed"
+                output:
+                    type:   "string"
+                    index:  "not_analyzed"
+                ip:
+                    type:   "ip"
+                ua:
+                    type:   "string"
+                path:
+                    type:   "string"
 
-                listen:
-                    properties:
-                        time:
-                            type:   "date"
-                            format: "date_time"
-                        stream:
-                            type:   "string"
-                            index:  "not_analyzed"
-                        session_id:
-                            type:   "string"
-                            index:  "not_analyzed"
+    @EStemplates:
+        sessions:
+            mappings:
+                session:
+                    properties: _.extend {}, @ESobjcore,
                         duration:
                             type:   "float"
                             include_in_all: false
                         bytes:
                             type:   "integer"
-                        client:
-                            type:   "object"
-                            properties:
-                                user_id:
-                                    type:   "string"
-                                    index:  "not_analyzed"
-                                output:
-                                    type:   "string"
-                                    index:  "not_analyzed"
-                                ip:
-                                    type:   "ip"
-                                ua:
-                                    type:   "string"
-                                path:
-                                    type:   "string"
+                        ips:
+                            type:   "ip"
+                            index_name: "ip"
+        listens:
+            mappings:
+                start:
+                    properties: _.extend {}, @ESobjcore
+
+                listen:
+                    properties:
+                        _.extend {}, @ESobjcore,
+                            duration:
+                                type:   "float"
+                                include_in_all: false
+                            bytes:
+                                type:   "integer"
 
 

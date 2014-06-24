@@ -11,7 +11,7 @@
 		"server":     "redis://localhost:6379"
 	},
   "analytics": {
-    "influx":         "influx://stream:machine@localhost:8086/streammachine_test",
+    "es_uri":         "es://localhost:9200/test_streammachine",
     "finalize_secs":  300
   }
 }
