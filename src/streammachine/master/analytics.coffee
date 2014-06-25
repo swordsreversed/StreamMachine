@@ -33,7 +33,10 @@ module.exports = class Analytics
 
         @log = @opts.log
 
+        @_timeout_sec = Number(@opts.config.finalize_secs)
+
         if @opts.redis
+
             @redis = @opts.redis.client
 
         @es = new elasticsearch.Client
@@ -64,6 +67,25 @@ module.exports = class Analytics
         #    console.log "last session is ", err, res
 
         # what sessions have we seen since then?
+
+        # -- Redis Session Sweep -- #
+
+        if @redis
+            @log.info "Analytics setting up Redis session sweeper"
+
+            setInterval =>
+                # look for sessions that should be written (score less than now)
+                @redis.zrangebyscore 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
+                    return @log.error "Error fetching sessions to finalize: #{err}" if err
+
+                    _sFunc = =>
+                        if s = sessions.shift()
+                            @_triggerSession s
+                            _sFunc()
+
+                    _sFunc()
+
+            , 5*1000
 
     #----------
 
@@ -129,6 +151,11 @@ module.exports = class Analytics
 
                         cb? null
 
+        # -- update our timer -- #
+
+        @_updateSessionTimerFor obj.client.session_id, (err) =>
+
+
     #----------
 
     # Given a session id and duration, add the given duration to any
@@ -151,8 +178,62 @@ module.exports = class Analytics
 
     #----------
 
+    _updateSessionTimerFor: (session,cb) ->
+        if @redis
+            # this will set the score, or update it if the session is
+            # already in the set
+            timeout_at = (Number(new Date) / 1000) + @_timeout_sec
+
+            @redis.zadd "session-timeouts", timeout_at, session, (err) =>
+                cb err
+
+        else
+            s = @_ensureMemorySession session
+
+            clearTimeout s.timeout if s.timeout
+
+            s.timeout = setTimeout =>
+                @_triggerSession session
+            , @_timeout_sec * 1000
+
+            cb null
+
+    #----------
+
+    _scrubSessionFor: (session,cb) ->
+        if @redis
+            @redis.zrem "session-timeouts", session, (err) =>
+                return cb err if err
+
+                @redis.del "duration-#{session}", (err) =>
+                    cb err
+
+        else
+           s = @_ensureMemorySession session
+           clearTimeout s.timeout if s.timeout
+           delete @sessions[session]
+
+           cb null
+
+
+    #----------
+
     _ensureMemorySession: (session) ->
-        @sessions[ session ] ||= duration:0, last_seen_at:Number(new Date())
+        @sessions[ session ] ||=
+            duration:0, last_seen_at:Number(new Date()), timeout:null
+
+    #----------
+
+    _triggerSession: (session) ->
+        @_scrubSessionFor session, (err) =>
+            return @log.error "Error cleaning session cache: #{err}" if err
+
+            @_finalizeSession session, (err,obj) =>
+                return @log.error "Error assembling session: #{err}" if err
+
+                if obj
+                    @_storeSession obj, (err) =>
+                        @log.error "Error writing session: #{err}" if err
 
     #----------
 
