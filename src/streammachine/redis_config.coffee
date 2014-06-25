@@ -7,31 +7,41 @@ module.exports = class RedisConfig extends EventEmitter
     DefaultOptions:
         server: "redis://localhost:6379"
         key:    "StreamMachine"
-    
+
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
-        
+
         console.log "init redis with ", @options.server
         info = Url.parse @options.server
         @client = Redis.createClient info.port, info.hostname
-        
-        @client.once "connect", =>
-            @_connected = true
-            @emit "connected", @client
-            
-            # see if there's a config to load
-            @_config()
-                            
+
+        @client.once "ready", =>
+            rFunc = =>
+                @_connected = true
+                @emit "connected", @client
+
+                # see if there's a config to load
+                @_config()
+
+            if _.isNumber(@_db = info.pathname.substr(1))
+                @client.select @_db, (err) =>
+                    return @log.error "Redis DB select error: #{err}" if err
+
+                    rFunc()
+            else
+                rFunc()
+
+
     #----------
-    
+
     once_connected: (cb) ->
         if @_connected
             cb?(@client)
         else
             @once "connected", cb
-    
+
     #----------
-            
+
     _config: ->
         console.log "Querying config from Redis"
         @client.get "#{@options.key}:config", (err, reply) =>
@@ -39,16 +49,15 @@ module.exports = class RedisConfig extends EventEmitter
                 config = JSON.parse(reply.toString())
                 console.log "Got redis config of ", config
                 @emit "config", config
-            
+
      #----------
- 
+
      _update: (config) ->
          @once_connected =>
              console.log "Saving configuration to Redis"
-     
+
              @client.set "#{@options.key}:config", JSON.stringify(config), (err,reply) =>
                 if err
                     console.log "Redis: Failed to save updated config: #{err}"
                 else
                     console.log "Set config to #{@options.key}:streams", config, reply
-    

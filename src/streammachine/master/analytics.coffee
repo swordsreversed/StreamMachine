@@ -52,7 +52,7 @@ module.exports = class Analytics
         @_loadTemplates (err) =>
             if err
                 console.error err
-                cb err
+                cb? err
             else
                 # do something...
                 cb? null, @
@@ -77,7 +77,7 @@ module.exports = class Analytics
                 cb null
 
         for t,obj of Analytics.EStemplates
-            console.log "Loading mappings for #{t}"
+            @log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
             tmplt = _.extend {}, obj, template:"#{@idx_prefix}-#{t}-*"
             @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
@@ -114,7 +114,6 @@ module.exports = class Analytics
             when "listen"
                 # do we know of other duration for this session?
                 @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
-
                     @es.index index:"#{@idx_prefix}-listens-#{index_date}", type:"listen", body:
                         session_id:         obj.client.session_id
                         time:               new Date(obj.time)
@@ -130,7 +129,6 @@ module.exports = class Analytics
 
                         cb? null
 
-
     #----------
 
     # Given a session id and duration, add the given duration to any
@@ -138,7 +136,12 @@ module.exports = class Analytics
     _getStashedDurationFor: (session,duration,cb) ->
         if @redis
             # use redis stash
-            @redis.incrby session, duration, cb
+            key = "duration-#{session}"
+            @redis.incrby key, duration, cb
+
+            # set a TTL on our key, so that it doesn't stay indefinitely
+            @redis.pexpire key, 5*60*1000, (err) =>
+                @log.error "Failed to set Redis TTL for #{key}: #{err}" if err
 
         else
             # use memory stash
@@ -157,7 +160,7 @@ module.exports = class Analytics
         @log.debug "Finalizing session for #{ id }"
 
         # This is a little ugly. We need to take several steps:
-        # 1) Have we ever finalized this session id? If so, then what?????
+        # 1) Have we ever finalized this session id?
         # 2) Look up the session_start for the session_id
         # 3) Compute the session's sent bytes, sent duration, and elapsed duration
         # 4) Write a session object
@@ -174,12 +177,12 @@ module.exports = class Analytics
             @_selectSessionStart id, (err,start) =>
                 if err
                     @log.error err
-                    return cb? err
+                    return cb err
 
                 if !start
                     err = "Failed to query session start for #{id}."
                     @log.error err
-                    return cb? err
+                    return cb err
 
                 @_selectListenTotals id, ts, (err,totals) =>
                     if err
@@ -187,9 +190,8 @@ module.exports = class Analytics
                         return cb? err
 
                     if !totals
-                        err = "No totals found for session #{ id }"
-                        @log.debug err
-                        return cb? err
+                        # Session did not have any recorded listen events.  Toss it.
+                        return cb null, false
 
                     # -- build session -- #
 
@@ -305,22 +307,46 @@ module.exports = class Analytics
     countListeners: (cb) ->
         # -- Query recent listeners -- #
 
-        return cb new Error "Not implemented."
+        body =
+            query:
+                constant_score:
+                    filter:
+                        range:
+                            time:
+                                gt:"now-15m"
+            size:0
+            aggs:
+                listeners_by_minute:
+                    date_histogram:
+                        field:      "time"
+                        interval:   "minute"
+                    aggs:
+                        duration:
+                            sum:{ field:"duration" }
+                        sessions:
+                            cardinality:{ field:"session_id" }
+                        streams:
+                            terms:{ field:"stream", size:5 }
 
-        @influx.query "SELECT SUM(duration) AS seconds FROM listens GROUP BY time(1m) fill(0) LIMIT 15", (err,res) =>
-            return cb new Error "Failed to query listens: #{err}" if err
 
-            if res.length == 1
-                timepoints = for p in res[0].points[1..-1]
-                    tp =
-                        time:       @local(p[0],"%F %T%^z")
-                        listeners:  Math.round(p[1] / 60)
+        @es.search index:"#{@idx_prefix}-listens-*", type:"listen", body:body, (err,res) =>
+            return cb new Error "Failed to query listeners: #{err}" if err
 
-                console.log "calling back with ", timepoints
-                cb null, timepoints
+            times = []
 
-            else
-                cb "Unknown error querying listening time."
+            for obj in res.aggregations.listeners_by_minute.buckets
+                streams = {}
+                for sobj in obj.streams.buckets
+                    streams[ sobj.key ] = sobj.doc_count
+
+                times.unshift
+                    time:               @local(new Date(obj.key),"%F %T%^z")
+                    requests:           obj.doc_count
+                    avg_listeners:      Math.round( obj.duration.value / 60 )
+                    sessions:           obj.sessions.value
+                    requests_by_stream: streams
+
+            cb null, times
 
     #----------
 
