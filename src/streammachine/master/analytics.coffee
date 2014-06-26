@@ -75,7 +75,7 @@ module.exports = class Analytics
 
             setInterval =>
                 # look for sessions that should be written (score less than now)
-                @redis.zrangebyscore 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
+                @redis.zrangebyscore "session-timeouts", 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
                     return @log.error "Error fetching sessions to finalize: #{err}" if err
 
                     _sFunc = =>
@@ -164,7 +164,9 @@ module.exports = class Analytics
         if @redis
             # use redis stash
             key = "duration-#{session}"
-            @redis.incrby key, duration, cb
+            console.log "Adding #{duration} to #{key}"
+            @redis.incrby key, Math.round(duration), (err,res) =>
+                cb err, res
 
             # set a TTL on our key, so that it doesn't stay indefinitely
             @redis.pexpire key, 5*60*1000, (err) =>

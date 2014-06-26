@@ -23,12 +23,15 @@ module.exports = class RedisConfig extends EventEmitter
                 # see if there's a config to load
                 @_config()
 
-            if _.isNumber(@_db = info.pathname.substr(1))
+            if (@_db = Number(info.pathname.substr(1))) != NaN
+                console.log "Redis connecting to DB #{@_db}"
                 @client.select @_db, (err) =>
                     return @log.error "Redis DB select error: #{err}" if err
 
                     rFunc()
             else
+                @_db = 0
+                console.log "Redis using DB 0: #{info.pathname.substr(1)}"
                 rFunc()
 
 
