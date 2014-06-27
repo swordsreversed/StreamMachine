@@ -164,7 +164,6 @@ module.exports = class Analytics
         if @redis
             # use redis stash
             key = "duration-#{session}"
-            console.log "Adding #{duration} to #{key}"
             @redis.incrby key, Math.round(duration), (err,res) =>
                 cb err, res
 
@@ -240,7 +239,7 @@ module.exports = class Analytics
     #----------
 
     _finalizeSession: (id,cb) ->
-        @log.debug "Finalizing session for #{ id }"
+        @log.silly "Finalizing session for #{ id }"
 
         # This is a little ugly. We need to take several steps:
         # 1) Have we ever finalized this session id?
@@ -263,9 +262,8 @@ module.exports = class Analytics
                     return cb err
 
                 if !start
-                    err = "Failed to query session start for #{id}."
-                    @log.error err
-                    return cb err
+                    @log.debug "Attempt to finalize invalid session. No start event for #{id}."
+                    return cb null, false
 
                 @_selectListenTotals id, ts, (err,totals) =>
                     if err
