@@ -166,8 +166,6 @@ module.exports = class Master extends require("events").EventEmitter
 
             mstatus = @_rewindStatus()
 
-            #console.log "mstatus is ", mstatus
-
             # -- now check the slaves -- #
 
             for s,obj of @slaves
@@ -201,7 +199,7 @@ module.exports = class Master extends require("events").EventEmitter
                                     sts = Number(new Date(sobj[ts]))
                                     mts = Number(mobj[ts])
 
-                                    if ( sts == NaN && ets == NaN) || (mts - 10*1000) < sts < (mts + 10*1000)
+                                    if ( _u.isNaN(sts) && _u.isNaN(mts) ) || (mts - 10*1000) < sts < (mts + 10*1000)
                                         # ok
                                     else
                                         @log.info "Slave #{s} sync unhealthy on #{key}:#{ts}", sts, mts
