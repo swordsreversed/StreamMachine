@@ -341,6 +341,9 @@ module.exports = class Master extends require("events").EventEmitter
     streamsInfo: ->
         obj.status() for k,obj of @streams
 
+    groupsInfo: ->
+        obj.status() for k,obj of @stream_groups
+
     #----------
 
     # Get a status snapshot by looping through each stream to get buffer stats
