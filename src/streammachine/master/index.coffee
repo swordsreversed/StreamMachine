@@ -38,12 +38,7 @@ module.exports = class Master extends require("events").EventEmitter
         # -- load our streams configuration from redis -- #
 
         if @options.redis?
-            _slaveUpdate = =>
-                # pass config on to any connected slaves
-                for id,s of @slaves
-                    s.sock.emit "config", @config()
-
-            @log.debug "initializing redis config"
+            @log.debug "Initializing Redis connection"
             @redis = new Redis @options.redis
             @redis.on "config", (config) =>
                 # stash the configuration
@@ -52,12 +47,13 @@ module.exports = class Master extends require("events").EventEmitter
                 # (re-)configure our master stream objects
                 @configureStreams @options.streams
 
-                _slaveUpdate()
+                # pass config on to any connected slaves
+                for id,s of @slaves
+                    s.sock.emit "config", @config()
 
-            # save changed configuration to Redis
-            console.log "Registering config_update listener"
+            # Persist changed configuration to Redis
+            @log.debug "Registering config_update listener"
             @on "config_update", =>
-                console.log "Redis got config_update: ", @config()
                 @redis._update @config()
 
         # -- create a server to provide the admin -- #
@@ -82,21 +78,13 @@ module.exports = class Master extends require("events").EventEmitter
                 @alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
         , 5*1000
 
-        # -- Buffer Stats -- #
-
-        #@_buffer_interval = setInterval =>
-        #    counts = []
-        #    for k,s of @streams
-        #        counts.push [s.key,s.rewind._rbuffer?.length].join(":")
-
-        #    @log.debug "Rewind buffers: " + counts.join(" -- ")
-
-        #, 5 * 1000
-
         # -- Analytics -- #
 
         if opts.analytics
-            @analytics = new Analytics opts.analytics, @log.child(module:"analytics")
+            @analytics = new Analytics
+                config: opts.analytics
+                log:    @log.child(module:"analytics")
+                redis:  @redis
 
             # add a log transport
             @log.logger.add new Analytics.LogTransport(@analytics), {}, true
@@ -178,8 +166,6 @@ module.exports = class Master extends require("events").EventEmitter
 
             mstatus = @_rewindStatus()
 
-            #console.log "mstatus is ", mstatus
-
             # -- now check the slaves -- #
 
             for s,obj of @slaves
@@ -213,7 +199,7 @@ module.exports = class Master extends require("events").EventEmitter
                                     sts = Number(new Date(sobj[ts]))
                                     mts = Number(mobj[ts])
 
-                                    if ( sts == NaN && ets == NaN) || (mts - 10*1000) < sts < (mts + 10*1000)
+                                    if ( _u.isNaN(sts) && _u.isNaN(mts) ) || (mts - 10*1000) < sts < (mts + 10*1000)
                                         # ok
                                     else
                                         @log.info "Slave #{s} sync unhealthy on #{key}:#{ts}", sts, mts
@@ -354,6 +340,9 @@ module.exports = class Master extends require("events").EventEmitter
 
     streamsInfo: ->
         obj.status() for k,obj of @streams
+
+    groupsInfo: ->
+        obj.status() for k,obj of @stream_groups
 
     #----------
 

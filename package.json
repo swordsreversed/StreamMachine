@@ -43,7 +43,7 @@
         "fluent-ffmpeg":        "~1.7.1"
     },
     "devDependencies": {
-        "mocha":                "~1.18.2",
+        "mocha":                "~1.20.1",
         "chai":                 "~1.9.1"
     },
     "bin": {

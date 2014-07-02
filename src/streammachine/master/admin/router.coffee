@@ -74,6 +74,11 @@ module.exports = class Router
             # return JSON version of the status for all streams
             api.ok req, res, @master.streamsInfo()
 
+        # list stream groups
+        @app.get "/api/stream_groups", (req,res) =>
+            # return JSON version of the status for all streams
+            api.ok req, res, @master.groupsInfo()
+
         # list streams
         @app.get "/api/config", (req,res) =>
             # return JSON version of the status for all streams
