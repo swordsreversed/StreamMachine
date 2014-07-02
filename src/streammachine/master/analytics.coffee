@@ -280,7 +280,8 @@ module.exports = class Analytics
                         session_id: id
                         output:     start.output
                         stream:     start.stream
-                        time:       ts || start.time
+                        time:       totals.last_listen
+                        start_time: ts || start.time
                         client:     start.client
                         bytes:      totals.bytes
                         duration:   totals.duration
@@ -312,13 +313,16 @@ module.exports = class Analytics
                 time:{order:"desc"}
             size:1
 
-        @es.search type:"start", body:body, index:"#{@idx_prefix}-listens-*", (err,res) =>
-            return cb new Error "Error querying session start for #{id}: #{err}" if err
+        # session start is allowed to be anywhere in the last 72 hours
+        # FIXME: Is this reasonable? What do we want to do with long sessions?
+        @_indicesForTimeRange "listens", new Date(), "-72 hours", (err,indices) =>
+            @es.search type:"start", body:body, index:indices, ignoreUnavailable:true, (err,res) =>
+                return cb new Error "Error querying session start for #{id}: #{err}" if err
 
-            if res.hits.hits.length > 0
-                cb null, _.extend {}, res.hits.hits[0]._source, time:new Date(res.hits.hits[0]._source.time)
-            else
-                cb null, null
+                if res.hits.hits.length > 0
+                    cb null, _.extend {}, res.hits.hits[0]._source, time:new Date(res.hits.hits[0]._source.time)
+                else
+                    cb null, null
 
     #----------
 
@@ -336,13 +340,14 @@ module.exports = class Analytics
             size:1
 
 
-        @es.search type:"session", body:body, index:"#{@idx_prefix}-sessions-*", (err,res) =>
-            return cb new Error "Error querying for old session #{id}: #{err}" if err
+        @_indicesForTimeRange "sessions", new Date(), "-72 hours", (err,indices) =>
+            @es.search type:"session", body:body, index:indices, ignoreUnavailable:true, (err,res) =>
+                return cb new Error "Error querying for old session #{id}: #{err}" if err
 
-            if res.hits.hits.length == 0
-                cb null, null
-            else
-                cb null, new Date(res.hits.hits[0]._source.time)
+                if res.hits.hits.length == 0
+                    cb null, null
+                else
+                    cb null, new Date(res.hits.hits[0]._source.time)
 
     #----------
 
@@ -371,17 +376,43 @@ module.exports = class Analytics
                 last_listen:
                     max:{ field:"time" }
 
-        @es.search type:"listen", index:"#{@idx_prefix}-listens-*", body:body, (err,res) =>
-            return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
+        @_indicesForTimeRange "listens", new Date(), ts||"-72 hours", (err,indices) =>
+            @es.search type:"listen", index:indices, body:body, ignoreUnavailable:true, (err,res) =>
+                return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
 
-            if res.hits.total > 0
-                cb null,
-                    requests:       res.hits.total
-                    duration:       res.aggregations.duration.value
-                    bytes:          res.aggregations.bytes.value
-                    last_listen:    new Date(res.aggregations.last_listen.value)
-            else
-                cb null, null
+                if res.hits.total > 0
+                    cb null,
+                        requests:       res.hits.total
+                        duration:       res.aggregations.duration.value
+                        bytes:          res.aggregations.bytes.value
+                        last_listen:    new Date(res.aggregations.last_listen.value)
+                else
+                    cb null, null
+
+    #----------
+
+    _indicesForTimeRange: (idx,start,end,cb) ->
+        if _.isFunction(end)
+            cb = end
+            end = null
+
+        start = @local(start)
+
+        if _.isString(end) && end[0] == "-"
+            end = @local(start,end)
+
+        indices = []
+        if end
+            end = @local(end)
+
+            s = start
+            while true
+                s = @local(s,"-1 day")
+                break if s < end
+                indices.push "#{@idx_prefix}-#{idx}-#{ @local(s,"%F") }"
+
+        indices.unshift "#{@idx_prefix}-#{idx}-#{ @local(start,"%F") }"
+        cb null, _.uniq(indices)
 
     #----------
 
@@ -409,25 +440,25 @@ module.exports = class Analytics
                         streams:
                             terms:{ field:"stream", size:5 }
 
+        @_indicesForTimeRange "listens", new Date(), "-15 minutes", (err,indices) =>
+            @es.search index:indices, type:"listen", body:body, ignoreUnavailable:true, (err,res) =>
+                return cb new Error "Failed to query listeners: #{err}" if err
 
-        @es.search index:"#{@idx_prefix}-listens-*", type:"listen", body:body, (err,res) =>
-            return cb new Error "Failed to query listeners: #{err}" if err
+                times = []
 
-            times = []
+                for obj in res.aggregations.listeners_by_minute.buckets
+                    streams = {}
+                    for sobj in obj.streams.buckets
+                        streams[ sobj.key ] = sobj.doc_count
 
-            for obj in res.aggregations.listeners_by_minute.buckets
-                streams = {}
-                for sobj in obj.streams.buckets
-                    streams[ sobj.key ] = sobj.doc_count
+                    times.unshift
+                        time:               @local(new Date(obj.key),"%F %T%^z")
+                        requests:           obj.doc_count
+                        avg_listeners:      Math.round( obj.duration.value / 60 )
+                        sessions:           obj.sessions.value
+                        requests_by_stream: streams
 
-                times.unshift
-                    time:               @local(new Date(obj.key),"%F %T%^z")
-                    requests:           obj.doc_count
-                    avg_listeners:      Math.round( obj.duration.value / 60 )
-                    sessions:           obj.sessions.value
-                    requests_by_stream: streams
-
-            cb null, times
+                cb null, times
 
     #----------
 

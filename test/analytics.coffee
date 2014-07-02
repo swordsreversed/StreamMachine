@@ -94,6 +94,35 @@ describe "Analytics", ->
 
         it "selects the last session time from the database"
 
+        describe "Index Selection", ->
+            it "chooses indices from a time range", (done) ->
+                start   = new Date()
+                end     = new Date( Number(start) - 86400*2*1000 )
+
+                analytics._indicesForTimeRange "listens", start, end, (err,indices) ->
+                    throw err if err
+
+                    expect(indices).to.have.length 3
+                    done()
+
+            it "chooses indices given a start and offset", (done) ->
+                start = new Date()
+
+                analytics._indicesForTimeRange "listens", start, "-24 hours", (err,indices) ->
+                    throw err if err
+
+                    expect(indices).to.have.length 2
+                    done()
+
+            it "chooses one index given a single time", (done) ->
+                start = new Date()
+
+                analytics._indicesForTimeRange "listens", start, (err,indices) ->
+                    throw err if err
+
+                    expect(indices).to.have.length 1
+                    done()
+
     describe "Session Start", ->
         it "stores a session start", (done) ->
             console.log "Storing session #{ START.client.session_id }"
