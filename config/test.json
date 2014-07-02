@@ -8,7 +8,7 @@
 		"password":   "zxcasdqwe"
 	},
 	"redis": {
-		"server":     "redis://localhost:6379"
+		"server":     "redis://localhost:6379/1"
 	},
   "analytics": {
     "es_uri":         "es://localhost:9200/test_streammachine",
