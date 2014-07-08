@@ -117,33 +117,17 @@ module.exports = class Analytics
         # write one index per day of data
         index_date = tz(obj.time,"%F")
 
-        switch obj.type
-            when "session_start"
-                @es.index index:"#{@idx_prefix}-listens-#{index_date}", type:"start", body:
-                    time:       new Date(obj.time)
-                    session_id: obj.client.session_id
-                    stream:     obj.stream_group || obj.stream
-                    client:     obj.client
-                , (err) =>
-                    if err
-                        @log.error "ES write error: #{err}"
-                        return cb? err
+        time = new Date( obj.time )
 
-                    cb? null
+        @_indicesForTimeRange "listens", time, (err,idx) =>
 
-                # -- start tracking the session -- #
-
-            when "listen"
-                # do we know of other duration for this session?
-                @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
-                    @es.index index:"#{@idx_prefix}-listens-#{index_date}", type:"listen", body:
-                        session_id:         obj.client.session_id
-                        time:               new Date(obj.time)
-                        bytes:              obj.bytes
-                        duration:           obj.duration
-                        session_duration:   dur
-                        stream:             obj.stream
-                        client:             obj.client
+            switch obj.type
+                when "session_start"
+                    @es.index index:idx[0], type:"start", body:
+                        time:       new Date(obj.time)
+                        session_id: obj.client.session_id
+                        stream:     obj.stream_group || obj.stream
+                        client:     obj.client
                     , (err) =>
                         if err
                             @log.error "ES write error: #{err}"
@@ -151,9 +135,29 @@ module.exports = class Analytics
 
                         cb? null
 
-        # -- update our timer -- #
+                    # -- start tracking the session -- #
 
-        @_updateSessionTimerFor obj.client.session_id, (err) =>
+                when "listen"
+                    # do we know of other duration for this session?
+                    @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
+                        @es.index index:idx[0], type:"listen", body:
+                            session_id:         obj.client.session_id
+                            time:               new Date(obj.time)
+                            bytes:              obj.bytes
+                            duration:           obj.duration
+                            session_duration:   dur
+                            stream:             obj.stream
+                            client:             obj.client
+                        , (err) =>
+                            if err
+                                @log.error "ES write error: #{err}"
+                                return cb? err
+
+                            cb? null
+
+            # -- update our timer -- #
+
+            @_updateSessionTimerFor obj.client.session_id, (err) =>
 
 
     #----------
