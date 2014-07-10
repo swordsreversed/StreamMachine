@@ -54,7 +54,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         @_rdataFunc = (chunk) =>
             # if we're at max length, shift off a chunk (or more, if needed)
-            while @_rbuffer.length > @_rmax
+            while @_rbuffer.length >= @_rmax
                 b = @_rbuffer.shift()
                 @emit "rshift", b
 
@@ -72,29 +72,36 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # -- look for stream connections -- #
 
         @on "source", (newsource) =>
-            @log.debug "RewindBuffer got source event"
-            # -- disconnect from old source -- #
+            @_rConnectSource newsource
 
-            if @_rsource
-                @_rsource.removeListener "data", @_rdataFunc
-                @log.debug "removed old rewind data listener"
+    #----------
 
-            # -- compute initial stats -- #
+    _rConnectSource: (newsource,cb) ->
+        @log.debug "RewindBuffer got source event"
+        # -- disconnect from old source -- #
 
-            newsource.once "vitals", (vitals) =>
-                if @_rstreamKey && @_rstreamKey == vitals.streamKey
-                    # reconnecting, but rate matches so we can keep using
-                    # our existing buffer.
-                    @log.debug "Rewind buffer validated new source.  Reusing buffer."
+        if @_rsource
+            @_rsource.removeListener "data", @_rdataFunc
+            @log.debug "removed old rewind data listener"
 
-                else
-                    @_rChunkLength vitals
+        # -- compute initial stats -- #
 
-                # connect our data listener
-                newsource.on "data", @_rdataFunc
+        newsource.vitals (vitals) =>
+            if @_rstreamKey && @_rstreamKey == vitals.streamKey
+                # reconnecting, but rate matches so we can keep using
+                # our existing buffer.
+                @log.debug "Rewind buffer validated new source.  Reusing buffer."
 
-                # keep track of our source
-                @_rsource = newsource
+            else
+                @_rChunkLength vitals
+
+            # connect our data listener
+            newsource.on "data", @_rdataFunc
+
+            # keep track of our source
+            @_rsource = newsource
+
+            cb? null
 
     #----------
 
@@ -121,9 +128,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 @_rbuffer = []
 
             # compute new frame numbers
-            @_rsecsPerChunk   = vitals.emitDuration
-            @_rmax            = Math.round @opts.seconds / @_rsecsPerChunk
-            @_rburst          = Math.round @opts.burst / @_rsecsPerChunk
+            @_rsecsPerChunk = vitals.emitDuration
+            @_rmax          = Math.round @opts.seconds / @_rsecsPerChunk
+            @_rburst        = Math.round @opts.burst / @_rsecsPerChunk
+            @_rstreamKey    = vitals.streamKey
 
             @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
 

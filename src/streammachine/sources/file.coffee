@@ -18,25 +18,7 @@ module.exports = class FileSource extends require("./base")
 
         @_emit_pos = 0
 
-        @_int = setInterval =>
-            @_emit_pos = 0 if @_emit_pos >= @_chunks.length
-
-            chunk = @_chunks[ @_emit_pos ]
-
-            return if !chunk
-
-            console.log "NO DATA!!!! ", chunk if !chunk.data
-
-            @emit "data",
-                data:       chunk.data
-                ts:         (new Date)
-                duration:   chunk.duration
-                streamKey:  @streamKey
-                uuid:       @uuid
-
-            @_emit_pos = @_emit_pos + 1
-
-        , @emitDuration * 1000
+        @start() if !@opts.do_not_emit
 
         @on "_chunk", (chunk) =>
             @_chunks.push chunk
@@ -54,6 +36,47 @@ module.exports = class FileSource extends require("./base")
         # pipe our file into the parser
         @_file = fs.createReadStream @opts.filePath
         @_file.pipe(@parser)
+
+    #----------
+
+    start: ->
+        return true if @_int
+
+        @_int = setInterval =>
+            @_emitOnce()
+        , @emitDuration * 1000
+
+        true
+
+    #----------
+
+    stop: ->
+        return true if !@_int
+
+        clearInterval @_int
+        @_int = null
+
+        true
+
+    #----------
+
+    _emitOnce: (ts=null) ->
+        @_emit_pos = 0 if @_emit_pos >= @_chunks.length
+
+        chunk = @_chunks[ @_emit_pos ]
+
+        return if !chunk
+
+        console.log "NO DATA!!!! ", chunk if !chunk.data
+
+        @emit "data",
+            data:       chunk.data
+            ts:         ts || (new Date)
+            duration:   chunk.duration
+            streamKey:  @streamKey
+            uuid:       @uuid
+
+        @_emit_pos = @_emit_pos + 1
 
     #----------
 
