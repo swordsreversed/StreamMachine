@@ -32,7 +32,7 @@ module.exports = class Source extends require("events").EventEmitter
                 @log?.info "Source data stopped flowing.  Killing connection."
                 @disconnect()
 
-            , 30*1000
+            , @opts.heartbeatInterval || 30*1000
 
 
         if !source_opts.skipParser

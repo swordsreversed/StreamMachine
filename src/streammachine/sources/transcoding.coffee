@@ -35,14 +35,20 @@ module.exports = class TranscodingSource extends require("./base")
         @_pingData = _.debounce =>
             # data has stopped flowing. mark a discontinuity in the chunker.
             @log?.info "Transcoder data interupted. Marking discontinuity."
+            @emit "discontinuity_stop"
 
             @o_stream.once "data", (chunk) =>
                 @log?.info "Transcoder data resumed. Reseting time to #{chunk.ts}."
+                @emit "discontinuity_start"
                 @chunker.resetTime chunk.ts
 
-        , 30*1000
+        , @opts.discontinuityTimeout || 30*1000
 
         # -- chunking -- #
+
+        @oDataFunc = (chunk) =>
+            @_pingData()
+            @_buf.write chunk.data
 
         @o_stream.once "data", (first_chunk) =>
             @emit "connected"
@@ -58,9 +64,7 @@ module.exports = class TranscodingSource extends require("./base")
                 while c = @chunker.read()
                     @emit "data", c
 
-            @o_stream.on "data", (chunk) =>
-                @_pingData()
-                @_buf.write chunk.data
+            @o_stream.on "data", @oDataFunc
 
             @_buf.write first_chunk.data
 
@@ -90,3 +94,12 @@ module.exports = class TranscodingSource extends require("./base")
         url:        "N/A"
         streamKey:  @streamKey
         uuid:       @uuid
+
+    #----------
+
+    disconnect: ->
+        @ffmpeg.kill()
+        @o_stream.removeListener "data", @oDataFunc
+        @connected = false
+
+

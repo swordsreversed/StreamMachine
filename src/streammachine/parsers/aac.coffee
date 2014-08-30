@@ -131,7 +131,7 @@ module.exports = class AAC extends require("stream").Writable
 
                     return FIRST_BYTE
                 else
-                    console.log "On-tracking with frame of: ", @frameSize - buf.length
+                    #console.log "On-tracking with frame of: ", @frameSize - buf.length
                     return new strtok.BufferType(@frameSize - buf.length);
 
             if @gotFF

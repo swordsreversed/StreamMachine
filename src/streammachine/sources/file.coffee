@@ -46,6 +46,8 @@ module.exports = class FileSource extends require("./base")
             @_emitOnce()
         , @emitDuration * 1000
 
+        @_emitOnce()
+
         true
 
     #----------

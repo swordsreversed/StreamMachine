@@ -36,32 +36,61 @@ TRANS_AAC_STREAM =
 in_file = $file "aac-256.aac"
 
 describe "Transcoding Source", ->
-    logger = new Logger {}
+    logger = new Logger {stdout:true}
 
     file_source = null
     trans_source = null
-    chunks = null
 
     before (done) ->
         file_source = new FileSource format:"aac", filePath:in_file
-        file_source.once "_loaded", ->
-            chunks = _.clone(file_source._chunks)
-            done()
+        done()
 
-    before (done) ->
+    beforeEach (done) ->
         trans_source = new TransSource
             stream:         file_source
             ffmpeg_args:    TRANS_AAC_STREAM.ffmpeg_args
             format:         "aac"
             stream_key:     "test"
+            discontinuityTimeout: 100
 
         done()
 
+    afterEach (done) ->
+        file_source.stop()
+        trans_source.disconnect()
+        done()
+
     it "emits a chunk of data", (done) ->
-        this.timeout(5000)
+        this.timeout(10000)
         trans_source.once "data", (chunk) ->
-            console.log "chunk is ", chunk
             done()
+
+        file_source.start()
+
+    it "detects a discontinuity", (done) ->
+        this.timeout(10000)
+
+        # Once we get first data, stop and start the stream. We should
+        # get events for each occasion, and we should get the stop within
+        # the 100ms we set as our discontinuityTimeout above
+
+        trans_source.once "data", (chunk) ->
+            first_data = Number(new Date())
+            trans_source.once "discontinuity_stop", ->
+                stopped = Number(new Date())
+                expect(stopped-first_data).to.be.below(150)
+
+                trans_source.once "discontinuity_start", ->
+                    done()
+
+                file_source.start()
+
+            file_source.stop()
+
+        file_source.start()
+
+
+
 
 
 
