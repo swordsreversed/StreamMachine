@@ -8,6 +8,8 @@ module.exports = class Source extends require("events").EventEmitter
     constructor: (source_opts={}) ->
         @uuid = @opts.uuid || uuid.v4()
 
+        @_isDisconnected = false
+
         @isFallback = false
         @streamKey  = null
         @_vitals    = null
@@ -27,13 +29,13 @@ module.exports = class Source extends require("events").EventEmitter
 
             # creates a sort of dead mans switch that we use to kill the connection
             # if it stops sending data
-            @_pingData = _u.debounce =>
-                # data has stopped flowing. kill the connection.
-                @log?.info "Source data stopped flowing.  Killing connection."
-                @disconnect()
 
-            , @opts.heartbeatInterval || 30*1000
-
+            @_pingData = new Source.Debounce @opts.heartbeatTimeout || 30*1000, (last_ts) =>
+                if !@_isDisconnected
+                    # data has stopped flowing. kill the connection.
+                    @log?.info "Source data stopped flowing.  Killing connection."
+                    @emit "_source_dead", last_ts, Number(new Date())
+                    @disconnect()
 
         if !source_opts.skipParser
             # -- Pull vitals from first header -- #
@@ -60,7 +62,8 @@ module.exports = class Source extends require("events").EventEmitter
 
             @parser.on "frame", (frame,header) =>
                 # heartbeat?
-                @_pingData?()
+                #console.log "_pingData at ",Number(new Date())
+                @_pingData?.ping()
 
                 @chunker.write frame:frame, header:header
 
@@ -87,6 +90,41 @@ module.exports = class Source extends require("events").EventEmitter
             cb? @_vitals
         else
             @once "vitals", => cb? @_vitals
+
+    #----------
+
+    disconnect: (cb) ->
+        @_isDisconnected = true
+        @chunker.removeAllListeners()
+        @parser.removeAllListeners()
+
+    #----------
+
+    class @Debounce
+        constructor: (@wait,@only_once,@cb) ->
+            if _u.isFunction(@only_once)
+                @cb = @only_once
+                @only_once = false
+
+            @last = null
+            @timeout = null
+
+            @_t = =>
+                ago = _u.now() - @last
+
+                if ago < @wait && ago >= 0
+                    @timeout = setTimeout @_t, @wait - ago
+                else
+                    @timeout = null
+                    @cb @last
+
+        ping: ->
+            @last = _u.now()
+
+            if !@timeout
+                @timeout = setTimeout @_t, @wait
+
+            true
 
     #----------
 
