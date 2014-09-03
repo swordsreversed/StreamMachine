@@ -32,22 +32,20 @@ module.exports = class TranscodingSource extends require("./base")
 
         # -- watch for discontinuities -- #
 
-        @_pingData = _.debounce =>
+        @_pingData = new TranscodingSource.Debounce (@opts.discontinuityTimeout || 30*1000), (last_ts) =>
             # data has stopped flowing. mark a discontinuity in the chunker.
             @log?.info "Transcoder data interupted. Marking discontinuity."
-            @emit "discontinuity_stop"
+            @emit "discontinuity_stop", last_ts
 
             @o_stream.once "data", (chunk) =>
                 @log?.info "Transcoder data resumed. Reseting time to #{chunk.ts}."
-                @emit "discontinuity_start"
+                @emit "discontinuity_start", chunk.ts, last_ts
                 @chunker.resetTime chunk.ts
-
-        , @opts.discontinuityTimeout || 30*1000
 
         # -- chunking -- #
 
         @oDataFunc = (chunk) =>
-            @_pingData()
+            @_pingData.ping()
             @_buf.write chunk.data
 
         @o_stream.once "data", (first_chunk) =>
