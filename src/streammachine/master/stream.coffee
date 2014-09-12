@@ -250,7 +250,7 @@ module.exports = class Stream extends require('events').EventEmitter
         , 5000
 
         # Look for a header before switching
-        newsource.vitals (vitals) =>
+        newsource.vitals (err,vitals) =>
             if @source && old_source != @source
                 # source changed while we were waiting for vitals. we'll
                 # abort our change attempt

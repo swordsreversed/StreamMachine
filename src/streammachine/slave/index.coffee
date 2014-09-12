@@ -353,7 +353,19 @@ module.exports = class Slave extends require("events").EventEmitter
 
             @slave.master.emit "stream_stats", @stream.key, (err,obj) =>
                 @_streamKey = obj.streamKey
+                @_vitals = obj
                 @emit "vitals", obj
+
+        #----------
+
+        vitals: (cb) ->
+            _vFunc = (v) =>
+                cb? null, v
+
+            if @_vitals
+                _vFunc @_vitals
+            else
+                @once "vitals", _vFunc
 
         #----------
 
@@ -362,6 +374,8 @@ module.exports = class Slave extends require("events").EventEmitter
                 cb? @_streamKey
             else
                 @once "vitals", => cb? @_streamKey
+
+        #----------
 
         getRewind: (cb) ->
             # connect to the master's StreamTransport and ask for any rewind

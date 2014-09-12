@@ -86,7 +86,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         # -- compute initial stats -- #
 
-        newsource.vitals (vitals) =>
+        newsource.vitals (err,vitals) =>
             if @_rstreamKey && @_rstreamKey == vitals.streamKey
                 # reconnecting, but rate matches so we can keep using
                 # our existing buffer.

@@ -86,10 +86,13 @@ module.exports = class Source extends require("events").EventEmitter
         @emit "vitals", @_vitals
 
     vitals: (cb) ->
+        _vFunc = (v) =>
+            cb? null, v
+
         if @_vitals
-            cb? @_vitals
+            _vFunc @_vitals
         else
-            @once "vitals", => cb? @_vitals
+            @once "vitals", _vFunc
 
     #----------
 

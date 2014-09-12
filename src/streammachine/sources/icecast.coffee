@@ -20,8 +20,11 @@ module.exports = class IcecastSource extends require("./base")
         # incoming -> Parser
         @opts.sock.pipe @parser
 
+        @last_ts = null
+
         # outgoing -> Stream
         @on "_chunk", (chunk) ->
+            @last_ts = chunk.ts
             @emit "data", chunk
 
         @opts.sock.on "close", =>
@@ -48,6 +51,7 @@ module.exports = class IcecastSource extends require("./base")
         url:        [@opts.sock.remoteAddress,@opts.sock.remotePort].join(":")
         streamKey:  @streamKey
         uuid:       @uuid
+        last_ts:    @last_ts
 
     #----------
 

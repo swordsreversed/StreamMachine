@@ -357,6 +357,7 @@ module.exports = class Master extends require("events").EventEmitter
     slavesInfo: ->
         slaveCount: Object.keys(@slaves).length
         slaves: ( { id:k, status:s.status } for k,s of @slaves )
+        master: @_rewindStatus()
 
     #----------
 

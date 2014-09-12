@@ -12,6 +12,8 @@ module.exports = class TranscodingSource extends require("./base")
 
         @o_stream = @opts.stream
 
+        @last_ts = null
+
         # we start up an ffmpeg transcoder and then listen for data events
         # from our source. Each time we get a chunk of audio data, we feed
         # it into ffmpeg.  We then run the stream of transcoded data that
@@ -60,6 +62,7 @@ module.exports = class TranscodingSource extends require("./base")
 
             @chunker.on "readable", =>
                 while c = @chunker.read()
+                    @last_ts = c.ts
                     @emit "data", c
 
             @o_stream.on "data", @oDataFunc
@@ -92,6 +95,7 @@ module.exports = class TranscodingSource extends require("./base")
         url:        "N/A"
         streamKey:  @streamKey
         uuid:       @uuid
+        last_ts:    @last_ts
 
     #----------
 
