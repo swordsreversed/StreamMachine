@@ -135,6 +135,7 @@ module.exports = class Source extends require("events").EventEmitter
         constructor: (@duration,@initialTime = new Date()) ->
             @_chunk_queue       = []
             @_queue_duration    = 0
+            @_remainders        = 0
 
             @_last_ts           = null
 
@@ -144,6 +145,7 @@ module.exports = class Source extends require("events").EventEmitter
 
         resetTime: (ts) ->
             @_last_ts       = null
+            @_remainders    = 0
             @initialTime    = ts
 
         #----------
@@ -172,9 +174,17 @@ module.exports = class Source extends require("events").EventEmitter
                 # what's the timestamp for this chunk? If it seems reasonable
                 # to attach it to the last chunk, let's do so.
 
+                simple_dur = Math.floor(duration)
+                @_remainders += duration - simple_dur
+
+                if @_remainders > 1
+                    simple_rem = Math.floor(@_remainders)
+                    @_remainders = @_remainders - simple_rem
+                    simple_dur += simple_rem
+
                 ts =
                     if @_last_ts
-                        new Date( Number(@_last_ts) + duration )
+                        new Date( Number(@_last_ts) + simple_dur )
                     else
                         @initialTime
 
