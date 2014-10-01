@@ -22,7 +22,6 @@
         "strtok":               "0.1.1",
         "underscore":           "~1.7.0",
         "winston":              "~0.7.2",
-        "cube":                 "0.2.0",
         "haml-coffee":          "1.4.1",
         "mincer":               "~0.5.6",
         "express-api-helper":   "~0.0.1",
