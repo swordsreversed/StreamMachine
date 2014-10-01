@@ -493,6 +493,7 @@ module.exports = class Master extends require("events").EventEmitter
                 res.status(200).write ''
                 req.stream.rewind.dumpBuffer res, (err) =>
                     @master.log.debug "Rewind dumpBuffer finished."
+                    #res.end()
 
     #----------
 

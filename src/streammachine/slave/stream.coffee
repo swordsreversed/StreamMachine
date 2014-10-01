@@ -68,7 +68,7 @@ module.exports = class Stream extends require('../rewind_buffer')
 
                 @loadBuffer stream, (err) =>
                     @log.debug "Slave source loaded rewind buffer."
-                    req.end()
+                    #req.end()
 
                     @_sourceInitializing = false
                     @emit "_source_init"

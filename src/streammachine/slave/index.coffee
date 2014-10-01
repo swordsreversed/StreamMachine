@@ -402,7 +402,7 @@ module.exports = class Slave extends require("events").EventEmitter
                 @log.debug "Got Rewind response with status code of #{ res.statusCode }"
                 if res.statusCode == 200
                     # emit a 'rewind' event with a callback to get the response
-                    cb? null, res, req
+                    cb? null, res
 
                 else
                     cb? "Rewind request got a non-500 response."
