@@ -1,5 +1,4 @@
 _       = require "underscore"
-Influx  = require "influx"
 URL     = require "url"
 winston = require "winston"
 tz      = require "timezone"
