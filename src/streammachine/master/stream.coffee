@@ -59,8 +59,7 @@ module.exports = class Stream extends require('events').EventEmitter
         # set up a rewind buffer, for use in bringing new slaves up to speed
         # or to transfer to a new master when restarting
         @log.info "Initializing RewindBuffer for master stream."
-        @rewind = new Rewind
-        @rewind.opts = @opts
+        @rewind = new Rewind seconds:@opts.seconds, burst:@opts.burst
         @rewind.log = @log.child module:"rewind"
 
         # Rewind listens to us, not to our source
@@ -331,6 +330,9 @@ module.exports = class Stream extends require('events').EventEmitter
         # did they update the metaTitle?
         if new_opts.metaTitle
             @setMetadata title:new_opts.metaTitle
+
+        # Update our rewind settings
+        @rewind.setRewind @opts.seconds, @opts.burst
 
         @emit "config"
 

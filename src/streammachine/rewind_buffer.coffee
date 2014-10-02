@@ -33,9 +33,11 @@ HLSSegmenter    = require "./rewind/hls_segmenter"
 
 module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: (rewind_opts={}) ->
+        @_rsecs         = rewind_opts.seconds || 0
+        @_rburstsecs    = rewind_opts.burst || 0
         @_rsecsPerChunk = Infinity
-        @_rmax = null
-        @_rburst = null
+        @_rmax          = null
+        @_rburst        = null
 
         # each listener should be an object that defines obj._offset and
         # obj.writeFrame. We implement RewindBuffer.Listener, but other
@@ -73,6 +75,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         @on "source", (newsource) =>
             @_rConnectSource newsource
+
+    #----------
+
+    setRewind: (secs,burst) ->
+        @_rsecs = secs
+        @_rburstsecs = burst
+        @_rUpdateMax()
 
     #----------
 
@@ -129,11 +138,19 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
             # compute new frame numbers
             @_rsecsPerChunk = vitals.emitDuration
-            @_rmax          = Math.round @opts.seconds / @_rsecsPerChunk
-            @_rburst        = Math.round @opts.burst / @_rsecsPerChunk
             @_rstreamKey    = vitals.streamKey
 
+            @_rUpdateMax()
+
             @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
+
+    #----------
+
+    _rUpdateMax: ->
+        if @_rsecsPerChunk
+            @_rmax          = Math.round @_rsecs / @_rsecsPerChunk
+            @_rburst        = Math.round @_rburstsecs / @_rsecsPerChunk
+        @log.debug "Rewind's max buffer length is ", max:@_rmax, seconds:@_rsecs
 
     #----------
 

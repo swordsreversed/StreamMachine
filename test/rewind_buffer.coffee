@@ -13,13 +13,7 @@ describe "Rewind Buffer", ->
     logger = new Logger {}
 
     before (done) ->
-        rewind = new RewindBuffer
-
-        # fake options that would have been on our stream class
-        rewind.opts =
-            seconds:    60
-            burst:      30
-
+        rewind = new RewindBuffer seconds:60, burst:30
         rewind.log = logger
 
         done()
@@ -88,7 +82,7 @@ describe "Rewind Buffer", ->
             it "still knows buffered duration", (done) ->
                 # the value is allowed to be rounded
                 dur = 125 * source_a.emitDuration
-                expect( rewind.bufferedSecs() ).to.be.within rewind.opts.seconds, rewind.opts.seconds + 1
+                expect( rewind.bufferedSecs() ).to.be.within rewind._rsecs, rewind._rsecs + 1
                 done()
 
             it "can find a timestamp inside the buffer", (done) ->
