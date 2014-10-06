@@ -184,28 +184,46 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # any incoming data.
 
     loadBuffer: (stream,cb) ->
-        parser = Dissolve().loop (end) ->
-            @uint8("meta_length")
-                .tap ->
-                    @buffer("meta",@vars.meta_length)
-                        .uint16le("data_length")
-                        .tap ->
-                            @buffer("data",@vars.data_length)
+        parser = Dissolve()
+            .uint8("header_length")
+            .tap ->
+                @buffer("header",@vars.header_length)
+                    .tap ->
+                        @push JSON.parse(@vars.header)
+                        @vars = {}
+
+                        @loop (end) ->
+                            @uint8("meta_length")
                                 .tap ->
-                                    meta = JSON.parse @vars.meta.toString()
-                                    @push ts:new Date(meta.ts), meta:meta.meta, duration:meta.duration, data:@vars.data
-                                    @vars = {}
+                                    @buffer("meta",@vars.meta_length)
+                                        .uint16le("data_length")
+                                        .tap ->
+                                            @buffer("data",@vars.data_length)
+                                                .tap ->
+                                                    meta = JSON.parse @vars.meta.toString()
+                                                    @push ts:new Date(meta.ts), meta:meta.meta, duration:meta.duration, data:@vars.data
+                                                    @vars = {}
 
         stream.pipe(parser)
 
+        headerRead = false
+
         parser.on "readable", =>
             while c = parser.read()
-                @_insertBuffer(c)
-                @emit "buffer", c
+                if !headerRead
+                    headerRead = true
+
+                    @emit "header", c
+                    @_rChunkLength emitDuration:c.secs_per_chunk, streamKey:c.stream_key
+
+                else
+                    @_insertBuffer(c)
+                    @emit "buffer", c
 
         parser.on "end", =>
-            @log.info "RewindBuffer is now at ", seconds:@bufferedSecs(), length:@_rbuffer.length
-            cb? null
+            obj = seconds:@bufferedSecs(), length:@_rbuffer.length
+            @log.info "RewindBuffer is now at ", obj
+            cb? null, obj
 
     #----------
 
@@ -229,6 +247,24 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         c.pipe stream
 
         slices = 0
+
+        # -- Write header -- #
+
+        header_buf = new Buffer JSON.stringify
+            start_ts:       rbuf_copy[0].ts
+            end_ts:         rbuf_copy[ rbuf_copy.length - 1 ].ts
+            secs_per_chunk: @_rsecsPerChunk
+            stream_key:     @_rstreamKey
+
+        # header buffer length
+        c.uint8 header_buf.length
+
+        # header buffer json
+        c.buffer header_buf
+
+        c.flush()
+
+        # -- Data Chunks -- #
 
         for i in [(rbuf_copy.length-1)..0]
             chunk = rbuf_copy[ i ]
@@ -262,7 +298,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
                 @log.info "Dumped rewind buffer. Sent #{slices} slices."
 
-                cb? null
+                cb? null, slices
 
         true
 
@@ -325,7 +361,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     pumpFrom: (rewinder,offset,length,concat,cb) ->
-        # we want to send _length_ frames, starting at _offset_
+        # we want to send _length_ chunks, starting at _offset_
 
         if offset == 0
             cb? null, null

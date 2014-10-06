@@ -5,6 +5,17 @@ Logger          = $src "logger"
 mp3_a = $file "mp3/mp3-44100-64-s.mp3"
 mp3_b = $file "mp3/mp3-44100-128-s.mp3"
 
+#----------
+
+class MockRewinder
+    constructor: ->
+        @buffer = []
+
+    _insert: (chunk) ->
+        @buffer.push chunk
+
+#----------
+
 describe "Rewind Buffer", ->
     rewind      = null
     source_a    = null
@@ -61,7 +72,7 @@ describe "Rewind Buffer", ->
             expect( rewind.bufferedSecs() ).to.be.within Math.floor(source_a.emitDuration), Math.ceil(source_a.emitDuration)
             done()
 
-        describe "on much data...", ->
+        describe "given more data...", ->
             ts = Number(new Date)
             before (done) ->
                 # push two minutes of data (240 samples)
@@ -99,5 +110,77 @@ describe "Rewind Buffer", ->
                     expect(err).to.be.instanceof Error
                     done()
 
+            it "can return data via pumpSeconds", (done) ->
+                mock = new MockRewinder
+
+                rewind.pumpSeconds mock, 2, false, (err,meta) ->
+                    throw err if err
+                    expect(meta.duration).to.be.within 1900, 2100
+                    expect(mock.buffer).to.have.length 4
+
+                    t_len = 0
+                    t_len += b.data.length for b in mock.buffer
+                    expect(t_len).to.be.within 15000, 17000
+
+                    done()
+
+            it "can return data via pumpSeconds (concat)", (done) ->
+                mock = new MockRewinder
+
+                rewind.pumpSeconds mock, 2, true, (err,meta) ->
+                    throw err if err
+                    expect(meta.duration).to.be.within 1900, 2100
+
+                    # buffer here is concatenated
+                    expect(mock.buffer).to.have.length 1
+
+                    # 64Kb/sec audio, so 2 sec should be ~16KB. Unit for length is bytes
+                    expect(mock.buffer[0].data.length).to.be.within 15000, 17000
+
+                    done()
+
+            # we'll use this in the next two tests
+            rewind_buf = new Buffer 0
+
+            it "can dump its rewind buffer", (done) ->
+                pt = new require("stream").PassThrough()
+
+                pt.on "readable", ->
+                    while b = pt.read()
+                        if rewind_buf
+                            rewind_buf = Buffer.concat [rewind_buf, b]
+                        else
+                            rewind_buf = b
+
+                rewind.dumpBuffer pt, (err,slices) ->
+                    true
+
+                pt.on "end", ->
+                    expect
+                    done()
+
+            it "can restore a dumped rewind buffer", (done) ->
+                n_rewind = new RewindBuffer seconds:60, burst:30
+                n_rewind.log = logger
+
+                pt = new require("stream").PassThrough()
+
+                n_rewind.loadBuffer pt, (err,obj) ->
+                    throw err if err
+
+                    expect(obj.seconds).to.equal rewind.bufferedSecs()
+                    expect(obj.length).to.equal rewind._rbuffer.length
+
+                    done()
+
+                pos     = 0
+                chunk   = 16384
+
+                while pos < rewind_buf.length
+                    b = rewind_buf.slice(pos,pos+chunk)
+                    pt.write b
+                    pos += chunk
+
+                pt.end()
 
 
