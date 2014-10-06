@@ -1,5 +1,6 @@
 RewindBuffer    = $src "rewind_buffer"
 HLSSegmenter    = $src "rewind/hls_segmenter"
+Logger          = $src "logger"
 _ = require "underscore"
 
 describe "HTTP Live Streaming Segmenter", ->
@@ -29,8 +30,8 @@ describe "HTTP Live Streaming Segmenter", ->
 
     rewind      = null
     beforeEach (done) ->
-        rewind = new RewindBuffer liveStreaming:true
-        rewind._rmax = 120
+        rewind = new RewindBuffer liveStreaming:true, seconds:120, burst:30, log:(new Logger {})
+        rewind._rChunkLength emitDuration:0.5, streamKey:"testing"
         done()
 
     it "creates the Live Streaming Segmenter", (done) ->
@@ -42,7 +43,7 @@ describe "HTTP Live Streaming Segmenter", ->
         # we'll inject 100 chunks of fake 0.5 second audio data
 
         for c in f_chunks
-            rewind._rdataFunc c
+            rewind._insertBuffer c
 
         # 50 seconds of audio data should have produced four HLS segments
         # (four whole ones, plus some change)
@@ -81,7 +82,7 @@ describe "HTTP Live Streaming Segmenter", ->
         done()
 
     it "segments mixed data", (done) ->
-        _(f_chunks).each (c) -> rewind._rdataFunc c
+        _(f_chunks).each (c) -> rewind._insertBuffer c
         _(b_chunks).each (c) -> rewind._insertBuffer c
 
         expect(rewind.hls_segmenter._segments).to.have.length 13
@@ -95,12 +96,12 @@ describe "HTTP Live Streaming Segmenter", ->
         done()
 
     it "removes segments as needed", (done) ->
-        rewind._rmax = 50
+        rewind.setRewind(30,30)
 
         for c in f_chunks
             rewind._rdataFunc c
 
-        expect(rewind._rbuffer).to.have.length 51
+        expect(rewind._rbuffer.length()).to.be.equal 60
         expect(rewind.hls_segmenter.segments).to.have.length 2
         expect(rewind.hls_segmenter._segments).to.have.length 3
         expect(Object.keys(rewind.hls_segmenter.segment_idx)).to.have.length 2

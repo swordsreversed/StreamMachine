@@ -33,6 +33,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rmax          = null
         @_rburst        = null
 
+        @log            = rewind_opts.log
+
         # each listener should be an object that defines obj._offset and
         # obj.writeFrame. We implement RewindBuffer.Listener, but other
         # classes can work with those pieces
