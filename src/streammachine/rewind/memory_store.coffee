@@ -9,10 +9,6 @@ module.exports = class MemoryStore extends require("./base_store")
         @buffer = []
         cb? null
 
-    setMax: (l) ->
-        @max_length = l
-        @_truncate()
-
     #----------
 
     length: ->
@@ -20,17 +16,32 @@ module.exports = class MemoryStore extends require("./base_store")
 
     #----------
 
-    at: (offset) ->
+    at: (offset,cb) ->
         offset = @buffer.length - 1 if offset > @buffer.length
         offset = 0 if offset < 0
 
-        @buffer[ @buffer.length - 1 - offset ]
+        cb null, @buffer[ @buffer.length - 1 - offset ]
+
+    #----------
+
+    range: (offset,length,cb) ->
+        offset = @buffer.length - 1 if offset > @buffer.length
+        offset = 0 if offset < 0
+
+        length = offset if length > offset
+
+        start = @buffer.length - offset
+        end = start + length
+
+        cb null, @buffer.slice(start,end)
+
+    #----------
 
     first: ->
-        @at( @buffer.length - 1 )
+        @buffer[0]
 
     last: ->
-        @at 0
+        @buffer[ @buffer.length - 1 ]
 
     #----------
 

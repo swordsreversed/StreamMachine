@@ -63,7 +63,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             # their offset.
             for l in @_rlisteners
                 # we'll give them whatever is at length - offset
-                l._insert @_rbuffer.at l._offset
+                # FIXME: This lookup strategy is horribly inefficient
+                @_rbuffer.at l._offset, (err,b) =>
+                    l._insert b
 
         # -- look for stream connections -- #
 
@@ -361,8 +363,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     pumpFrom: (rewinder,offset,length,concat,cb) ->
         # we want to send _length_ chunks, starting at _offset_
 
-        if offset == 0
+        if offset == 0 || length == 0
             cb? null, null
+            return true
 
         # sanity checks...
         offset = @checkOffset offset
@@ -370,18 +373,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # can't pump into the future, obviously
         length = offset if length > offset
 
-        bl = @_rbuffer.length()
+        @_rbuffer.range offset, length, (err,chunks) =>
+            pumpLen     = 0
+            duration    = 0
+            meta        = null
+            buffers     = []
 
-        pumpLen     = 0
-        duration    = 0
-
-        meta = null
-
-        buffers = []
-
-        if length > 0
-            for i in [1..length]
-                b = @_rbuffer.at(offset - i)
+            for b in chunks
                 pumpLen     += b.data.length
                 duration    += b.duration
 
@@ -392,13 +390,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
                 meta = b.meta if !meta
 
-        if concat
-          cbuf = Buffer.concat(buffers)
-          rewinder._insert { data:cbuf, meta:meta, duration:duration }
+            if concat
+              cbuf = Buffer.concat(buffers)
+              rewinder._insert { data:cbuf, meta:meta, duration:duration }
 
-        @log.silly "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length, bl:bl
+            @log.silly "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length
 
-        cb? null, meta:meta, duration:duration, length:pumpLen
+            cb? null, meta:meta, duration:duration, length:pumpLen
 
     #----------
 
