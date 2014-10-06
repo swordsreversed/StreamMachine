@@ -1,5 +1,13 @@
 _ = require "underscore"
 
+# -- HTTP Live Streaming Segmenter -- #
+
+# each segment would include:
+# id:       timestamp
+# duration: cumulative timestamp
+# buffers:  array of buffer refs
+# header:   computed ID3 header
+
 module.exports = class HLSSegmenter
     constructor: (@rewind,@segment_length,@log) ->
         @segments       = []

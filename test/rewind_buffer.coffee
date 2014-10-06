@@ -72,115 +72,127 @@ describe "Rewind Buffer", ->
             expect( rewind.bufferedSecs() ).to.be.within Math.floor(source_a.emitDuration), Math.ceil(source_a.emitDuration)
             done()
 
-        describe "given more data...", ->
-            ts = Number(new Date)
-            before (done) ->
-                # push two minutes of data (240 samples)
-                for i in [0..239]
-                    c_ts = new Date(ts+source_a.emitDuration*1000*i)
-                    source_a._emitOnce(c_ts)
+    describe "more data...", ->
+        events = rshift:0, runshift:0, rpush:0
+        before (done) ->
+            rewind._rbuffer.reset()
+
+            rewind.on "rshift",     (b) -> events.rshift += 1
+            rewind.on "runshift",   (b) -> events.runshift += 1
+            rewind.on "rpush",      (b) -> events.rpush += 1
+
+            done()
+
+        ts = Number(new Date)
+        before (done) ->
+            # push two minutes of data (240 samples)
+            for i in [0..239]
+                c_ts = new Date(ts+source_a.emitDuration*1000*i)
+                source_a._emitOnce(c_ts)
+
+            done()
+
+        it "pushed 240 data chunks", (done) ->
+            expect(events.rpush).to.eql 240
+            expect(events.runshift).to.eql 0
+            done()
+
+        it "shifted off 120 data chunks", (done) ->
+            expect(events.rshift).to.eql 120
+            done()
+
+        it "still knows buffered duration", (done) ->
+            # the value is allowed to be rounded
+            expect( rewind.bufferedSecs() ).to.be.within rewind._rsecs, rewind._rsecs + 1
+            done()
+
+        it "can find a timestamp inside the buffer", (done) ->
+            # we've pushed 240 samples, but 120 have been shifted off,
+            # so we'll look for one minute after the first push time
+            f_ts = new Date(ts + 1*60*1000)
+            rewind.findTimestamp f_ts, (err,offset) ->
+                expect(err).to.be.null
+                # should be the "last" timestamp in the buffer... first on the array
+                expect(offset).to.eql 120
+                done()
+
+        it "errors if a timestamp isn't in the buffer", (done) ->
+            f_ts = new Date(ts+2*60*1000)
+            rewind.findTimestamp f_ts, (err,offset) ->
+                expect(err).to.be.instanceof Error
+                done()
+
+        it "can return data via pumpSeconds", (done) ->
+            mock = new MockRewinder
+
+            rewind.pumpSeconds mock, 2, false, (err,meta) ->
+                throw err if err
+                expect(meta.duration).to.be.within 1900, 2100
+                expect(mock.buffer).to.have.length 4
+
+                t_len = 0
+                t_len += b.data.length for b in mock.buffer
+                expect(t_len).to.be.within 15000, 17000
 
                 done()
 
-            it "pushed 241 data chunks", (done) ->
-                expect(events.rpush).to.eql 241
+        it "can return data via pumpSeconds (concat)", (done) ->
+            mock = new MockRewinder
+
+            rewind.pumpSeconds mock, 2, true, (err,meta) ->
+                throw err if err
+                expect(meta.duration).to.be.within 1900, 2100
+
+                # buffer here is concatenated
+                expect(mock.buffer).to.have.length 1
+
+                # 64Kb/sec audio, so 2 sec should be ~16KB. Unit for length is bytes
+                expect(mock.buffer[0].data.length).to.be.within 15000, 17000
+
                 done()
 
-            it "shifted off 121 data chunks", (done) ->
-                expect(events.rshift).to.eql 121
+        # we'll use this in the next two tests
+        rewind_buf = new Buffer 0
+
+        it "can dump its rewind buffer", (done) ->
+            pt = new require("stream").PassThrough()
+
+            pt.on "readable", ->
+                while b = pt.read()
+                    if rewind_buf
+                        rewind_buf = Buffer.concat [rewind_buf, b]
+                    else
+                        rewind_buf = b
+
+            rewind.dumpBuffer pt, (err,slices) ->
+                true
+
+            pt.on "end", ->
+                expect
                 done()
 
-            it "still knows buffered duration", (done) ->
-                # the value is allowed to be rounded
-                dur = 125 * source_a.emitDuration
-                expect( rewind.bufferedSecs() ).to.be.within rewind._rsecs, rewind._rsecs + 1
+        it "can restore a dumped rewind buffer", (done) ->
+            n_rewind = new RewindBuffer seconds:60, burst:30
+            n_rewind.log = logger
+
+            pt = new require("stream").PassThrough()
+
+            n_rewind.loadBuffer pt, (err,obj) ->
+                throw err if err
+
+                expect(obj.seconds).to.equal rewind.bufferedSecs()
+                expect(obj.length).to.equal rewind._rbuffer.length()
+
                 done()
 
-            it "can find a timestamp inside the buffer", (done) ->
-                f_ts = new Date(ts+1*60*1000)
-                rewind.findTimestamp f_ts, (err,offset) ->
-                    expect(err).to.be.null
-                    # should be the "last" timestamp in the buffer... first on the array
-                    expect(offset).to.eql 120
-                    done()
+            pos     = 0
+            chunk   = 16384
 
-            it "errors if a timestamp isn't in the buffer", (done) ->
-                f_ts = new Date(ts+2*60*1000)
-                rewind.findTimestamp f_ts, (err,offset) ->
-                    expect(err).to.be.instanceof Error
-                    done()
+            while pos < rewind_buf.length
+                b = rewind_buf.slice(pos,pos+chunk)
+                pt.write b
+                pos += chunk
 
-            it "can return data via pumpSeconds", (done) ->
-                mock = new MockRewinder
-
-                rewind.pumpSeconds mock, 2, false, (err,meta) ->
-                    throw err if err
-                    expect(meta.duration).to.be.within 1900, 2100
-                    expect(mock.buffer).to.have.length 4
-
-                    t_len = 0
-                    t_len += b.data.length for b in mock.buffer
-                    expect(t_len).to.be.within 15000, 17000
-
-                    done()
-
-            it "can return data via pumpSeconds (concat)", (done) ->
-                mock = new MockRewinder
-
-                rewind.pumpSeconds mock, 2, true, (err,meta) ->
-                    throw err if err
-                    expect(meta.duration).to.be.within 1900, 2100
-
-                    # buffer here is concatenated
-                    expect(mock.buffer).to.have.length 1
-
-                    # 64Kb/sec audio, so 2 sec should be ~16KB. Unit for length is bytes
-                    expect(mock.buffer[0].data.length).to.be.within 15000, 17000
-
-                    done()
-
-            # we'll use this in the next two tests
-            rewind_buf = new Buffer 0
-
-            it "can dump its rewind buffer", (done) ->
-                pt = new require("stream").PassThrough()
-
-                pt.on "readable", ->
-                    while b = pt.read()
-                        if rewind_buf
-                            rewind_buf = Buffer.concat [rewind_buf, b]
-                        else
-                            rewind_buf = b
-
-                rewind.dumpBuffer pt, (err,slices) ->
-                    true
-
-                pt.on "end", ->
-                    expect
-                    done()
-
-            it "can restore a dumped rewind buffer", (done) ->
-                n_rewind = new RewindBuffer seconds:60, burst:30
-                n_rewind.log = logger
-
-                pt = new require("stream").PassThrough()
-
-                n_rewind.loadBuffer pt, (err,obj) ->
-                    throw err if err
-
-                    expect(obj.seconds).to.equal rewind.bufferedSecs()
-                    expect(obj.length).to.equal rewind._rbuffer.length
-
-                    done()
-
-                pos     = 0
-                chunk   = 16384
-
-                while pos < rewind_buf.length
-                    b = rewind_buf.slice(pos,pos+chunk)
-                    pt.write b
-                    pos += chunk
-
-                pt.end()
+            pt.end()
 
 

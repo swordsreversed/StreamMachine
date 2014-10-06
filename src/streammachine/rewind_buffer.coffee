@@ -6,6 +6,8 @@ nconf       = require "nconf"
 Rewinder        = require "./rewind/rewinder"
 HLSSegmenter    = require "./rewind/hls_segmenter"
 
+MemoryStore     = require "./rewind/memory_store"
+
 # RewindBuffer supports play from an arbitrary position in the last X hours
 # of our stream.
 
@@ -23,14 +25,6 @@ HLSSegmenter    = require "./rewind/hls_segmenter"
 # * uint16: data length
 # * Buffer: data chunk
 
-# -- HTTP Live Streaming Segmenter -- #
-
-# each segment would include:
-# id:       timestamp
-# duration: cumulative timestamp
-# buffers:  array of buffer refs
-# header:   computed ID3 header
-
 module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: (rewind_opts={}) ->
         @_rsecs         = rewind_opts.seconds || 0
@@ -45,7 +39,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rlisteners = []
 
         # create buffer as an array
-        @_rbuffer = []
+        @_rbuffer = new MemoryStore
+        @_rbuffer.on "shift",    (b) => @emit "rshift", b
+        @_rbuffer.on "push",     (b) => @emit "rpush", b
+        @_rbuffer.on "unshift",  (b) => @emit "runshift", b
 
         # -- set up Live Streaming segments -- #
 
@@ -55,21 +52,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # -- set up header and frame functions -- #
 
         @_rdataFunc = (chunk) =>
-            # if we're at max length, shift off a chunk (or more, if needed)
-            while @_rbuffer.length >= @_rmax
-                b = @_rbuffer.shift()
-                @emit "rshift", b
-
             # push the chunk on the buffer
-            @_rbuffer.push chunk
-            @emit "rpush", chunk
+            @_rbuffer.insert chunk
 
             # loop through all connected listeners and pass the frame buffer at
             # their offset.
-            bl = @_rbuffer.length
             for l in @_rlisteners
                 # we'll give them whatever is at length - offset
-                l._insert @_rbuffer[ bl - 1 - l._offset ]
+                l._insert @_rbuffer.at l._offset
 
         # -- look for stream connections -- #
 
@@ -117,9 +107,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # Return rewind buffer status, including HTTP Live Streaming if enabled
     _rStatus: ->
         status =
-            buffer_length:      @_rbuffer.length
-            first_buffer_ts:    @_rbuffer[0]?.ts
-            last_buffer_ts:     @_rbuffer[ @_rbuffer.length - 1 ]?.ts
+            buffer_length:      @_rbuffer.length()
+            first_buffer_ts:    @_rbuffer.first()?.ts
+            last_buffer_ts:     @_rbuffer.last()?.ts
 
         if @hls_segmenter
             _u.extend status, @hls_segmenter.status()
@@ -134,7 +124,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 # we're reconnecting, but didn't match rate...  we
                 # should wipe out the old buffer
                 @log.debug "Invalid existing rewind buffer. Reset."
-                @_rbuffer = []
+                @_rbuffer.reset()
 
             # compute new frame numbers
             @_rsecsPerChunk = vitals.emitDuration
@@ -149,6 +139,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     _rUpdateMax: ->
         if @_rsecsPerChunk
             @_rmax          = Math.round @_rsecs / @_rsecsPerChunk
+            @_rbuffer.setMax @_rmax
             @_rburst        = Math.round @_rburstsecs / @_rsecsPerChunk
         @log.debug "Rewind's max buffer length is ", max:@_rmax, seconds:@_rsecs
 
@@ -166,16 +157,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     bufferedSecs: ->
         # convert buffer length to seconds
-        Math.round @_rbuffer.length * @_rsecsPerChunk
+        Math.round @_rbuffer.length() * @_rsecsPerChunk
 
     #----------
 
     # Insert a chunk into the RewindBuffer. Inserts can only go backward, so
     # the timestamp must be less than @_rbuffer[0].ts for a valid chunk
     _insertBuffer: (chunk) ->
-        if chunk?.ts < @_rbuffer[0]?.ts||Infinity
-            @_rbuffer.unshift chunk
-            @emit "runshift", chunk
+        @_rbuffer.insert chunk
 
     #----------
 
@@ -221,7 +210,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                     @emit "buffer", c
 
         parser.on "end", =>
-            obj = seconds:@bufferedSecs(), length:@_rbuffer.length
+            obj = seconds:@bufferedSecs(), length:@_rbuffer.length()
             @log.info "RewindBuffer is now at ", obj
             cb? null, obj
 
@@ -232,73 +221,76 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     dumpBuffer: (stream,cb) ->
         # taking a copy of the array should effectively freeze us in place
-        rbuf_copy = @_rbuffer.slice(0)
+        @_rbuffer.clone (err,rbuf_copy) =>
+            if err
+                cb err
+                return false
 
-        # make sure there's something to send
-        if rbuf_copy.length == 0
-            stream.end()
-            @log.debug "No rewind buffer to dump."
-            cb? null
-            return false
+            # make sure there's something to send
+            if rbuf_copy.length == 0
+                stream.end()
+                @log.debug "No rewind buffer to dump."
+                cb? null
+                return false
 
-        c = Concentrate()
+            c = Concentrate()
 
-        # Pipe concentrated buffer to the stream object
-        c.pipe stream
+            # Pipe concentrated buffer to the stream object
+            c.pipe stream
 
-        slices = 0
+            slices = 0
 
-        # -- Write header -- #
+            # -- Write header -- #
 
-        header_buf = new Buffer JSON.stringify
-            start_ts:       rbuf_copy[0].ts
-            end_ts:         rbuf_copy[ rbuf_copy.length - 1 ].ts
-            secs_per_chunk: @_rsecsPerChunk
-            stream_key:     @_rstreamKey
+            header_buf = new Buffer JSON.stringify
+                start_ts:       rbuf_copy[0].ts
+                end_ts:         rbuf_copy[ rbuf_copy.length - 1 ].ts
+                secs_per_chunk: @_rsecsPerChunk
+                stream_key:     @_rstreamKey
 
-        # header buffer length
-        c.uint8 header_buf.length
+            # header buffer length
+            c.uint8 header_buf.length
 
-        # header buffer json
-        c.buffer header_buf
-
-        c.flush()
-
-        # -- Data Chunks -- #
-
-        for i in [(rbuf_copy.length-1)..0]
-            chunk = rbuf_copy[ i ]
-
-            meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta, duration:chunk.duration
-
-            # 1) metadata length
-            c.uint8 meta_buf.length
-
-            # 2) metadata json
-            c.buffer meta_buf
-
-            # 3) data chunk length
-            c.uint16le chunk.data.length
-
-            # 4) data chunk
-            c.buffer chunk.data
+            # header buffer json
+            c.buffer header_buf
 
             c.flush()
 
-            slices += 1
+            # -- Data Chunks -- #
 
-            # clean up
-            meta_buf = null
+            for i in [(rbuf_copy.length-1)..0]
+                chunk = rbuf_copy[ i ]
 
-            if i == 0
-                c.end()
+                meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta, duration:chunk.duration
 
-                rbuf_copy.slice(0)
-                rbuf_copy = null
+                # 1) metadata length
+                c.uint8 meta_buf.length
 
-                @log.info "Dumped rewind buffer. Sent #{slices} slices."
+                # 2) metadata json
+                c.buffer meta_buf
 
-                cb? null, slices
+                # 3) data chunk length
+                c.uint16le chunk.data.length
+
+                # 4) data chunk
+                c.buffer chunk.data
+
+                c.flush()
+
+                slices += 1
+
+                # clean up
+                meta_buf = null
+
+                if i == 0
+                    c.end()
+
+                    rbuf_copy.slice(0)
+                    rbuf_copy = null
+
+                    @log.info "Dumped rewind buffer. Sent #{slices} slices."
+
+                    cb? null, slices
 
         true
 
@@ -310,16 +302,18 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     checkOffset: (offset) ->
+        bl = @_rbuffer.length()
+
         if offset < 0
             @log.silly "offset is invalid! 0 for live."
             return 0
 
-        if @_rbuffer.length >= offset
-            @log.silly "Granted. current buffer length is ", length:@_rbuffer.length
+        if bl >= offset
+            @log.silly "Granted. current buffer length is ", length:bl
             return offset
         else
-            @log.silly "Not available. Instead giving max buffer of ", length:@_rbuffer.length - 1
-            return @_rbuffer.length - 1
+            @log.silly "Not available. Instead giving max buffer of ", length:bl - 1
+            return bl - 1
 
     #----------
 
@@ -337,8 +331,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # buffer.  If not, return an error
     findTimestamp: (ts,cb) ->
         req_ts      = Number(ts)
-        first_ts    = Number( @_rbuffer[0].ts )
-        last_ts     = Number( @_rbuffer[ @_rbuffer.length - 1].ts )
+        first_ts    = Number( @_rbuffer.first().ts )
+        last_ts     = Number( @_rbuffer.last().ts )
 
         if first_ts <= req_ts <= last_ts
             # it's in there...
@@ -367,13 +361,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             cb? null, null
 
         # sanity checks...
-        if offset > @_rbuffer.length
-            offset = @_rbuffer.length
+        offset = @checkOffset offset
 
         # can't pump into the future, obviously
         length = offset if length > offset
 
-        bl = @_rbuffer.length
+        bl = @_rbuffer.length()
 
         pumpLen     = 0
         duration    = 0
@@ -384,7 +377,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         if length > 0
             for i in [1..length]
-                b = @_rbuffer[ bl - 1 - (offset - i) ]
+                b = @_rbuffer.at(offset - i)
                 pumpLen     += b.data.length
                 duration    += b.duration
 
