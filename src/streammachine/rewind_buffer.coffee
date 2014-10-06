@@ -33,7 +33,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rmax          = null
         @_rburst        = null
 
-        @log            = rewind_opts.log
+        # This could already be set if we've subclassed RewindBuffer, so
+        # only set it if it doesn't exist
+        @log            = rewind_opts.log if rewind_opts.log && !@log
 
         # each listener should be an object that defines obj._offset and
         # obj.writeFrame. We implement RewindBuffer.Listener, but other
