@@ -43,7 +43,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rlisteners = []
 
         # create buffer as an array
-        @_rbuffer = new MemoryStore
+        @_rbuffer = rewind_opts.buffer_store || new MemoryStore
         @_rbuffer.on "shift",    (b) => @emit "rshift", b
         @_rbuffer.on "push",     (b) => @emit "rpush", b
         @_rbuffer.on "unshift",  (b) => @emit "runshift", b

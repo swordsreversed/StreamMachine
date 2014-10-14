@@ -4,7 +4,8 @@ net     = require "net"
 fs      = require "fs"
 express = require "express"
 
-Redis       = require "../redis_config"
+Redis       = require "../redis"
+RedisConfig = require "../redis_config"
 Admin       = require "./admin/router"
 Stream      = require "./stream"
 SourceIn    = require "./source_in"
@@ -40,7 +41,8 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.redis?
             @log.debug "Initializing Redis connection"
             @redis = new Redis @options.redis
-            @redis.on "config", (config) =>
+            @redis_config = new RedisConfig @redis
+            @redis_config.on "config", (config) =>
                 # stash the configuration
                 @options = _u.defaults config||{}, @options
 
@@ -54,7 +56,7 @@ module.exports = class Master extends require("events").EventEmitter
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
             @on "config_update", =>
-                @redis._update @config()
+                @redis_config._update @config()
 
         # -- create a server to provide the admin -- #
 
