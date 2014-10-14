@@ -7,6 +7,7 @@ Rewinder        = require "./rewind/rewinder"
 HLSSegmenter    = require "./rewind/hls_segmenter"
 
 MemoryStore     = require "./rewind/memory_store"
+Dumper          = require "./rewind/dumper"
 
 # RewindBuffer supports play from an arbitrary position in the last X hours
 # of our stream.
@@ -32,6 +33,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rsecsPerChunk = Infinity
         @_rmax          = null
         @_rburst        = null
+        @_rkey          = rewind_opts.key
 
         # This could already be set if we've subclassed RewindBuffer, so
         # only set it if it doesn't exist
@@ -42,7 +44,15 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # classes can work with those pieces
         @_rlisteners = []
 
-        # create buffer as an array
+        # -- are we doing rewind dumps? -- #
+
+        @_dump = null
+
+        if nconf.get("rewind_dump")
+            @_dump = new Dumper @, nconf.get("rewind_dump")
+
+        # -- instantiate our memory buffer -- #
+
         @_rbuffer = rewind_opts.buffer_store || new MemoryStore
         @_rbuffer.on "shift",    (b) => @emit "rshift", b
         @_rbuffer.on "push",     (b) => @emit "rpush", b

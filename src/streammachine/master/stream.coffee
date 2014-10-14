@@ -59,8 +59,7 @@ module.exports = class Stream extends require('events').EventEmitter
         # set up a rewind buffer, for use in bringing new slaves up to speed
         # or to transfer to a new master when restarting
         @log.info "Initializing RewindBuffer for master stream."
-        @rewind = new Rewind seconds:@opts.seconds, burst:@opts.burst
-        @rewind.log = @log.child module:"rewind"
+        @rewind = new Rewind seconds:@opts.seconds, burst:@opts.burst, key:"master__#{@key}", log:@log.child(module:"rewind")
 
         # Rewind listens to us, not to our source
         @rewind.emit "source", @
