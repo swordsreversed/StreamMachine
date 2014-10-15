@@ -11,6 +11,10 @@ _       = require "underscore"
 
 module.exports = class RewindDumper extends require('events').EventEmitter
     constructor: (@rewind,@settings) ->
+        @_i             = null
+        @_active        = false
+        @_loaded        = null
+        @_tried_load    = false
 
         # -- make sure directory is valid -- #
 
@@ -24,12 +28,49 @@ module.exports = class RewindDumper extends require('events').EventEmitter
 
         @_filepath = path.join(@_path,"#{@rewind._rkey}.dump")
 
+        # -- is there a file to load? -- #
+
+        @_tryLoad()
+
         # -- set a timer to do the save -- #
 
-        console.log "RewindDumper setting interval of #{ @settings.frequency }"
-        @_i = setInterval =>
-            @_dump()
-        , @settings.frequency*1000
+        if @settings.frequency > 0
+            @once "loaded", =>
+                console.log "RewindDumper setting interval of #{ @settings.frequency }"
+                @_i = setInterval =>
+                    @_dump()
+                , @settings.frequency*1000
+
+    #----------
+
+    _tryLoad: (cb) ->
+        # try loading our filepath. catch the error if it is not found
+        rs = fs.createReadStream @_filepath
+
+        rs.once "error", (err) =>
+            console.error "RewindDumper tryLoad read error: #{err}"
+            @_setLoaded false
+
+        rs.once "open", =>
+            console.log "tryLoad read open"
+            @rewind.loadBuffer rs, (err,stats) =>
+                console.log "RewindDumper tryLoad success", stats
+                @_setLoaded true
+
+    #----------
+
+    _setLoaded: (status) ->
+        @_loaded        = status
+        @_tried_load    = true
+        @emit "loaded", status
+
+    #----------
+
+    once_loaded: (cb) ->
+        if @_tried_load
+            cb?()
+        else
+            @once "loaded", cb
 
     #----------
 
