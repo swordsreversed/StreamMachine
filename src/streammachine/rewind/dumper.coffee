@@ -38,7 +38,8 @@ module.exports = class RewindDumper extends require('events').EventEmitter
             @once "loaded", =>
                 console.log "RewindDumper setting interval of #{ @settings.frequency }"
                 @_i = setInterval =>
-                    @_dump()
+                    @_dump (err,fp) =>
+                        # do nothing
                 , @settings.frequency*1000
 
     #----------
@@ -48,7 +49,7 @@ module.exports = class RewindDumper extends require('events').EventEmitter
         rs = fs.createReadStream @_filepath
 
         rs.once "error", (err) =>
-            console.error "RewindDumper tryLoad read error: #{err}"
+            console.error "RewindDumper tryLoad read error: #{err}", err
             @_setLoaded false
 
         rs.once "open", =>
@@ -86,17 +87,33 @@ module.exports = class RewindDumper extends require('events').EventEmitter
 
         # -- open our output file -- #
 
-        console.log "opening dumper out at #{@_filepath}"
+        # To make sure we don't crash mid-write, we want to write to a temp file
+        # and then get renamed to our actual filepath location.
 
-        w = fs.createWriteStream @_filepath
+        console.log "opening dumper out at #{@_filepath}.new"
+
+        w = fs.createWriteStream "#{@_filepath}.new"
 
         w.once "open", =>
             @rewind.dumpBuffer w, (err) =>
                 w.once "close", =>
-                    end_ts = _.now()
-                    console.log "RewindDumper dump finished. Took #{ end_ts - start_ts }ms."
-                    @_active = false
-                    cb null, @_filepath
+
+                    if w.bytesWritten == 0
+                        fs.unlink "#{@_filepath}.new", (err) =>
+                            cb null, null
+
+                    else
+                        console.log "RewindDumper doing rename: #{@_filepath}.new -> #{ @_filepath }"
+                        fs.rename "#{@_filepath}.new", @_filepath, (err) =>
+                            if err
+                                console.error "RewindDumper rename failed: #{err}"
+                                cb err
+                                return false
+
+                            end_ts = _.now()
+                            console.log "RewindDumper dump finished. Took #{ end_ts - start_ts }ms."
+                            @_active = false
+                            cb null, @_filepath
 
         w.on "error", (err) =>
             console.error "RewindDumper error: ", err

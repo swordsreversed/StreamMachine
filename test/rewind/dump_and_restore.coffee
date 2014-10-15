@@ -27,6 +27,19 @@ describe "Rewind Buffer Dump and Restore", ->
         fs.unlinkSync dump_filepath if dump_filepath
         done()
 
+    describe "Empty RewindBuffer", ->
+        before (done) ->
+            rewind = new RewindBuffer seconds:120, burst:30, log:logger, key:"test__#{run_id}"
+            rewind.log = logger
+
+            done()
+
+        it "can 'dump' an empty buffer", (done) ->
+            rewind._dump._dump (err,fp) ->
+                throw err if err
+                expect(fp).to.be.null
+                done()
+
     describe "When dumping", ->
         before (done) ->
             rewind = new RewindBuffer seconds:120, burst:30, log:logger, key:"test__#{run_id}"
