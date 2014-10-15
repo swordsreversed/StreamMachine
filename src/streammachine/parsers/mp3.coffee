@@ -58,6 +58,7 @@ module.exports = class MP3 extends require("stream").Writable
         @frameSize = -1
         @beginning = true
         @gotFF = false
+        @gotID3 = 0
         @byteTwo = null
 
         @frameHeader    = null
@@ -90,7 +91,7 @@ module.exports = class MP3 extends require("stream").Writable
             # -- initial request -- #
 
             if v == undefined
-                # we need to examine each byte until we get a FF
+                # we need to examine each byte until we get a FF or ID3
                 return FIRST_BYTE
 
             # -- ID3v1 tag -- #
@@ -115,23 +116,13 @@ module.exports = class MP3 extends require("stream").Writable
                 @id3v2.flags = v[1]
 
                 # calculate the length
-                # from node-id3
-                offset = 2;
-                byte1 = v[offset]
-                byte2 = v[offset + 1]
-                byte3 = v[offset + 2]
-                byte4 = v[offset + 3]
-
-                @id3v2.length =
-                       byte4 & 0x7f           |
-                       ((byte3 & 0x7f) << 7)  |
-                       ((byte2 & 0x7f) << 14) |
-                       ((byte1 & 0x7f) << 21)
+                @id3v2.length =  (v[5] & 0x7f) | (( v[4] & 0x7f ) << 7) | (( v[3] & 0x7f ) << 14) | (( v[2] & 0x7f ) << 21)
 
                 @_parsingId3v2 = false;
                 @_finishingId3v2 = true;
                 @_id3v2_2 = v;
-                return new strtok.BufferType @id3v2.length
+
+                return new strtok.BufferType @id3v2.length - 10
 
             if @_finishingId3v2
                 # step 3 in the ID3v2 parse...
@@ -160,7 +151,7 @@ module.exports = class MP3 extends require("stream").Writable
 
                 else if tag == 'TAG'
                     # parse ID3v1 tag
-                    console.log "got a TAG"
+                    _emitAndMaybeEnd "debug", "got a TAG"
 
                     @_id3v1_1 = v
                     @_parsingId3v1 = true
@@ -241,6 +232,25 @@ module.exports = class MP3 extends require("stream").Writable
                     # possible start of frame header. need next byte to know more
                     @gotFF = true
                     return FIRST_BYTE
+                else if v[0] == 0x49
+                    # could be the I in ID3
+                    @gotID3 = 1
+                    return FIRST_BYTE
+
+                else if @gotID3 == 1 && v[0] == 0x44
+                    @gotID3 = 2
+                    return FIRST_BYTE
+
+                else if @gotID3 == 2 && v[0] == 0x33
+                    @gotID3 = 3
+                    return FIRST_BYTE
+
+                else if @gotID3 == 3
+                    @_id3v2_1 = new Buffer([0x49,0x44,0x33,v[0]])
+                    @id3v2 = versionMajor:v[0]
+                    @_parsingId3v2 = true
+                    @gotID3 = 0
+                    return REST_OF_ID3V2_HEADER
                 else
                     # keep looking
                     return FIRST_BYTE
@@ -298,6 +308,8 @@ module.exports = class MP3 extends require("stream").Writable
 
         # genre: 1 byte
         id3.genre = id3v1.readUInt8(127)
+
+        id3
 
     #----------
 
