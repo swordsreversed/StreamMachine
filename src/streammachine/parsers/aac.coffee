@@ -193,49 +193,30 @@ module.exports = class AAC extends require("stream").Writable
 
         assert.ok ( b[0] == 0xFF && (b[1] >> 4) == 0xF ), "Buffer does not start with FFF"
 
-        # -- is this a CRC Frame? -- #
-
-        no_crc          = b[1] & 0x1
-
-        mpeg_2          = b[1] & 0x8
-
-        # -- AAC Stream Info -- #
-
-        obj_type        = b[2] >> 6
-        sample_freq     = b[2] >> 2 & 0xF
-
-        channels        = (b[2] & 1) << 2 | b[3] >> 6
-
-        # -- Frame Length -- #
-
-        frame_length    = (b[3] & 0x3) << 11 | b[4] << 3 | b[5] >> 5
-
-        # -- Buffer Fullness -- #
-
-        buffer_full     = (b[5] & 0x1F) << 6 | b[6] >> 2
-        num_frames      = (b[6] & 0x3) + 1
-
-        # -- CRC Checksum -- #
-
-        if !no_crc
-            true
-
-        # -- Compile Header -- #
+        # -- set up our object -- #
 
         header =
-            crc:                !no_crc
-            mpeg_type:          if mpeg_2 then "MPEG2" else "MPEG4"
-            profile:            obj_type + 1
-            profile_name:       PROFILES[ obj_type + 1]
-            sample_freq:        SAMPLE_FREQUENCIES[sample_freq]
-            channel_config:     channels
-            channels:           CHANNEL_COUNTS[ channels ]
-            frame_length:       frame_length
-            buffer_fullness:    buffer_full
-            number_of_frames:   num_frames
-            frames_per_sec:     SAMPLE_FREQUENCIES[sample_freq] / 1024
-            duration:           1 / (SAMPLE_FREQUENCIES[sample_freq] / 1024) * 1000
+            crc:                !(b[1] & 0x1)
+            mpeg_type:          if (b[1] & 0x8) then "MPEG2" else "MPEG4"
+            profile:            (b[2] >> 6) + 1
+            sample_freq:        SAMPLE_FREQUENCIES[ b[2] >> 2 & 0xF ]
+            channel_config:     (b[2] & 1) << 2 | b[3] >> 6
+            frame_length:       (b[3] & 0x3) << 11 | b[4] << 3 | b[5] >> 5
+            buffer_fullness:    (b[5] & 0x1F) << 6 | b[6] >> 2
+            number_of_frames:   (b[6] & 0x3) + 1
 
-        header.stream_key = ['aac',header.sample_freq,header.profile,header.channels].join("-")
+            profile_name:       ""
+            channels:           0
+            frames_per_sec:     0
+            duration:           0
+            stream_key:         ""
+
+        # -- fill in remaining values -- #
+
+        header.profile_name     = PROFILES[ header.profile ]
+        header.channels         = CHANNEL_COUNTS[ header.channel_config ]
+        header.frames_per_sec   = header.sample_freq / 1024
+        header.duration         = ( 1 / header.frames_per_sec ) * 1000
+        header.stream_key       = ['aac',header.sample_freq,header.profile,header.channels].join("-")
 
         header

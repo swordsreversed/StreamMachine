@@ -324,33 +324,48 @@ module.exports = class MP3 extends require("stream").Writable
 
         # -- mpeg id -- #
 
-        r = {}
+        r =
+            mpegID:             (header32 >> 19) & 3
+            layerID:            (header32 >> 17) & 3
+            crc16used:          (header32 & 0x00010000) == 0
+            bitrateIndex:       (header32 >> 12) & 0xF
+            samplingRateIndex:  (header32 >> 10) & 3
 
-        r.mpegID            = (header32 >> 19) & 3
-        r.layerID           = (header32 >> 17) & 3
-        r.crc16used         = (header32 & 0x00010000) == 0
-        r.bitrateIndex      = (header32 >> 12) & 0xF
-        r.samplingRateIndex = (header32 >> 10) & 3
-        r.samplingRateHz    = SAMPLING_RATES[r.samplingRateIndex]
+            padding:            (header32 & 0x00000200) != 0
+            privateBitSet:      (header32 & 0x00000100) != 0
+            mode:               (header32 >> 6) & 3
+            modeExtension:      (header32 >> 4) & 3
+            copyrighted:        (header32 & 0x00000008) != 0
+            original:           (header32 & 0x00000004) == 0
+            emphasis:           header32 & 3
 
-        r.padding           = (header32 & 0x00000200) != 0
-        r.privateBitSet     = (header32 & 0x00000100) != 0
-        r.mode              = (header32 >> 6) & 3
-        r.modeExtension     = (header32 >> 4) & 3
-        r.copyrighted       = (header32 & 0x00000008) != 0
-        r.original          = (header32 & 0x00000004) == 0
-        r.emphasis          = header32 & 3
+            # placeholders for mem allocation
+            channels:           0
+            bitrateKBPS:        0
+            mpegName:           ""
+            layerName:          ""
+            modeName:           ""
+            samplingRateHz:     0
+            samplesPerFrame:    0
+            bytesPerSlot:       0
+            frameSizeRaw:       0
+            frameSize:          0
+            frames_per_sec:     0
+            stream_key:         ""
 
-        if r.mpegID == MPEG2_ID
-          r.samplingRateHz  >>= 1 # 16,22,48 kHz
-        else if r.mpegID == MPEG25_ID
-          r.samplingRateHz  >>= 2 # 8,11,24 kHz
+        # now fill in the derived values...
 
         r.channels          = if r.mode == MODE_MONO then 1 else 2
         r.bitrateKBPS       = BITRATE_MAP[ r.mpegID ][ r.layerID ][ r.bitrateIndex ]
         r.mpegName          = MPEG_NAME[ r.mpegID ]
         r.layerName         = LAYER_NAME[ r.layerID ]
         r.modeName          = MODE_NAME[ r.mode ]
+        r.samplingRateHz    = SAMPLING_RATES[r.samplingRateIndex]
+
+        if r.mpegID == MPEG2_ID
+          r.samplingRateHz  >>= 1 # 16,22,48 kHz
+        else if r.mpegID == MPEG25_ID
+          r.samplingRateHz  >>= 2 # 8,11,24 kHz
 
         if r.layerID == LAYER1_ID
             # layer 1: always 384 samples/frame and 4byte-slots
