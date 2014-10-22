@@ -22,3 +22,5 @@ module.exports = class StreamMachine
         live_streaming:
             segment_duration:   10
 
+        chunk_duration: 2
+

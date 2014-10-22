@@ -100,6 +100,7 @@ module.exports = class RewindDumper extends require('events').EventEmitter
 
                     if w.bytesWritten == 0
                         fs.unlink "#{@_filepath}.new", (err) =>
+                            @_active = false
                             cb null, null
 
                     else

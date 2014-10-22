@@ -1,5 +1,6 @@
 _u = require "underscore"
 uuid = require "node-uuid"
+nconf = require "nconf"
 
 module.exports = class Source extends require("events").EventEmitter
 
@@ -17,8 +18,8 @@ module.exports = class Source extends require("events").EventEmitter
         @_chunk_queue = []
         @_chunk_queue_ts = null
 
-        # If not specified, we'll emit chunks of data every 0.5 seconds
-        @emitDuration = @opts.chunkDuration || 0.5
+        # How often will we emit chunks of data? The default is set in StreamMachine.Defaults
+        @emitDuration = @opts.chunkDuration || nconf.get("chunk_duration") || 0.5
 
         @log = @opts.logger?.child uuid:@uuid
 

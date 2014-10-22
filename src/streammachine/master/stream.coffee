@@ -417,6 +417,6 @@ module.exports = class Stream extends require('events').EventEmitter
         #----------
 
         _cloneStream: (stream) ->
-            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts
+            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts, seconds:30
 
         #----------
