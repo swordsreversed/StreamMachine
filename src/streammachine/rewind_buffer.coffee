@@ -46,10 +46,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         # -- are we doing rewind dumps? -- #
 
-        @_dump = null
+        #@_dump = null
 
-        if nconf.get("rewind_dump")
-            @_dump = new Dumper @, nconf.get("rewind_dump")
+        #if nconf.get("rewind_dump")
+        #    @_dump = new Dumper @, nconf.get("rewind_dump")
 
         # -- instantiate our memory buffer -- #
 

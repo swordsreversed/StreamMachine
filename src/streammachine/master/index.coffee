@@ -12,6 +12,8 @@ SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
 Analytics   = require "./analytics"
 
+RewindDumpRestore   = require "../rewind/dumper"
+
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
 module.exports = class Master extends require("events").EventEmitter
@@ -90,6 +92,10 @@ module.exports = class Master extends require("events").EventEmitter
 
             # add a log transport
             @log.logger.add new Analytics.LogTransport(@analytics), {}, true
+
+        # -- Rewind Dump and Restore -- #
+
+        @rewind_dr = new RewindDumpRestore @, opts.rewind_dump
 
     #----------
 
