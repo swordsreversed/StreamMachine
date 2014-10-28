@@ -33,9 +33,18 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         for s,obj of @master.streams
             @_streams[ s ] = new Dumper obj, @_path
 
+            obj.once "destroy", =>
+                delete @_streams[s]
+
+        # watch for new streams
+        @master.on "new_stream", (stream) =>
+            @log.debug "RewindDumpRestore got new stream: #{stream.key}"
+            @_streams[stream.key] = new Dumper stream, @_path
+
         # -- set our interval -- #
 
         if (@settings.frequency||-1) > 0
+            @log.debug "RewindDumpRestore initialized with interval of #{ @settings.frequency } seconds."
             @_int = setInterval =>
                 @_triggerDumps()
             , @settings.frequency*1000
@@ -50,7 +59,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
         results = success:0, errors:0
 
-        _load = ->
+        _load = =>
             if d = load_q.shift()
                 d._tryLoad (err,stats) =>
                     if err
@@ -62,7 +71,8 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
                     _load()
             else
                 # done
-                cb null, results
+                @log.info "RewindDumpRestore load complete.", success:results.success, errors:results.errors
+                cb? null, results
 
         _load()
 
@@ -84,7 +94,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
                 if err
                     @log.error "Dump for #{d.stream.key} errored: #{err}", stream:d.stream.key
                 else
-                    @log.silly "Dump for #{d.stream.key} succeeded in #{ timing }ms."
+                    @log.debug "Dump for #{d.stream.key} succeeded in #{ timing }ms."
 
                 # for tests...
                 @emit "debug", "dump", d.stream.key, err, file:file, timing:timing
@@ -155,9 +165,10 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
             w = fs.createWriteStream "#{@_filepath}.new"
 
             w.once "open", =>
-                @stream.rewind.dumpBuffer w, (err) =>
-                    w.once "close", =>
+                @stream.rewind.dumpBuffer (err,writer) =>
+                    writer.pipe(w)
 
+                    w.once "close", =>
                         if w.bytesWritten == 0
                             fs.unlink "#{@_filepath}.new", (err) =>
                                 @_active = false

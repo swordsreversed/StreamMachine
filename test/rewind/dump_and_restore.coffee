@@ -19,7 +19,7 @@ STREAM1 =
     burst:              30
     format:             "mp3"
 
-class FakeMaster
+class FakeMaster extends require("events").EventEmitter
     constructor: (@log,mstreams...) ->
         @streams = {}
         for obj in mstreams

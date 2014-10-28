@@ -84,6 +84,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    resetRewind: (cb) ->
+        @_rbuffer.reset cb
+
+    #----------
+
     setRewind: (secs,burst) ->
         @_rsecs = secs
         @_rburstsecs = burst
@@ -235,80 +240,16 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # Dump the rewindbuffer. We want to dump the newest data first, so that
     # means running back from the end of the array to the front.
 
-    dumpBuffer: (stream,cb) ->
+    dumpBuffer: (cb) ->
         # taking a copy of the array should effectively freeze us in place
         @_rbuffer.clone (err,rbuf_copy) =>
             if err
                 cb err
                 return false
 
-            # make sure there's something to send
-            if rbuf_copy.length == 0
-                stream.end()
-                @log.debug "No rewind buffer to dump."
-                cb? null
-                return false
+            writer = new RewindBuffer.RewindWriter rbuf_copy, @_rsecsPerChunk, @_rstreamKey
 
-            c = Concentrate()
-
-            # Pipe concentrated buffer to the stream object
-            c.pipe stream
-
-            slices = 0
-
-            # -- Write header -- #
-
-            header_buf = new Buffer JSON.stringify
-                start_ts:       rbuf_copy[0].ts
-                end_ts:         rbuf_copy[ rbuf_copy.length - 1 ].ts
-                secs_per_chunk: @_rsecsPerChunk
-                stream_key:     @_rstreamKey
-
-            # header buffer length
-            c.uint8 header_buf.length
-
-            # header buffer json
-            c.buffer header_buf
-
-            c.flush()
-
-            # -- Data Chunks -- #
-
-            for i in [(rbuf_copy.length-1)..0]
-                chunk = rbuf_copy[ i ]
-
-                meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta, duration:chunk.duration
-
-                # 1) metadata length
-                c.uint8 meta_buf.length
-
-                # 2) metadata json
-                c.buffer meta_buf
-
-                # 3) data chunk length
-                c.uint16le chunk.data.length
-
-                # 4) data chunk
-                c.buffer chunk.data
-
-                c.flush()
-
-                slices += 1
-
-                # clean up
-                meta_buf = null
-
-                if i == 0
-                    c.end()
-
-                    rbuf_copy.slice(0)
-                    rbuf_copy = null
-
-                    @log.info "Dumped rewind buffer. Sent #{slices} slices."
-
-                    cb? null, slices
-
-        true
+            cb null, writer
 
     #----------
 
@@ -440,3 +381,83 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         return true
 
     #----------
+
+    class @RewindWriter extends require("stream").Readable
+        constructor: (@buf,@secs,@streamKey) ->
+            @c          = Concentrate()
+            @slices     = 0
+            @i          = @buf.length - 1
+            @_ended     = false
+
+            super highWaterMark:25*1024*1024
+
+            # make sure there's something to send
+            if @buf.length == 0
+                @push null
+                return false
+
+            @_writeHeader()
+
+        #----------
+
+        _writeHeader: (cb) ->
+            # -- Write header -- #
+
+            header_buf = new Buffer JSON.stringify
+                start_ts:       @buf[0].ts
+                end_ts:         @buf[ @buf.length - 1 ].ts
+                secs_per_chunk: @secs
+                stream_key:     @streamKey
+
+            # header buffer length
+            @c.uint8 header_buf.length
+
+            # header buffer json
+            @c.buffer header_buf
+
+            @push @c.result()
+            @c.reset()
+
+        #----------
+
+        _read: (size) ->
+            if @i < 0
+                return false
+
+            # -- Data Chunks -- #
+            wlen = 0
+
+            loop
+                chunk = @buf[ @i ]
+
+                meta_buf = new Buffer JSON.stringify ts:chunk.ts, meta:chunk.meta, duration:chunk.duration
+
+                # 1) metadata length
+                @c.uint8 meta_buf.length
+
+                # 2) metadata json
+                @c.buffer meta_buf
+
+                # 3) data chunk length
+                @c.uint16le chunk.data.length
+
+                # 4) data chunk
+                @c.buffer chunk.data
+
+                r = @c.result()
+                @c.reset()
+                result = @push r
+
+                wlen += r.length
+
+                @i -= 1
+
+                if @i < 0
+                    # finished
+                    @push null
+                    return true
+
+                if !result || wlen > size
+                    return false
+
+                # otherwise loop again

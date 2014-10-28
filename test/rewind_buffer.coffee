@@ -85,20 +85,20 @@ describe "Rewind Buffer", ->
 
         ts = Number(new Date)
         before (done) ->
-            # push two minutes of data (240 samples)
-            for i in [0..239]
+            # push two minutes of data (60 samples)
+            for i in [0..59]
                 c_ts = new Date(ts+source_a.emitDuration*1000*i)
                 source_a._emitOnce(c_ts)
 
             done()
 
-        it "pushed 240 data chunks", (done) ->
-            expect(events.rpush).to.eql 240
+        it "pushed 60 data chunks", (done) ->
+            expect(events.rpush).to.eql 60
             expect(events.runshift).to.eql 0
             done()
 
-        it "shifted off 120 data chunks", (done) ->
-            expect(events.rshift).to.eql 120
+        it "shifted off 30 data chunks", (done) ->
+            expect(events.rshift).to.eql 30
             done()
 
         it "still knows buffered duration", (done) ->
@@ -107,13 +107,13 @@ describe "Rewind Buffer", ->
             done()
 
         it "can find a timestamp inside the buffer", (done) ->
-            # we've pushed 240 samples, but 120 have been shifted off,
+            # we've pushed 60 samples, but 30 have been shifted off,
             # so we'll look for one minute after the first push time
             f_ts = new Date(ts + 1*60*1000)
             rewind.findTimestamp f_ts, (err,offset) ->
                 expect(err).to.be.null
                 # should be the "last" timestamp in the buffer... first on the array
-                expect(offset).to.eql 120
+                expect(offset).to.eql 29
                 done()
 
         it "errors if a timestamp isn't in the buffer", (done) ->
@@ -125,14 +125,14 @@ describe "Rewind Buffer", ->
         it "can return data via pumpSeconds", (done) ->
             mock = new MockRewinder
 
-            rewind.pumpSeconds mock, 2, false, (err,meta) ->
+            rewind.pumpSeconds mock, 8, false, (err,meta) ->
                 throw err if err
-                expect(meta.duration).to.be.within 1900, 2100
+                expect(meta.duration).to.be.within 7900, 8100
                 expect(mock.buffer).to.have.length 4
 
                 t_len = 0
                 t_len += b.data.length for b in mock.buffer
-                expect(t_len).to.be.within 15000, 17000
+                expect(t_len).to.be.within 64000, 65000
 
                 done()
 
@@ -164,11 +164,11 @@ describe "Rewind Buffer", ->
                     else
                         rewind_buf = b
 
-            rewind.dumpBuffer pt, (err,slices) ->
+            rewind.dumpBuffer (err,writer) ->
+                writer.pipe(pt)
                 true
 
             pt.on "end", ->
-                expect
                 done()
 
         it "can restore a dumped rewind buffer", (done) ->

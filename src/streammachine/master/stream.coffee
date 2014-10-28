@@ -340,13 +340,8 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
 
     getRewind: (cb) ->
-        # create a PassThrough stream that will handle our data
-        pt = new (require "stream").PassThrough
-
-        @rewind.dumpBuffer pt, (err) =>
-            @log.debug "getRewind dumpBuffer finished."
-
-        cb? null, pt
+        @rewind.dumpBuffer (err,writer) =>
+            cb? null, writer
 
     #----------
 

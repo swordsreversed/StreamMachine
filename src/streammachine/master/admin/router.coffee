@@ -6,6 +6,7 @@ hamlc           = require "haml-coffee"
 Mincer          = require "mincer"
 passport        = require "passport"
 BasicStrategy   = (require "passport-http").BasicStrategy
+Throttle        = require "throttle"
 
 Users = require "./users"
 
@@ -137,12 +138,28 @@ module.exports = class Router
 
         # Delete a stream
         @app.delete "/api/streams/:stream", (req,res) =>
-            # delete a stream
             @master.removeStream req.stream, (err,obj) =>
                 if err
                     api.invalid req, res, err
                 else
                     api.ok req, res, obj
+
+        # Dump a RewindBuffer
+        @app.get "/api/streams/:stream/rewind", (req,res) =>
+            res.status(200).write ''
+            req.stream.getRewind (err,io) =>
+                # long story... may be related to https://github.com/joyent/node/issues/6065
+                # in any case, piping to /dev/null went too fast and crashed the server.
+                # Throttling fixes it
+                io.pipe( new Throttle 100*1024*1024 ).pipe(res)
+
+        # Clear a Rewind Buffer
+        @app.delete "/api/streams/:stream/rewind", (req,res) =>
+            req.stream.rewind.resetRewind (err) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, req.stream.status()
 
         # -- User Management -- #
 

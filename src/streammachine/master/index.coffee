@@ -99,6 +99,12 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    loadRewinds: (cb) ->
+        @once "streams", =>
+            @rewind_dr.load cb
+
+    #----------
+
     listenForSlaves: (server) ->
         # fire up a socket listener on our slave port
         @io = require("socket.io").listen server
@@ -279,6 +285,8 @@ module.exports = class Master extends require("events").EventEmitter
 
             @streams[ key ] = stream
             @_attachIOProxy stream
+
+            @emit "new_stream", stream
             return stream
         else
             return false
@@ -389,10 +397,11 @@ module.exports = class Master extends require("events").EventEmitter
                     # write the buffer to the socket
                     @log.info "Got socket connection on #{spath}"
 
-                    stream.rewind.dumpBuffer c, =>
-                        @log.info "Dumped buffer for #{stream.key}", bytesWritten:c.bytesWritten
+                    stream.rewind.dumpBuffer (err,writer) =>
+                        @writer.pipe(c)
 
                         c.on "close", (err) =>
+                            @log.info "Dumped buffer for #{stream.key}", bytesWritten:c.bytesWritten
                             @log.info "Rewind buffer sock is done.", error:err
 
                             # cleanup...
@@ -499,9 +508,10 @@ module.exports = class Master extends require("events").EventEmitter
             @app.get "/:stream/rewind", (req,res) =>
                 @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
-                req.stream.rewind.dumpBuffer res, (err) =>
-                    @master.log.debug "Rewind dumpBuffer finished."
-                    #res.end()
+                req.stream.rewind.dumpBuffer (err,writer) =>
+                    writer.pipe(res)
+                    res.on "end", =>
+                        @master.log.debug "Rewind dumpBuffer finished."
 
     #----------
 
