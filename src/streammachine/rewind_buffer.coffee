@@ -86,6 +86,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     resetRewind: (cb) ->
         @_rbuffer.reset cb
+        @emit "reset"
 
     #----------
 

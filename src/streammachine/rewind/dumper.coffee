@@ -31,7 +31,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         # -- create agents for each stream -- #
 
         for s,obj of @master.streams
-            @_streams[ s ] = new Dumper obj, @_path
+            @_streams[ s ] = new Dumper s, obj.rewind, @_path
 
             obj.once "destroy", =>
                 delete @_streams[s]
@@ -39,7 +39,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         # watch for new streams
         @master.on "new_stream", (stream) =>
             @log.debug "RewindDumpRestore got new stream: #{stream.key}"
-            @_streams[stream.key] = new Dumper stream, @_path
+            @_streams[stream.key] = new Dumper stream.key, stream.rewind, @_path
 
         # -- set our interval -- #
 
@@ -63,7 +63,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
             if d = load_q.shift()
                 d._tryLoad (err,stats) =>
                     if err
-                        @log.error "Load for #{ d.stream.key } errored: #{err}", stream:d.stream.key
+                        @log.error "Load for #{ d.key } errored: #{err}", stream:d.key
                         results.errors += 1
                     else
                         results.success += 1
@@ -92,12 +92,12 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         if d = @_queue.shift()
             d._dump (err,file,timing) =>
                 if err
-                    @log.error "Dump for #{d.stream.key} errored: #{err}", stream:d.stream.key
+                    @log.error "Dump for #{d.key} errored: #{err}", stream:d.stream.key
                 else
-                    @log.debug "Dump for #{d.stream.key} succeeded in #{ timing }ms."
+                    @log.debug "Dump for #{d.key} succeeded in #{ timing }ms."
 
                 # for tests...
-                @emit "debug", "dump", d.stream.key, err, file:file, timing:timing
+                @emit "debug", "dump", d.key, err, file:file, timing:timing
 
                 @_dump()
 
@@ -107,13 +107,13 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
     #----------
 
     class Dumper extends require('events').EventEmitter
-        constructor: (@stream,@_path) ->
+        constructor: (@key,@rewind,@_path) ->
             @_i             = null
             @_active        = false
             @_loaded        = null
             @_tried_load    = false
 
-            @_filepath = path.join(@_path,"#{@stream.key}.dump")
+            @_filepath = path.join(@_path,"#{@rewind._rkey}.dump")
 
         #----------
 
@@ -123,10 +123,15 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
             rs.once "error", (err) =>
                 @_setLoaded false
+
+                if err.code == "ENOENT"
+                    # not an error. just doesn't exist
+                    return cb null
+
                 cb err
 
             rs.once "open", =>
-                @stream.rewind.loadBuffer rs, (err,stats) =>
+                @rewind.loadBuffer rs, (err,stats) =>
                     @_setLoaded true
                     cb null, stats
 
@@ -149,7 +154,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
         _dump: (cb) ->
             if @_active
-                cb "RewindDumper failed: Already active for #{ @stream.key }"
+                cb "RewindDumper failed: Already active for #{ @rewind._rkey }"
                 return false
 
             @_active = true
@@ -165,14 +170,24 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
             w = fs.createWriteStream "#{@_filepath}.new"
 
             w.once "open", =>
-                @stream.rewind.dumpBuffer (err,writer) =>
+                @rewind.dumpBuffer (err,writer) =>
                     writer.pipe(w)
 
                     w.once "close", =>
                         if w.bytesWritten == 0
-                            fs.unlink "#{@_filepath}.new", (err) =>
+                            err = null
+                            af = _.after 2, =>
                                 @_active = false
-                                cb null, null
+                                cb err
+
+                            fs.unlink "#{@_filepath}.new", (e) =>
+                                err = e if e
+                                af()
+
+                            # we also want to unlink any existing dump file
+                            fs.unlink @_filepath, (e) =>
+                                err = e if e && e.code != "ENOENT"
+                                af()
 
                         else
                             fs.rename "#{@_filepath}.new", @_filepath, (err) =>
