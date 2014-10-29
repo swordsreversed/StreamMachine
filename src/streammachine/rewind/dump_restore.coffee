@@ -78,15 +78,15 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
     #----------
 
-    _triggerDumps: ->
+    _triggerDumps: (cb) ->
         @log.silly "Queuing Rewind dumps"
         @_queue.push ( d for k,d of @_streams )...
 
-        @_dump() if !@_working
+        @_dump cb if !@_working
 
     #----------
 
-    _dump: ->
+    _dump: (cb) ->
         @_working = true
 
         if d = @_queue.shift()
@@ -99,10 +99,11 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
                 # for tests...
                 @emit "debug", "dump", d.key, err, file:file, timing:timing
 
-                @_dump()
+                @_dump cb
 
         else
             @_working = false
+            cb?()
 
     #----------
 
@@ -177,8 +178,9 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
                         if w.bytesWritten == 0
                             err = null
                             af = _.after 2, =>
+                                end_ts = _.now()
                                 @_active = false
-                                cb err
+                                cb err, null, end_ts - start_ts
 
                             fs.unlink "#{@_filepath}.new", (e) =>
                                 err = e if e

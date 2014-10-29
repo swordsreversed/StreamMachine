@@ -1,6 +1,6 @@
 Stream          = $src "master/stream"
 FileSource      = $src "sources/file"
-DumpRestore     = $src "rewind/dumper"
+DumpRestore     = $src "rewind/dump_restore"
 Logger          = $src "logger"
 
 nconf = require "nconf"
@@ -42,8 +42,10 @@ describe "Rewind Buffer Dump and Restore", ->
 
     after (done) ->
         # make sure our file gets removed
-        fs.unlinkSync dump_filepath if dump_filepath
-        done()
+        if dump_filepath
+            fs.unlink dump_filepath, (err) ->
+                throw err if err && err.code != "ENOENT"
+                done()
 
     describe "Empty RewindBuffer", ->
         before (done) ->
@@ -122,3 +124,22 @@ describe "Rewind Buffer Dump and Restore", ->
         it "should have 120 seconds in the buffer", (done) ->
             expect( stream.rewind.bufferedSecs() ).to.be.within 119, 121
             done()
+
+    describe "When reset", ->
+        beforeEach (done) ->
+            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            master = new FakeMaster logger, stream
+            dump_restore = new DumpRestore master, nconf.get("rewind_dump")
+
+            dump_restore.load (err,stats) ->
+                throw err if err
+                done()
+
+        it "should unlink the dump file when the stream rewind buffer resets", (done) ->
+            stream.rewind.resetRewind()
+            dump_restore._triggerDumps ->
+                fs.stat dump_restore._streams[ stream.key ]._filepath, (err,stats) ->
+                    expect(err).to.not.be.null
+                    expect(err.code).to.eql "ENOENT"
+                    done()
+

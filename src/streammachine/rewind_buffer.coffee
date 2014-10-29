@@ -7,7 +7,6 @@ Rewinder        = require "./rewind/rewinder"
 HLSSegmenter    = require "./rewind/hls_segmenter"
 
 MemoryStore     = require "./rewind/memory_store"
-Dumper          = require "./rewind/dumper"
 
 # RewindBuffer supports play from an arbitrary position in the last X hours
 # of our stream.

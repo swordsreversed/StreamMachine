@@ -12,7 +12,7 @@ SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
 Analytics   = require "./analytics"
 
-RewindDumpRestore   = require "../rewind/dumper"
+RewindDumpRestore   = require "../rewind/dump_restore"
 
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
