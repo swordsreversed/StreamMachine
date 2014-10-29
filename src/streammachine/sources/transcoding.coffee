@@ -21,7 +21,7 @@ module.exports = class TranscodingSource extends require("./base")
         # attach the right timing information to the chunks that come out
 
         @_buf = new PassThrough
-        @ffmpeg = new FFmpeg( source:@_buf ).addOptions @opts.ffmpeg_args.split("|")
+        @ffmpeg = new FFmpeg( source:@_buf, captureStderr:false ).addOptions @opts.ffmpeg_args.split("|")
 
         @ffmpeg.on "start", (cmd) =>
             @log?.info "ffmpeg started with #{ cmd }"

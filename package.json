@@ -43,8 +43,10 @@
         "throttle":             "~1.0.0"
     },
     "devDependencies": {
-        "mocha":                "~1.20.1",
-        "chai":                 "~1.9.1"
+        "webkit-devtools-agent":  "~0.3.1",
+        "mocha":                  "~1.20.1",
+        "chai":                   "~1.9.1",
+        "optimist":               "~0.5.2"
     },
     "bin": {
       "streammachine":        "./streammachine-cmd"
