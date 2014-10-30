@@ -8,84 +8,92 @@ module.exports = class TranscodingSource extends require("./base")
     constructor: (@opts) ->
         super skipParser:true
 
-        @_queue = []
+        @_disconnected = false
 
-        @o_stream = @opts.stream
+        @d = require("domain").create()
+        @d.on "error", (err) =>
+            @log?.error err
+            @disconnect()
 
-        @last_ts = null
+        @d.run =>
+            @_queue = []
 
-        # we start up an ffmpeg transcoder and then listen for data events
-        # from our source. Each time we get a chunk of audio data, we feed
-        # it into ffmpeg.  We then run the stream of transcoded data that
-        # comes back through our parser to re-chunk it. We count chunks to
-        # attach the right timing information to the chunks that come out
+            @o_stream = @opts.stream
 
-        @_buf = new PassThrough
-        @ffmpeg = new FFmpeg( source:@_buf, captureStderr:false ).addOptions @opts.ffmpeg_args.split("|")
+            @last_ts = null
 
-        @ffmpeg.on "start", (cmd) =>
-            @log?.info "ffmpeg started with #{ cmd }"
+            # we start up an ffmpeg transcoder and then listen for data events
+            # from our source. Each time we get a chunk of audio data, we feed
+            # it into ffmpeg.  We then run the stream of transcoded data that
+            # comes back through our parser to re-chunk it. We count chunks to
+            # attach the right timing information to the chunks that come out
 
-        @ffmpeg.on "error", (err) =>
-            @log?.error "ffmpeg transcoding error: #{ err }"
-            # FIXME: What do we do to restart the transcoder?
+            @_buf = new PassThrough
+            @ffmpeg = new FFmpeg( source:@_buf, captureStderr:false ).addOptions @opts.ffmpeg_args.split("|")
 
-        @ffmpeg.writeToStream @parser
+            @ffmpeg.on "start", (cmd) =>
+                @log?.info "ffmpeg started with #{ cmd }"
 
-        # -- watch for discontinuities -- #
+            @ffmpeg.on "error", (err) =>
+                @log?.error "ffmpeg transcoding error: #{ err }"
+                # FIXME: What do we do to restart the transcoder?
 
-        @_pingData = new TranscodingSource.Debounce (@opts.discontinuityTimeout || 30*1000), (last_ts) =>
-            # data has stopped flowing. mark a discontinuity in the chunker.
-            @log?.info "Transcoder data interupted. Marking discontinuity."
-            @emit "discontinuity_stop", last_ts
+            @ffmpeg.writeToStream @parser
 
-            @o_stream.once "data", (chunk) =>
-                @log?.info "Transcoder data resumed. Reseting time to #{chunk.ts}."
-                @emit "discontinuity_start", chunk.ts, last_ts
-                @chunker.resetTime chunk.ts
+            # -- watch for discontinuities -- #
 
-        # -- chunking -- #
+            @_pingData = new TranscodingSource.Debounce (@opts.discontinuityTimeout || 30*1000), (last_ts) =>
+                # data has stopped flowing. mark a discontinuity in the chunker.
+                @log?.info "Transcoder data interupted. Marking discontinuity."
+                @emit "discontinuity_begin", last_ts
 
-        @oDataFunc = (chunk) =>
-            @_pingData.ping()
-            @_buf.write chunk.data
+                @o_stream.once "data", (chunk) =>
+                    @log?.info "Transcoder data resumed. Reseting time to #{chunk.ts}."
+                    @emit "discontinuity_end", chunk.ts, last_ts
+                    @chunker.resetTime chunk.ts
 
-        @o_stream.once "data", (first_chunk) =>
-            @emit "connected"
-            @connected = true
+            # -- chunking -- #
 
-            @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
+            @oDataFunc = (chunk) =>
+                @_pingData.ping()
+                @_buf.write chunk.data
 
-            @parser.on "frame", (frame,header) =>
-                # we need to re-apply our chunking logic to the output
-                @chunker.write frame:frame, header:header
+            @o_stream.once "data", (first_chunk) =>
+                @emit "connected"
+                @connected = true
 
-            @chunker.on "readable", =>
-                while c = @chunker.read()
-                    @last_ts = c.ts
-                    @emit "data", c
+                @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
 
-            @o_stream.on "data", @oDataFunc
+                @parser.on "frame", (frame,header) =>
+                    # we need to re-apply our chunking logic to the output
+                    @chunker.write frame:frame, header:header
 
-            @_buf.write first_chunk.data
+                @chunker.on "readable", =>
+                    while c = @chunker.read()
+                        @last_ts = c.ts
+                        @emit "data", c
 
-        # -- watch for vitals -- #
+                @o_stream.on "data", @oDataFunc
 
-        @parser.once "header", (header) =>
-            # -- compute frames per second and stream key -- #
+                @_buf.write first_chunk.data
 
-            @framesPerSec   = header.frames_per_sec
-            @streamKey      = header.stream_key
+            # -- watch for vitals -- #
 
-            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log?.debug "first header is ", header
+            @parser.once "header", (header) =>
+                # -- compute frames per second and stream key -- #
 
-            # -- send out our stream vitals -- #
+                @framesPerSec   = header.frames_per_sec
+                @streamKey      = header.stream_key
 
-            @_setVitals
-                streamKey:          @streamKey
-                framesPerSec:       @framesPerSec
-                emitDuration:       @emitDuration
+                @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+                @log?.debug "first header is ", header
+
+                # -- send out our stream vitals -- #
+
+                @_setVitals
+                    streamKey:          @streamKey
+                    framesPerSec:       @framesPerSec
+                    emitDuration:       @emitDuration
 
     #----------
 
@@ -100,8 +108,13 @@ module.exports = class TranscodingSource extends require("./base")
     #----------
 
     disconnect: ->
-        @ffmpeg.kill()
-        @o_stream.removeListener "data", @oDataFunc
-        @connected = false
+        if !@_disconnected
+            @_disconnected = true
+            @d.run =>
+                @o_stream.removeListener "data", @oDataFunc
+                @ffmpeg.kill()
+                @connected = false
+
+            @d.dispose()
 
 

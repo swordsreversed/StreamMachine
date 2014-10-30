@@ -36,13 +36,13 @@ TRANS_AAC_STREAM =
 in_file = $file "aac-256.aac"
 
 describe "Transcoding Source", ->
-    logger = new Logger {stdout:true}
+    logger = new Logger {stdout:false}
 
     file_source = null
     trans_source = null
 
     before (done) ->
-        file_source = new FileSource format:"aac", filePath:in_file
+        file_source = new FileSource format:"aac", filePath:in_file, chunkDuration:0.1
         done()
 
     beforeEach (done) ->
@@ -51,7 +51,8 @@ describe "Transcoding Source", ->
             ffmpeg_args:    TRANS_AAC_STREAM.ffmpeg_args
             format:         "aac"
             stream_key:     "test"
-            discontinuityTimeout: 100
+            discontinuityTimeout: 150
+            logger:         logger
 
         done()
 
@@ -76,11 +77,11 @@ describe "Transcoding Source", ->
 
         trans_source.once "data", (chunk) ->
             first_data = Number(new Date())
-            trans_source.once "discontinuity_stop", ->
+            trans_source.once "discontinuity_begin", ->
                 stopped = Number(new Date())
-                expect(stopped-first_data).to.be.below(150)
+                expect(stopped-first_data).to.be.below(200)
 
-                trans_source.once "discontinuity_start", ->
+                trans_source.once "discontinuity_end", ->
                     done()
 
                 file_source.start()
