@@ -15,6 +15,13 @@ STREAM1 =
     seconds:            60*60*4
     format:             "mp3"
 
+class FakeSlave
+    constructor: ->
+        @streams = null
+
+    configureStreams: (s) ->
+        @streams = s
+
 describe "StreamMachine Master Mode", ->
     mm = null
 
@@ -93,27 +100,34 @@ describe "StreamMachine Master Mode", ->
     # -- Slaves -- #
 
     describe "Slave Connections", ->
-        s_log = new Logger stdout:true
+        s_log   = new Logger stdout:false
+        slave   = null
+        s_io    = null
 
         it "should allow a slave connection", (done) ->
-            slave = new SlaveIO {}, s_log, master:"ws://localhost:#{port_master}?password=#{nconf.get("master:password")}"
+            slave   = new FakeSlave
+            s_io    = new SlaveIO slave, s_log, master:"ws://localhost:#{port_master}?password=#{nconf.get("master:password")}"
 
             err_f = (err) -> throw err
 
-            slave.once "error", err_f
+            s_io.once "error", err_f
 
-            slave.once_connected (err,io) ->
+            s_io.once_connected (err,io) ->
                 throw err if err
-                slave.removeListener "error", err_f
+                s_io.removeListener "error", err_f
 
                 expect(io.connected).to.be.true
-                expect(slave.connected).to.be.true
+                expect(s_io.connected).to.be.true
 
                 done()
 
+        it "should have emitted configuration to the slave", (done) ->
+            expect(slave.streams).to.be.object
+            expect(slave.streams).to.have.property STREAM1.key
+            done()
+
         it "should deny a slave that provides the wrong password"
 
-        it "should have emitted configuration to the slave"
 
     # -- Sources -- #
 
