@@ -407,6 +407,11 @@ module.exports = class Stream extends require('events').EventEmitter
 
             stream.addSource tsource
 
+            # if our transcoder goes down, restart it
+            tsource.once "disconnect", =>
+                @log.info "SG #{@key}: Transcoder disconnected for #{ stream.key}. Restarting."
+                @_startTranscoder(stream)
+
             tsource
 
         #----------

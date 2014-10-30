@@ -36,7 +36,7 @@ module.exports = class TranscodingSource extends require("./base")
 
             @ffmpeg.on "error", (err) =>
                 @log?.error "ffmpeg transcoding error: #{ err }"
-                # FIXME: What do we do to restart the transcoder?
+                @disconnect()
 
             @ffmpeg.writeToStream @parser
 
@@ -110,9 +110,11 @@ module.exports = class TranscodingSource extends require("./base")
     disconnect: ->
         if !@_disconnected
             @_disconnected = true
+            @emit "disconnect"
             @d.run =>
                 @o_stream.removeListener "data", @oDataFunc
                 @ffmpeg.kill()
+                @_pingData?.kill()
                 @connected = false
 
             @d.dispose()

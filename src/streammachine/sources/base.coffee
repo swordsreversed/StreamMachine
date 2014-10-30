@@ -130,6 +130,10 @@ module.exports = class Source extends require("events").EventEmitter
 
             true
 
+        kill: ->
+            clearTimeout @timeout if @timeout
+            @cb = null
+
     #----------
 
     class @FrameChunker extends require("stream").Transform
