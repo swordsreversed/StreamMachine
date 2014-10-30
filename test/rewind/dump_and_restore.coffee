@@ -3,8 +3,6 @@ FileSource      = $src "sources/file"
 DumpRestore     = $src "rewind/dump_restore"
 Logger          = $src "logger"
 
-nconf = require "nconf"
-
 uuid = require "node-uuid"
 fs = require "fs"
 _ = require "underscore"
@@ -25,6 +23,8 @@ class FakeMaster extends require("events").EventEmitter
         for obj in mstreams
             @streams[ obj.key ] = obj
 
+rewind_opts = dir:"/tmp", frequency:-1
+
 describe "Rewind Buffer Dump and Restore", ->
     master          = null
     stream          = null
@@ -34,9 +34,6 @@ describe "Rewind Buffer Dump and Restore", ->
     logger = new Logger stdout:false
 
     run_id = uuid.v4()
-
-    nconf.set "rewind_dump:dir", "/tmp"
-    nconf.set "rewind_dump:frequency", -1
 
     dump_filepath = null
 
@@ -52,7 +49,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
             stream = new Stream null, "test__#{run_id}", logger, STREAM1
             master = new FakeMaster logger, stream
-            dump_restore = new DumpRestore master, nconf.get("rewind_dump")
+            dump_restore = new DumpRestore master, rewind_opts
 
             done()
 
@@ -71,7 +68,7 @@ describe "Rewind Buffer Dump and Restore", ->
         before (done) ->
             stream = new Stream null, "test__#{run_id}", logger, STREAM1
             master = new FakeMaster logger, stream
-            dump_restore = new DumpRestore master, nconf.get("rewind_dump")
+            dump_restore = new DumpRestore master, rewind_opts
 
             done()
 
@@ -111,7 +108,7 @@ describe "Rewind Buffer Dump and Restore", ->
         before (done) ->
             stream = new Stream null, "test__#{run_id}", logger, STREAM1
             master = new FakeMaster logger, stream
-            dump_restore = new DumpRestore master, nconf.get("rewind_dump")
+            dump_restore = new DumpRestore master, rewind_opts
 
             done()
 
@@ -129,7 +126,7 @@ describe "Rewind Buffer Dump and Restore", ->
         beforeEach (done) ->
             stream = new Stream null, "test__#{run_id}", logger, STREAM1
             master = new FakeMaster logger, stream
-            dump_restore = new DumpRestore master, nconf.get("rewind_dump")
+            dump_restore = new DumpRestore master, rewind_opts
 
             dump_restore.load (err,stats) ->
                 throw err if err

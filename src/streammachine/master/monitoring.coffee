@@ -1,7 +1,7 @@
 _ = require "underscore"
 
 module.exports = class Monitoring extends require("events").EventEmitter
-    constructor: (@master,@log) ->
+    constructor: (@master,@log,@opts) ->
         # -- check monitored streams for sources -- #
 
         @_streamInt = setInterval =>
@@ -15,16 +15,25 @@ module.exports = class Monitoring extends require("events").EventEmitter
 
     #----------
 
+    shutdown: ->
+        clearInterval @_streamInt if @_streamInt
+        clearInterval @_slaveInt if @_slaveInt
+        @master.slaves?.removeListener "disconnect", @_dFunc
+
+    #----------
+
     _pollForSlaveSync: ->
         # -- Monitor Slave IO for disconnects -- #
 
-        @master.slaves.on "disconnect", (slave_id) =>
+        @_dFunc = (slave_id) =>
             # set this in a timeout just in case we're mid-status at the time
             setTimeout =>
                 # mark any alerts as cleared
                 for k in ["slave_unsynced","slave_unresponsive"]
                     @master.alerts.update k, slave_id, false
             , 3000
+
+        @master.slaves.on "disconnect", @_dFunc
 
         # -- poll for sync -- #
 

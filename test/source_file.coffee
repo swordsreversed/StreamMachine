@@ -1,10 +1,6 @@
 FileSource      = $src "sources/file"
 Logger          = $src "logger"
 
-nconf = require "nconf"
-
-nconf.set("chunk_duration",0.1)
-
 STREAM1 =
     key:                "test1"
     source_password:    "abc123"
@@ -16,7 +12,7 @@ mp3 = $file "mp3/mp3-44100-64-s.mp3"
 
 describe "File Source", ->
     logger = new Logger {}
-    source = new FileSource format:"mp3", filePath:mp3
+    source = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.1
 
     it "should set the correct streamKey", (done) ->
         source.getStreamKey (key) ->

@@ -7,12 +7,7 @@ RewindBuffer    = $src "rewind_buffer"
 
 mp3 = $file "mp3/mp3-44100-64-m.mp3"
 
-nconf   = require "nconf"
 _       = require "underscore"
-
-nconf.set "chunk_duration", 0.1
-
-console.log "nconf chunk_duration is ", nconf.get("chunk_duration")
 
 #process.exit()
 
@@ -39,8 +34,8 @@ describe "Master Stream", ->
     describe "Typical Source Connections", ->
         stream = new MasterStream null, "test1", logger, STREAM1
 
-        source  = new FileSource format:"mp3", filePath:mp3
-        source2 = new FileSource format:"mp3", filePath:mp3
+        source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.1
+        source2 = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.1
 
         it "activates the first source to connect", (done) ->
             expect(stream.source).to.be.null
@@ -91,9 +86,9 @@ describe "Master Stream", ->
 
         beforeEach (done) ->
             stream = new MasterStream null, "test1", logger, STREAM1
-            source1 = new FileSource format:"mp3", filePath:mp3a
-            source2 = new FileSource format:"mp3", filePath:mp3b
-            source3 = new FileSource format:"mp3", filePath:mp3c
+            source1 = new FileSource format:"mp3", filePath:mp3a, chunkDuration:0.1
+            source2 = new FileSource format:"mp3", filePath:mp3b, chunkDuration:0.1
+            source3 = new FileSource format:"mp3", filePath:mp3c, chunkDuration:0.1
             done()
 
         afterEach (done) ->

@@ -40,7 +40,11 @@ describe "StreamMachine Master Mode", ->
     # -- Initialize our master -- #
 
     before (done) ->
-        new MasterMode nconf.get(), (err,m) =>
+        settings = nconf.get()
+        delete settings.redis
+        delete settings.analytics
+
+        new MasterMode settings, (err,m) =>
             return throw err if err
 
             mm = m
@@ -49,6 +53,10 @@ describe "StreamMachine Master Mode", ->
             port_source = mm.master.sourcein?.server?.address().port
 
             done()
+
+    after (done) ->
+        mm.master.monitoring.shutdown()
+        done()
 
     # -- Test our startup state -- #
 

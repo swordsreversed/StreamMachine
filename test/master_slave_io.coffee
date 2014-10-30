@@ -2,7 +2,6 @@ MasterIO    = $src "master/master_io"
 SlaveIO     = $src "slave/slave_io"
 Logger      = $src "logger"
 
-nconf   = require "nconf"
 _       = require "underscore"
 http    = require "http"
 
