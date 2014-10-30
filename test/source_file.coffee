@@ -1,6 +1,10 @@
 FileSource      = $src "sources/file"
 Logger          = $src "logger"
 
+nconf = require "nconf"
+
+nconf.set("chunk_duration",0.1)
+
 STREAM1 =
     key:                "test1"
     source_password:    "abc123"
@@ -32,7 +36,7 @@ describe "File Source", ->
         setTimeout ->
             expect(did_emit).to.equal false
             done()
-        , 1000
+        , 300
 
         source.disconnect()
 
