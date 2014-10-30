@@ -10,6 +10,12 @@ mp3 = $file "mp3/mp3-44100-64-m.mp3"
 nconf   = require "nconf"
 _       = require "underscore"
 
+nconf.set "chunk_duration", 0.1
+
+console.log "nconf chunk_duration is ", nconf.get("chunk_duration")
+
+#process.exit()
+
 STREAM1 =
     key:                "test1"
     source_password:    "abc123"
@@ -18,7 +24,7 @@ STREAM1 =
     format:             "mp3"
 
 describe "Master Stream", ->
-    logger = new Logger {}
+    logger = new Logger stdout:false
 
 
     describe "Startup", ->
@@ -98,8 +104,6 @@ describe "Master Stream", ->
             done()
 
         it "doesn't get confused by simultaneous addSource calls", (done) ->
-            this.timeout 6000
-
             stream.once "source", ->
                 # listen for five data emits.  they should all come from
                 # the same source uuid
@@ -123,12 +127,17 @@ describe "Master Stream", ->
             stream.addSource source1
             stream.addSource source2
 
-        it "doesn't get confused by quick promoteSource calls", (done) ->
-            this.timeout 6000
+            source1.start()
+            source2.start()
 
+        it "doesn't get confused by quick promoteSource calls", (done) ->
             stream.addSource source1, ->
                 stream.addSource source2, ->
                     stream.addSource source3, ->
+                        source1.start()
+                        source2.start()
+                        source3.start()
+
                         # listen for five data emits.  they should all come from
                         # the same source uuid
                         emits = []
