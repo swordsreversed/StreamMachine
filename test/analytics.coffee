@@ -13,6 +13,8 @@ session_id  = uuid.v4()
 # started an hour ago
 start_time = Number(new Date) - 60*60*1000
 
+config = es_uri:"es://localhost:9200/stream-test", finalize_secs:-1
+
 START =
     type:           "session_start"
     client:
@@ -36,7 +38,7 @@ describe "Analytics", ->
 
     before (done) ->
         # connect to the db
-        _uri = URL.parse(nconf.get("analytics:es_uri"))
+        _uri = URL.parse(config.es_uri)
 
         es = new elasticsearch.Client
             host:       "http://#{_uri.hostname}:#{_uri.port||9200}"
@@ -69,7 +71,7 @@ describe "Analytics", ->
         logger = new Logger {}
 
         it "starts up using config options", (done) ->
-            analytics = new Analytics config:nconf.get("analytics"), log:logger, (err) ->
+            analytics = new Analytics config:config, log:logger, (err) ->
                 expect(err).to.be.null
 
                 expect(analytics).to.be.instanceof(Analytics)
@@ -125,7 +127,6 @@ describe "Analytics", ->
 
     describe "Session Start", ->
         it "stores a session start", (done) ->
-            console.log "Storing session #{ START.client.session_id }"
             analytics._log START, (err) ->
                 expect(err).to.be.null
                 done()
