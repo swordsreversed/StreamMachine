@@ -1,4 +1,4 @@
-_u = require "underscore"
+_       = require "underscore"
 express = require "express"
 nconf   = require "nconf"
 
@@ -22,8 +22,8 @@ module.exports = class StandaloneMode extends require("./base")
 
         # -- Set up master and slave -- #
 
-        @master = new Master _u.extend {}, @opts, logger:@log.child(mode:"master")
-        @slave  = new Slave _u.extend {}, @opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
+        @master = new Master _.extend {}, @opts, logger:@log.child(mode:"master")
+        @slave  = new Slave _.extend {}, @opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
 
         # -- Set up combined server -- #
 
@@ -43,11 +43,7 @@ module.exports = class StandaloneMode extends require("./base")
 
         # proxy data events from master -> slave
         @master.on "streams", (streams) =>
-            @slave.configureStreams @master.config().streams
-            @slave._onConnect()
-
-            #console.log "in standalone streams", streams
-            process.nextTick =>
+            @slave.once "streams", =>
                 for k,v of streams
                     console.log "looking to attach #{k}", @streams[k]?, @slave.streams[k]?
                     if @streams[k]
@@ -60,6 +56,8 @@ module.exports = class StandaloneMode extends require("./base")
                             @streams[k] = true
                         else
                             console.log "Unable to map master -> slave for #{k}"
+
+            @slave.configureStreams @master.config().streams
 
         @log.debug "Standalone is listening on port #{@opts.port}"
 

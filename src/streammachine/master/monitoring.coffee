@@ -11,6 +11,23 @@ module.exports = class Monitoring extends require("events").EventEmitter
 
         # -- Monitor Slave Status -- #
 
+        @_pollForSlaveSync() if @master.slaves
+
+    #----------
+
+    _pollForSlaveSync: ->
+        # -- Monitor Slave IO for disconnects -- #
+
+        @master.slaves.on "disconnect", (slave_id) =>
+            # set this in a timeout just in case we're mid-status at the time
+            setTimeout =>
+                # mark any alerts as cleared
+                for k in ["slave_unsynced","slave_unresponsive"]
+                    @master.alerts.update k, slave_id, false
+            , 3000
+
+        # -- poll for sync -- #
+
         @_slaveInt = setInterval =>
             # -- what is master's status? -- #
 
@@ -50,13 +67,3 @@ module.exports = class Monitoring extends require("events").EventEmitter
 
                     @master.alerts.update "slave_unsynced", stat.id, unsynced
         , 10*1000
-
-        # -- Monitor Slave IO for disconnects -- #
-
-        @master.slaves.on "disconnect", (slave_id) =>
-            # set this in a timeout just in case we're mid-status at the time
-            setTimeout =>
-                # mark any alerts as cleared
-                for k in ["slave_unsynced","slave_unresponsive"]
-                    @master.alerts.update k, slave_id, false
-            , 3000
