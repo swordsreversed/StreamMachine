@@ -11,6 +11,8 @@ Stream      = require "./stream"
 SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
 Analytics   = require "./analytics"
+Monitoring  = require "./monitoring"
+SlaveIO     = require "./master_io"
 
 RewindDumpRestore   = require "../rewind/dump_restore"
 
@@ -23,7 +25,6 @@ module.exports = class Master extends require("events").EventEmitter
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
 
-        @slaves         = {}
         @streams        = {}
         @stream_groups  = {}
         @proxies        = {}
@@ -51,10 +52,6 @@ module.exports = class Master extends require("events").EventEmitter
                 # (re-)configure our master stream objects
                 @configureStreams @options.streams
 
-                # pass config on to any connected slaves
-                for id,s of @slaves
-                    s.sock.emit "config", @config()
-
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
             @on "config_update", =>
@@ -76,11 +73,12 @@ module.exports = class Master extends require("events").EventEmitter
 
         @alerts = new Alerts logger:@log.child(module:"alerts")
 
-        # set an interval to check monitored streams for sources
-        setInterval =>
-            for k,s of @streams
-                @alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
-        , 5*1000
+        # -- create a listener for slaves -- #
+
+        if @options.master
+            @slaves = new SlaveIO @, @log.child(module:"master_io"), @options.master
+            @on "streams", =>
+                @slaves.updateConfig @config()
 
         # -- Analytics -- #
 
@@ -95,136 +93,17 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Rewind Dump and Restore -- #
 
-        @rewind_dr = new RewindDumpRestore @, opts.rewind_dump
+        @rewind_dr = new RewindDumpRestore @, opts.rewind_dump if opts.rewind_dump
+
+        # -- Set up our monitoring module -- #
+
+        @monitoring = new Monitoring @, @log.child(module:"monitoring")
 
     #----------
 
     loadRewinds: (cb) ->
         @once "streams", =>
-            @rewind_dr.load cb
-
-    #----------
-
-    listenForSlaves: (server) ->
-        # fire up a socket listener on our slave port
-        @io = require("socket.io").listen server
-
-        @log.info "Master now listening for slave connections."
-
-        # attach proxies for any streams that are already up
-        @_attachIOProxy(s) for key,s of @streams
-
-        # add our authentication
-        @io.use (socket,next) =>
-            @log.debug "Authenticating slave connection."
-            if @options.master.password == socket.request._query?.password
-                @log.debug "Slave password is valid."
-                next()
-            else
-                @log.debug "Slave password is incorrect."
-                next new Error "Invalid slave password."
-
-        # look for slave connections
-        @io.on "connection", (sock) =>
-            # a slave may make multiple connections to test transports. we're
-            # only interested in the one that gives us the OK
-            sock.once "ok", (cb) =>
-                # ping back to let the slave know we're here
-                cb "OK"
-
-                @log.debug "slave connection is #{sock.id}"
-
-                if @options.streams
-                    # emit our configuration
-                    @log.debug "Sending config information to slave."
-                    sock.emit "config", @config()
-
-                @slaves[sock.id] =
-                    sock:           sock
-                    connected_at:   new Date()
-                    status:         null
-                    errors:         0
-
-                # attach event handler for log reporting
-
-                socklogger = @log.child slave:sock.id
-                sock.on "log", (obj = {}) =>
-                    socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
-
-                sock.on "stream_stats", (key, cb) =>
-                    # respond with the stream's vitals
-                    @streams[key].vitals cb
-
-                # attach disconnect handler
-                sock.on "disconnect", =>
-                    connected = Math.round( (Number(new Date()) - Number(@slaves[sock.id].connected_at)) / 1000 )
-                    @log.debug "Slave disconnect from #{sock.id}. Connected for #{ connected } seconds."
-
-                    delete @slaves[sock.id]
-
-                    # set this in a timeout just in case we're mid-status at the time
-                    setTimeout =>
-                        # mark any alerts as cleared
-                        for k in ["slave_unsynced","slave_unresponsive"]
-                            @alerts.update k, sock.id, false
-                    , 3000
-
-        @on "config_update", =>
-            config = @config()
-            s.sock.emit "config", config for id,s of @slaves
-
-        # -- Poll for Slave Status -- #
-
-        @_slaveStatus = setInterval =>
-            # -- what is our status? -- #
-
-            mstatus = @_rewindStatus()
-
-            # -- now check the slaves -- #
-
-            for s,obj of @slaves
-                do (s,obj) =>
-                    pollTimeout = setTimeout =>
-                        @log.error "Slave #{s} failed to respond to status."
-                        @alerts.update "slave_unresponsive", s, true
-                    , 1000
-
-                    obj.sock.emit "status", (err,status) =>
-                        clearTimeout pollTimeout
-                        @alerts.update "slave_unresponsive", s, false
-
-                        if err
-                            @log.error "Slave #{s} reported status error: #{err}"
-                            return false
-
-                        obj.status = status
-
-                        # -- are the rewind buffers synced to ours? -- #
-
-                        # For this we need to run through each stream, and then
-                        # through each value inside to see if it is within an
-                        # acceptable range
-
-                        unsynced = false
-
-                        for key,mobj of mstatus
-                            if sobj = status[key]
-                                for ts in ["first_buffer_ts","last_buffer_ts"]
-                                    sts = Number(new Date(sobj[ts]))
-                                    mts = Number(mobj[ts])
-
-                                    if ( _u.isNaN(sts) && _u.isNaN(mts) ) || (mts - 10*1000) < sts < (mts + 10*1000)
-                                        # ok
-                                    else
-                                        @log.info "Slave #{s} sync unhealthy on #{key}:#{ts}", sts, mts
-                                        unsynced = true
-
-                            else
-                                unsynced = true
-
-                        @alerts.update "slave_unsynced", s, unsynced
-
-        , 5 * 1000
+            @rewind_dr?.load cb
 
     #----------
 
@@ -362,6 +241,14 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    vitals: (stream,cb) ->
+        if s = @streams[ stream ]
+            s.vitals cb
+        else
+            cb "Invalid Stream"
+
+    #----------
+
     # Get a status snapshot by looping through each stream to get buffer stats
     _rewindStatus: ->
         status = {}
@@ -371,9 +258,9 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     slavesInfo: ->
-        slaveCount: Object.keys(@slaves).length
-        slaves: ( { id:k, status:s.status } for k,s of @slaves )
-        master: @_rewindStatus()
+        slaveCount: Object.keys(@slaves.slaves).length
+        slaves:     ( { id:k, status:s.last_status||"WARMING UP" } for k,s of @slaves.slaves )
+        master:     @_rewindStatus()
 
     #----------
 
@@ -461,8 +348,8 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _attachIOProxy: (stream) ->
-        @log.debug "attachIOProxy call for #{stream.key}.", io:@io?, proxy:@proxies[stream.key]?
-        return false if !@io
+        @log.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@proxies[stream.key]?
+        return false if !@slaves
 
         if @proxies[ stream.key ]
             return false
@@ -495,8 +382,8 @@ module.exports = class Master extends require("events").EventEmitter
 
             @app.use (req,res,next) =>
                 sock_id = req.get 'stream-slave-id'
-                if sock_id && @master.slaves[ sock_id ]
-                    req.slave_socket = @master.slaves[ sock_id ]
+                if sock_id && @master.slaves.slaves[ sock_id ]
+                    #req.slave_socket = @master.slaves[ sock_id ]
                     next()
 
                 else
@@ -508,7 +395,7 @@ module.exports = class Master extends require("events").EventEmitter
             @app.get "/:stream/rewind", (req,res) =>
                 @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
-                req.stream.rewind.dumpBuffer (err,writer) =>
+                req.stream.getRewind (err,writer) =>
                     writer.pipe(res)
                     res.on "end", =>
                         @master.log.debug "Rewind dumpBuffer finished."
@@ -522,8 +409,7 @@ module.exports = class Master extends require("events").EventEmitter
             @master = opts.master
 
             @dataFunc = (chunk) =>
-                for id,s of @master.slaves
-                    s.sock.emit "streamdata:#{@key}", chunk
+                @master.slaves.broadcastAudio @key, chunk
 
             @stream.on "data", @dataFunc
 

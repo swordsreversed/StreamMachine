@@ -304,9 +304,9 @@ module.exports = class LogController
     class @SocketLogger extends winston.Transport
         name: "socket"
 
-        constructor: (@sock,opts) ->
+        constructor: (@io,opts) ->
             super(opts)
 
         log: (level,msg,meta,cb) ->
-            @sock.emit "log", level:level, msg:msg, meta:meta
+            @io.log level:level, msg:msg, meta:meta
             cb?()

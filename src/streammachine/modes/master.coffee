@@ -38,7 +38,7 @@ module.exports = class MasterMode extends require("./base")
             @master.loadRewinds()
 
             @handle = @server.listen @opts.master.port
-            @master.listenForSlaves(@handle)
+            @master.slaves.listen(@handle)
             @master.sourcein.listen()
 
             @log.info "Listening."
@@ -106,7 +106,7 @@ module.exports = class MasterMode extends require("./base")
             translator.once "master_handle", (msg,handle) =>
                 @log.info "Got master socket."
                 @handle = @server.listen handle
-                @master.listenForSlaves @handle
+                @master.slaves.listen @handle
                 @log.info "Master up!"
                 translator.send "master_handle_up"
                 aFunc()
