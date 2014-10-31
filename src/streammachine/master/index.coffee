@@ -310,6 +310,7 @@ module.exports = class Master extends require("events").EventEmitter
             for source in sg._stream.sources
                 if source._shouldHandoff
                     do (source) =>
+                        @log.info "Sending StreamGroup source #{msg.key}/#{source.uuid}"
                         rpc.request "group_source",
                             group:      sg.key
                             type:       source.HANDOFF_TYPE
@@ -318,6 +319,8 @@ module.exports = class Master extends require("events").EventEmitter
                         , (err,reply) =>
                             @log.error "Error sending group source #{msg.key}/#{source.uuid}: #{err}" if err
                             af()
+                else
+                    af()
 
 
         # -- Stream Rewind Buffers and Sources -- #
@@ -372,12 +375,14 @@ module.exports = class Master extends require("events").EventEmitter
             source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
             stream.addSource source
             @log.info "Added stream source: #{stream.key}/#{source.uuid}"
+            cb null
 
         rpc.on "group_source", (msg,handle,cb) =>
             sg = @stream_groups[ msg.group ]
             source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
             sg._stream.addSource source
             @log.info "Added group source: #{stream.key}/#{source.uuid}"
+            cb null
 
         af = _.after (Object.keys(@streams).length+Object.keys(@stream_groups).length), =>
             cb null
@@ -386,7 +391,7 @@ module.exports = class Master extends require("events").EventEmitter
             do (key,group) =>
                 # we don't need rewind buffers for stream groups, but we do
                 # need sources.
-                rpc.request "group_sources", key:key, (err) =>
+                rpc.request "group_sources", key:key, null, timeout:10000, (err) =>
                     @log.error "Error getting StreamGroup sources: #{err}" if err
                     @log.info "Sources received for StreamGroup #{ key }."
                     af()
@@ -407,7 +412,7 @@ module.exports = class Master extends require("events").EventEmitter
                             @log.error "Error loading rewind buffer: #{err}" if err
                             c.end()
 
-                    rpc.request "stream_rewind", key:key,path:spath, (err) =>
+                    rpc.request "stream_rewind", key:key,path:spath, null, timeout:10000, (err) =>
                         return @log.error "Error loading rewind buffer for #{key}: #{err}" if err
                         @log.info "Rewind buffer loaded for #{key}"
 
