@@ -2,6 +2,7 @@ _u = require "underscore"
 
 module.exports = class IcecastSource extends require("./base")
     TYPE: -> "Icecast (#{[@opts.sock.remoteAddress,@opts.sock.remotePort].join(":")})"
+    HANDOFF_TYPE: "icecast"
 
     # opts should include:
     # format:   Format for Parser (aac or mp3)
@@ -11,6 +12,8 @@ module.exports = class IcecastSource extends require("./base")
     # logger:   Logger (optional)
     constructor: (@opts) ->
         super useHeartbeat:true
+
+        @_shouldHandoff = true
 
         # data is going to start streaming in as data on req. We need to pipe
         # it into a parser to turn it into frames, headers, etc

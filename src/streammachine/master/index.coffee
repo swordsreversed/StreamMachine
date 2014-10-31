@@ -1,4 +1,4 @@
-_u      = require "underscore"
+_       = require "underscore"
 temp    = require "temp"
 net     = require "net"
 fs      = require "fs"
@@ -23,7 +23,9 @@ module.exports = class Master extends require("events").EventEmitter
         max_zombie_life:    1000 * 60 * 60
 
     constructor: (opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
+        @options = _.defaults opts||{}, @DefaultOptions
+
+        @_configured = false
 
         @streams        = {}
         @stream_groups  = {}
@@ -33,21 +35,16 @@ module.exports = class Master extends require("events").EventEmitter
 
         @log = @options.logger
 
-        # -- look for hard-coded configuration -- #
-
-        if @options.streams
-            process.nextTick =>
-                @configureStreams @options.streams
-
-        # -- load our streams configuration from redis -- #
 
         if @options.redis?
+            # -- load our streams configuration from redis -- #
+
             @log.debug "Initializing Redis connection"
             @redis = new Redis @options.redis
             @redis_config = new RedisConfig @redis
             @redis_config.on "config", (config) =>
                 # stash the configuration
-                @options = _u.defaults config||{}, @options
+                @options = _.defaults config||{}, @options
 
                 # (re-)configure our master stream objects
                 @configureStreams @options.streams
@@ -56,6 +53,19 @@ module.exports = class Master extends require("events").EventEmitter
             @log.debug "Registering config_update listener"
             @on "config_update", =>
                 @redis_config._update @config()
+
+        else if @options.streams
+            # -- look for hard-coded configuration -- #
+
+            process.nextTick =>
+                @configureStreams @options.streams
+        else
+            # nothing there...
+            process.nextTick =>
+                @configureStreams {}
+
+        @once "streams", =>
+            @_configured = true
 
         # -- create a server to provide the admin -- #
 
@@ -98,6 +108,14 @@ module.exports = class Master extends require("events").EventEmitter
         # -- Set up our monitoring module -- #
 
         @monitoring = new Monitoring @, @log.child(module:"monitoring")
+
+    #----------
+
+    once_configured: (cb) ->
+        if @_configured
+            cb()
+        else
+            @once "streams", => cb()
 
     #----------
 
@@ -269,86 +287,94 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
-    sendHandoffData: (translator,cb) ->
-        # -- Send Rewind buffers -- #
+    sendHandoffData: (rpc,cb) ->
+        streams_sent = {}
 
-        @log.info "Sending Rewind buffers for handoff."
-
-        fFunc = _u.after Object.keys(@streams).length, =>
+        fFunc = _.after Object.keys(@streams).length, =>
             @log.info "Rewind buffers and sources sent."
             cb null
 
-        lFunc = (stream) =>
-            if stream.rewind.bufferedSecs() > 0
-                # create a socket
-                spath = temp.path suffix:".sock"
+        rpc.on "rewind_buffer", (msg,handle,cb) =>
+            @log.info "Rewind buffer requested for #{ msg.key }"
+            stream = @streams[msg.key]
 
-                @log.info "Sending rewind buffer for #{stream.key} over #{spath}."
-
-                sock = net.createServer (c) =>
-                    # write the buffer to the socket
-                    @log.info "Got socket connection on #{spath}"
-
-                    stream.rewind.dumpBuffer (err,writer) =>
-                        @writer.pipe(c)
-
-                        c.on "close", (err) =>
-                            @log.info "Dumped buffer for #{stream.key}", bytesWritten:c.bytesWritten
-                            @log.info "Rewind buffer sock is done.", error:err
-
-                            # cleanup...
-                            sock.close => fs.unlink spath, (err) =>
-                                @log.info "RewindBuffer socket unlinked.", error:err
-
-                            fFunc()
-
-                sock.listen spath
-
-                sock.on "listening", =>
-                    # pass the socket to the new child and wait for acknowledgement
-                    translator.send "master_rewind", { stream:stream.key, path:spath, rsecsPerChunk:stream.rewind._rsecsPerChunk }
-
-                # OK!
-            else
-                fFunc()
-
-            # -- send source connections -- #
-
-            sFunc = (source) ->
-                if source.sock
-                    translator.send "stream_source", { stream:stream.key, headers:source.headers, uuid:source.uuid }, source.sock
-
+            # go ahead and send over any sources...
             for source in stream.sources
-                sFunc(source)
+                if source._shouldHandoff
+                    do (source) =>
+                        meta =
 
-        # run 'em
-        lFunc(s) for k,s of @streams
+                        rpc.request "stream_source",
+                            stream:     stream.key
+                            type:       source.HANDOFF_TYPE
+                            opts:       format:source.opts.format, uuid:source.uuid
+                        , source.opts.sock
+                        , (err,reply) =>
+                            @log.error "Error sending stream source #{msg.key}/#{source.uuid}: #{err}" if err
+
+            if stream.rewind.bufferedSecs() > 0
+                @log.info "RewindBuffer write for #{ msg.key } to #{ msg.path }"
+                sock = net.connect msg.path, (err) =>
+                    @log.info "Writer socket connected for rewind buffer #{msg.key}", error:err
+                    return cb err if err
+
+                    stream.getRewind (err,writer) =>
+                        return cb err if err
+
+                        writer.pipe(sock)
+                        writer.on "end", =>
+                            @log.info "RewindBuffer for #{ msg.key } written to socket."
+
+                        @log.info "Waiting for sock close for #{ msg.key }..."
+                        sock.on "close", (err) =>
+                            @log.info "Dumped buffer for #{msg.key}", bytesWritten:sock.bytesWritten, error:err
+                            fFunc()
+                            cb null
+
+            else
+                @log.info "No rewind buffer to send for #{msg.key}."
+                fFunc()
+                cb null
 
     #----------
 
-    loadHandoffData: (translator,cb) ->
-        # listen for the start of RewindBuffer transactions
-        translator.on "master_rewind", (data) =>
-            @log.info "Got Rewind load signal for #{data.stream} on #{data.path}"
+    loadHandoffData: (rpc,cb) ->
+        # -- set up a listener for sources -- #
 
-            # set emit duration on the rewinder if the source hasn't
-            # connected yet
-            @streams[ data.stream ].rewind._rChunkLength data.rsecsPerChunk
-
-            # create a socket connection
-            sock = net.connect path:data.path, allowHalfOpen:true, =>
-                @streams[ data.stream ].rewind.loadBuffer sock, (err) =>
-                    @log.info "Loaded rewind buffer.", bytesRead:sock.bytesRead
-                    sock.end()
-
-        # listen for source connections
-        translator.on "stream_source", (data,sock) =>
-            @log.info "Got source socket for #{data.stream}"
-            stream = @streams[ data.stream ]
-
-            #sock = new net.Socket fd:handle, type:"tcp4"
-            source = new (require "../sources/icecast") stream, sock, data.headers, data.uuid
+        rpc.on "stream_source", (msg,handle,cb) =>
+            stream = @streams[ msg.stream ]
+            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
             stream.addSource source
+            @log.info "Added source: #{stream.key}/#{source.uuid}"
+
+        af = _.after Object.keys(@streams).length, =>
+            cb null
+
+        for key,stream of @streams
+            do (key,stream) =>
+                # set up a socket to accept the buffer on
+                # create a socket
+                spath = temp.path suffix:".sock"
+
+                @log.info "Asking to get rewind buffer for #{key} over #{spath}."
+
+                sock = net.createServer()
+
+                sock.listen spath, =>
+                    sock.once "connection", (c) =>
+                        stream.rewind.loadBuffer c, (err) =>
+                            @log.error "Error loading rewind buffer: #{err}" if err
+                            c.end()
+
+                    rpc.request "rewind_buffer", key:key,path:spath, (err) =>
+                        return @log.error "Error loading rewind buffer for #{key}: #{err}" if err
+                        @log.info "Rewind buffer loaded for #{key}"
+
+                        # cleanup...
+                        sock.close => fs.unlink spath, (err) =>
+                            @log.info "RewindBuffer socket unlinked.", error:err
+                            af()
+
 
     #----------
 

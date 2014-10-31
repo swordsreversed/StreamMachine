@@ -1,9 +1,11 @@
-_u = require "underscore"
+_       = require "underscore"
 express = require "express"
-nconf = require "nconf"
+nconf   = require "nconf"
 
 Logger  = require "../logger"
 Master  = require "../master"
+
+RPC     = require "ipc-rpc"
 
 # Master Server
 #
@@ -23,12 +25,31 @@ module.exports = class MasterMode extends require("./base")
         super
 
         # create a master
-        @master = new Master _u.extend {}, @opts, logger:@log
+        @master = new Master _.extend {}, @opts, logger:@log
 
         # Set up a server for our admin
         @server = express()
         @server.use "/s", @master.transport.app
         @server.use @master.admin.app
+
+        if process.send?
+            @_rpc = new RPC process, functions:
+                OK: (msg,handle,cb) ->
+                    cb null, "OK"
+
+                master_port: (msg,handle,cb) =>
+                    cb null, @handle?.address().port||"NONE"
+
+                source_port: (msg,handle,cb) =>
+                    cb null, @master.sourcein?.server.address()?.port||"NONE"
+
+                streams: (streams,handle,cb) =>
+                    @master.configureStreams streams, (err) =>
+                        cb err, @master.config().streams
+
+                start_handoff: (msg,handle,cb) =>
+                    @_sendHandoff()
+                    cb null, "OK"
 
         if nconf.get("handoff")
             @_acceptHandoff cb
@@ -47,68 +68,79 @@ module.exports = class MasterMode extends require("./base")
 
     #----------
 
-    _sendHandoff: (translator) ->
-        @log.event "Got streams signal from new process."
-        # Send master data (includes source port handoff)
-        @master.sendHandoffData translator, (err) =>
-            @log.event "Sent master data to new process."
+    _sendHandoff: ->
+        @log.event "Got handoff signal from new process."
 
-            _afterSockets = _u.after 2, =>
-                @log.info "Sockets transferred.  Exiting."
-                process.exit()
+        @_rpc.once "config", (msg,handle,cb) =>
+            # send our streams info so we make sure our configs are matched
+            @_rpc.request "streams", @master.config().streams, (err,streams) =>
+                if err
+                    @log.error "Error setting streams on new process."
+                    return false
 
-            # Hand over the source port
-            @log.info "Hand off source socket."
-            translator.send "source_socket", {}, @master.sourcein.server
+                @log.info "New Master confirmed stream configuration."
 
-            translator.once "source_socket_up", =>
-                _afterSockets()
+                cb()
 
-            @log.info "Hand off master socket."
-            translator.send "master_handle", {}, @handle
+                # Send master data (includes source port handoff)
+                @master.sendHandoffData @_rpc, (err) =>
+                    @log.event "Sent master data to new process."
 
-            translator.once "master_handle_up", =>
-                _afterSockets()
+                    _afterSockets = _.after 2, =>
+                        @log.info "Sockets transferred.  Exiting."
+                        process.exit()
+
+                    # Hand over the source port
+                    @log.info "Hand off source socket."
+                    @_rpc.request "source_socket", null, @master.sourcein.server, (err) =>
+                        @log.error "Error sending source socket: #{err}" if err
+                        _afterSockets()
+
+                    @log.info "Hand off master socket."
+                    @_rpc.request "master_handle", null, @handle, (err) =>
+                        @log.error "Error sending master handle: #{err}" if err
+                        _afterSockets()
 
     #----------
 
     _acceptHandoff: (cb) ->
         @log.info "Initializing handoff receptor."
 
-        if !process.send?
-            @log.error "Handoff called, but process has no send function. Aborting."
+        if !@_rpc
+            @log.error "Handoff called, but no RPC interface set up. Aborting."
             return false
 
-        console.log "Sending GO"
-        process.send "HANDOFF_GO"
+        @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
+            cb null, "GO"
 
-        # set up our translator
-        translator = new MasterMode.HandoffTranslator process
+            # watch for streams
+            @master.once_configured =>
+                # signal that we're ready
+                @_rpc.request "config", @master.config(), (err,reply) =>
+                    if err
+                        @log.error "Failed to send config broadcast when starting handoff: #{err}"
+                        return false
 
-        # watch for streams
-        @master.once "streams", =>
-            # signal that we're ready
-            translator.send "streams"
+                    @log.info "Handoff initiator ACKed our config broadcast."
 
-            @master.loadHandoffData translator
+                    @master.loadHandoffData @_rpc, =>
+                        @log.info "Handoff receiver believes all stream and source data has arrived."
 
-            aFunc = _u.after 2, =>
-                @log.info "Source and Master handles are up."
-                cb? null, @
+                    aFunc = _.after 2, =>
+                        @log.info "Source and Master handles are up."
+                        cb? null, @
 
-            translator.once "source_socket", (msg,handle) =>
-                @log.info "Got source socket."
-                @master.sourcein.listen handle
-                @log.info "Listening for sources!"
-                translator.send "source_socket_up"
-                aFunc()
+                    @_rpc.once "source_socket", (msg,handle,cb) =>
+                        @log.info "Source socket is incoming."
+                        @master.sourcein.listen handle
+                        cb null
+                        aFunc()
 
-            translator.once "master_handle", (msg,handle) =>
-                @log.info "Got master socket."
-                @handle = @server.listen handle
-                @master.slaves.listen @handle
-                @log.info "Master up!"
-                translator.send "master_handle_up"
-                aFunc()
+                    @_rpc.once "master_handle", (msg,handle,cb) =>
+                        @log.info "Master socket is incoming."
+                        @handle = @server.listen handle
+                        @master.slaves?.listen @handle
+                        cb null
+                        aFunc()
 
     #----------

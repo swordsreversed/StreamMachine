@@ -40,7 +40,8 @@
         "timezone":             "~0.0.30",
         "fluent-ffmpeg":        "~1.7.1",
         "elasticsearch":        "~2.2.0",
-        "throttle":             "~1.0.0"
+        "throttle":             "~1.0.0",
+        "ipc-rpc":              "StreamMachine/ipc-rpc"
     },
     "devDependencies": {
         "webkit-devtools-agent":  "~0.3.1",

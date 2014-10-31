@@ -28,15 +28,6 @@ describe "StreamMachine Master Mode", ->
     port_master = null
     port_source = null
 
-    # -- Update some config -- #
-
-    nconf.overrides
-        "master:port":      0
-        "source_port":      0
-
-    nconf.clear("redis")
-    nconf.clear("analytics")
-
     # -- Initialize our master -- #
 
     before (done) ->

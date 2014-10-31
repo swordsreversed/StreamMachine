@@ -9,6 +9,8 @@ module.exports = class Source extends require("events").EventEmitter
     constructor: (source_opts={}) ->
         @uuid = @opts.uuid || uuid.v4()
 
+        @_shouldHandoff = false
+
         @_isDisconnected = false
 
         @isFallback = false
