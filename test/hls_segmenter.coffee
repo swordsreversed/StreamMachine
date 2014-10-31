@@ -30,7 +30,8 @@ describe "HTTP Live Streaming Segmenter", ->
 
     rewind      = null
     beforeEach (done) ->
-        rewind = new RewindBuffer liveStreaming:true, seconds:120, burst:30, log:(new Logger {})
+        # Set up rewind buffer with HLS enabled using 10-second chunks
+        rewind = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
         rewind._rChunkLength emitDuration:0.5, streamKey:"testing"
         done()
 

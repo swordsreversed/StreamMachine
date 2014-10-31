@@ -19,7 +19,7 @@ module.exports = class StreamMachine
             stdout:     true
 
         ua_skip:        false
-        live_streaming:
+        hls:
             segment_duration:   10
 
         chunk_duration: 2

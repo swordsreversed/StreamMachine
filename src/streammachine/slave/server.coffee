@@ -3,7 +3,6 @@ _u      = require 'underscore'
 util    = require 'util'
 fs      = require 'fs'
 path    = require 'path'
-nconf   = require 'nconf'
 uuid    = require 'node-uuid'
 tz      = require 'timezone'
 
@@ -13,13 +12,13 @@ module.exports = class Server extends require('events').EventEmitter
         slave_mode:     false
         mount_admin:    true
 
-    constructor: (opts) ->
-        @opts = _u.defaults opts||{}, @DefaultOptions
+    constructor: (@opts) ->
 
-        @core = @opts.core
+        @core   = @opts.core
         @logger = @opts.logger
+        @config = @opts.config
 
-        @local = tz(require "timezone/zones")(nconf.get("timezone")||"UTC")
+        @local = tz(require "timezone/zones")(@config.timezone||"UTC")
 
         # -- set up our express app -- #
 
@@ -29,11 +28,11 @@ module.exports = class Server extends require('events').EventEmitter
 
         # -- Set up sessions -- #
 
-        if nconf.get("session:secret") && nconf.get("session:key")
+        if @config.session?.secret && @config.session?.key
             @app.use express.cookieParser()
             @app.use express.cookieSession
-                key:    nconf.get("session:key")
-                secret: nconf.get("session:secret")
+                key:    @config.session?.key
+                secret: @config.session?.secret
 
             @app.use (req,res,next) =>
                 if !req.session.userID
@@ -45,7 +44,7 @@ module.exports = class Server extends require('events').EventEmitter
 
         # -- Shoutcast emulation -- #
 
-        @_ua_skip = if nconf.get("ua_skip") then ///#{nconf.get("ua_skip").join("|")}/// else null
+        @_ua_skip = if @config.ua_skip then ///#{@config.ua_skip.join("|")}/// else null
 
         # -- Stream Finder -- #
 

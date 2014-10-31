@@ -21,6 +21,8 @@ module.exports = class Slave extends require("events").EventEmitter
     constructor: (opts) ->
         @options = _u.defaults opts||{}, @DefaultOptions
 
+        @_configured = false
+
         @master = null
 
         @streams        = {}
@@ -51,10 +53,12 @@ module.exports = class Slave extends require("events").EventEmitter
                 @alerts.update "slave_disconnected", @io.id, true
                 @log.proxyToMaster()
 
+        @once "streams", =>
+            @_configured = true
+
         # -- set up our stream server -- #
 
-        # init our server
-        @server = new Server core:@, logger:@log.child(subcomponent:"server")
+        @server = new Server core:@, logger:@log.child(subcomponent:"server"), config:@options
 
         # -- Buffer Stats -- #
 
@@ -68,6 +72,14 @@ module.exports = class Slave extends require("events").EventEmitter
         #    @log.debug "Rewind buffers: " + counts.join(" -- ")
 
         #, 5 * 1000
+
+    #----------
+
+    once_configured: (cb) ->
+        if @_configured
+            cb()
+        else
+            @once "streams", => cb()
 
     #----------
 
@@ -91,8 +103,10 @@ module.exports = class Slave extends require("events").EventEmitter
             else
                 @log.debug "Starting up stream: #{key}", opts:opts
 
-                slog = @log.child stream:key
-                stream = @streams[key] = new Stream @, key, slog, opts
+                if @options.hls
+                    opts.hls_chunk = @options.hls.segment_duration
+
+                stream = @streams[key] = new Stream @, key, @log.child(stream:key), opts
 
                 if @io
                     source = @socketSource stream

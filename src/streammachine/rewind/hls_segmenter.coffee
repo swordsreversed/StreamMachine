@@ -113,6 +113,8 @@ module.exports = class HLSSegmenter
             return true
 
         else
+            console.log "Unsure placement. ", chunk, last_seg, first_seg
+
             @log.error "Not sure where to place segment!!! ", chunk_ts: chunk.ts
 
     #----------

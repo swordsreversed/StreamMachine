@@ -16,7 +16,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         @STATUS = "Initializing"
 
         # initialize RewindBuffer, with support for HTTP Live Streaming
-        super liveStreaming:true, seconds:@opts.seconds, burst:@opts.burst
+        super hls:@opts.hls_chunk, seconds:@opts.seconds, burst:@opts.burst
 
         @StreamTitle  = @opts.metaTitle
         @StreamUrl    = ""

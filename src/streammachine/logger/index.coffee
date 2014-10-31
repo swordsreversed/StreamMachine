@@ -109,6 +109,9 @@ module.exports = class LogController
 
             @child = (opts={}) -> new LogController.Child(@parent,_u.extend({},@opts,opts))
 
+        proxyToMaster: (sock) ->
+            @parent.proxyToMaster(sock)
+
     #----------
 
     class @Console extends winston.transports.Console
