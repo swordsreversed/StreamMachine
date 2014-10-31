@@ -31,7 +31,7 @@ module.exports = class SlaveWorker
 
                 @slave.server.listen listen_via, =>
                     @log.debug "SlaveWorker listening via #{ listen_via }."
-                    cb null, "OK"
+                    cb null, @slave.server.hserver.address()
 
         , (err,rpc) =>
             @_rpc = rpc

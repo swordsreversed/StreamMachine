@@ -2,7 +2,6 @@
 # master to another, as we would during a graceful restart. Test that
 # the new master is listening on the correct ports.
 
-Translator      = ($src "modes/base").HandoffTranslator
 MasterMode      = $src "modes/master"
 IcecastSource   = $src "util/icecast_source"
 

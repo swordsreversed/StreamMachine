@@ -17,7 +17,7 @@ Slave   = require "../slave"
 module.exports = class SlaveMode extends require("./base")
 
     MODE: "Slave"
-    constructor: (@opts) ->
+    constructor: (@opts,cb) ->
         @log = new Logger @opts.log
         @log.debug "Slave Instance initialized"
 
@@ -31,21 +31,39 @@ module.exports = class SlaveMode extends require("./base")
         @_haveHandle    = false
         @_shuttingDown  = false
 
+        @_lastAddress   = null
+
+        # -- Set up Internal RPC -- #
+
+        if process.send?
+            @_rpc = new RPC process, functions:
+                slave_port: (msg,handle,cb) =>
+                    if @_lastAddress
+                        cb null, @_lastAddress.port
+                    else
+                        cb new Error "No address returned yet."
+
+                workers: (msg,handle,cb) =>
+
+        # -- Set up Clustered Workers -- #
+
         cluster.setupMaster
             exec: path.resolve(__dirname,"./slave_worker.js")
 
         cluster.on "online", (worker) =>
             console.log "SlaveWorker online: #{worker.id}"
 
-            w = w:worker, rpc:null, _listening:false
+            w = id:worker.id, w:worker, rpc:null, _listening:false
 
             w.rpc = new RPC worker, functions:
                 worker_configured: (msg,handle,cb) =>
                     if @_haveHandle && !w._listening
-                        w.rpc.request "listen", {fd:@_handle?.fd}, (err) =>
+                        w.rpc.request "listen", {fd:@_handle?.fd}, (err,address) =>
                             @log.error "Worker listen error: #{err}" if err
                             w._listening = true
-                            @lWorkers[ worker.id ] = w
+                            @lWorkers[ w.id ] = w
+                            @_lastAddress = address
+                            console.log "worker listening: #{ w.id }"
 
                             @emit "worker_listening"
 
@@ -61,13 +79,6 @@ module.exports = class SlaveMode extends require("./base")
                     return false
 
                 @workers[ worker.id ] = w
-
-            #console.log "Asking worker to listen to ", @_handle?.fd
-            #obj.t.send("listen",fd:@_handle?.fd) if @_haveHandle
-
-            #obj.t.once "streams", =>
-            #    @lWorkers[ worker.id ] = @workers[ worker.id ]
-            #    @emit "worker_listening"
 
         cluster.on "disconnect", (worker) =>
             console.log "SlaveWorker disconnect: #{worker.id}"
@@ -87,19 +98,15 @@ module.exports = class SlaveMode extends require("./base")
         else
             # we'll listen via our configured port
             @_haveHandle = true
-            for id,w of @workers
-                w.rpc.request "listen", null, (err) =>
-                    @log.error "Worker listen error: #{err}" if err
+            cb? null, @
 
-        #@once "server_handle", =>
-        #    w.t.send("listen",fd:@_handle.fd) for id,w of @workers
 
     #----------
 
     _respawnWorkers: ->
         # if our worker count has dropped below our minimum, launch more workers
         wl = Object.keys(@workers).length
-        _.times ( nconf.get("cluster") - wl ), => cluster.fork()
+        _.times ( @opts.cluster - wl ), => cluster.fork()
 
     #----------
 
