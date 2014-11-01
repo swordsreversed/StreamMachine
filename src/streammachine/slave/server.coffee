@@ -177,7 +177,7 @@ module.exports = class Server extends require('events').EventEmitter
     #----------
 
     listen: (port,cb) ->
-        console.log "Start listening"
+        @logger.info "SlaveWorker called listen"
         @hserver = @app.listen port, =>
             @io = require("socket.io").listen @hserver
             @emit "io_connected", @io

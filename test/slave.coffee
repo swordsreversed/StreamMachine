@@ -56,15 +56,29 @@ describe "Slave Mode", ->
 
             slave = s
 
-            slave.once "worker_listening", ->
+            slave.once "full_strength", ->
                 slave_port = slave._lastAddress.port
                 expect(slave_port).to.not.be.undefined
                 expect(slave_port).to.be.number
                 done()
 
     it "has the correct number of listening workers", (done) ->
-        # FIXME: How could this happen more elegantly?
-        setTimeout =>
-            expect(Object.keys(slave.lWorkers).length).to.eql slave_config.cluster
+        expect(Object.keys(slave.lWorkers).length).to.eql slave_config.cluster
+        done()
+
+    it "has our stream information", (done) ->
+        slave.status (err,status) ->
+            throw err if err
+
+            # we should be dealing with our first two workers, so our
+            # status keys should be '1' and '2'
+            expect(status['1']).to.not.be.undefined
+
+
+            # we'll check that the stream is present in the first worker
+            expect(status[ '1' ].streams).to.have.key STREAM1.key
+
+            # no source connected, so buffer should be 0
+            expect(status[ '1' ].streams[ STREAM1.key ].buffer_length).to.eql 0
+
             done()
-        , 1000

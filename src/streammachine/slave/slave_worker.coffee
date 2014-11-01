@@ -11,6 +11,9 @@ module.exports = class SlaveWorker
         # -- Set up RPC -- #
 
         new RPC process, functions:
+            status: (msg,handle,cb) =>
+                @slave._streamStatus cb
+
             send_handle: (msg,handle,cb) =>
                 if @slave.server.hserver
                     cb null, null, @slave.server.hserver
@@ -36,7 +39,6 @@ module.exports = class SlaveWorker
         , (err,rpc) =>
             @_rpc = rpc
 
-            console.log "Requesting config"
             @_rpc.request "config", (err,obj) =>
                 if err
                     console.error "Error loading config: #{err}"

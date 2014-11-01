@@ -18,7 +18,7 @@ module.exports = class SlaveMode extends require("./base")
 
     MODE: "Slave"
     constructor: (@opts,cb) ->
-        @log = new Logger @opts.log
+        @log = (new Logger @opts.log).child({component:'slave',pid:process.pid})
         @log.debug "Slave Instance initialized"
 
         process.title = "StreamM:slave"
@@ -51,9 +51,9 @@ module.exports = class SlaveMode extends require("./base")
             exec: path.resolve(__dirname,"./slave_worker.js")
 
         cluster.on "online", (worker) =>
-            console.log "SlaveWorker online: #{worker.id}"
+            @log.info "SlaveWorker online: #{worker.id}"
 
-            w = id:worker.id, w:worker, rpc:null, _listening:false
+            w = id:worker.id, w:worker, rpc:null, _listening:false, pid:worker.process.pid
 
             w.rpc = new RPC worker, functions:
                 worker_configured: (msg,handle,cb) =>
@@ -63,9 +63,11 @@ module.exports = class SlaveMode extends require("./base")
                             w._listening = true
                             @lWorkers[ w.id ] = w
                             @_lastAddress = address
-                            console.log "worker listening: #{ w.id }"
 
                             @emit "worker_listening"
+
+                            if Object.keys(@lWorkers).length >= @opts.cluster
+                                @emit "full_strength"
 
                     cb null
 
@@ -81,11 +83,11 @@ module.exports = class SlaveMode extends require("./base")
                 @workers[ worker.id ] = w
 
         cluster.on "disconnect", (worker) =>
-            console.log "SlaveWorker disconnect: #{worker.id}"
+            @log.info "SlaveWorker disconnect: #{worker.id}"
             delete @lWorkers[worker.id]
 
         cluster.on "exit", (worker) =>
-            console.log "SlaveWorker exit: #{worker.id}"
+            @log.info "SlaveWorker exit: #{worker.id}"
             delete @workers[ worker.id ]
             @_respawnWorkers() if !@_shuttingDown
 
@@ -107,6 +109,20 @@ module.exports = class SlaveMode extends require("./base")
         # if our worker count has dropped below our minimum, launch more workers
         wl = Object.keys(@workers).length
         _.times ( @opts.cluster - wl ), => cluster.fork()
+
+    #----------
+
+    status: (cb) ->
+        # send back a status for each of our workers
+        status = {}
+        af = _.after Object.keys(@workers).length, =>
+            cb null, status
+
+        for id,w of @workers
+            do (id,w) =>
+                w.rpc.request "status", (err,s) =>
+                    status[ id ] = listening:w._listening, streams:s, pid:w.pid
+                    af()
 
     #----------
 
