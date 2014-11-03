@@ -66,19 +66,14 @@ describe "Slave Mode", ->
         expect(Object.keys(slave.lWorkers).length).to.eql slave_config.cluster
         done()
 
-    it "has our stream information", (done) ->
+    it "has our stream information in all workers", (done) ->
         slave.status (err,status) ->
             throw err if err
 
-            # we should be dealing with our first two workers, so our
-            # status keys should be '1' and '2'
-            expect(status['1']).to.not.be.undefined
+            expect(Object.keys(status)).to.have.length 2
 
-
-            # we'll check that the stream is present in the first worker
-            expect(status[ '1' ].streams).to.have.key STREAM1.key
-
-            # no source connected, so buffer should be 0
-            expect(status[ '1' ].streams[ STREAM1.key ].buffer_length).to.eql 0
+            for id,w of status
+                expect(w.streams).to.have.key STREAM1.key
+                expect(w.streams[ STREAM1.key ].buffer_length).to.eql 0
 
             done()

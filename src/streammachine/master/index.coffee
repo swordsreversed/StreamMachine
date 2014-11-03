@@ -2,7 +2,8 @@ _       = require "underscore"
 temp    = require "temp"
 net     = require "net"
 fs      = require "fs"
-express = require "express"
+express     = require "express"
+Throttle    = require "throttle"
 
 Redis       = require "../redis"
 RedisConfig = require "../redis_config"
@@ -473,7 +474,7 @@ module.exports = class Master extends require("events").EventEmitter
                 @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
                 req.stream.getRewind (err,writer) =>
-                    writer.pipe(res)
+                    writer.pipe( new Throttle 200*1024*1024 ).pipe(res)
                     res.on "end", =>
                         @master.log.debug "Rewind dumpBuffer finished."
 
