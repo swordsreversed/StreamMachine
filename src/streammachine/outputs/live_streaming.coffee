@@ -41,49 +41,21 @@ module.exports = class LiveStreaming extends BaseOutput
 
     class @Index extends BaseOutput
         constructor: (@stream,@opts) ->
-            @stream._once_source_loaded =>
-                @local = @opts.local || tz
+            super "live_streaming"
 
-                if @stream.hls_segmenter.segments.length <= 3
-                    @opts.res.status(500).end "No data."
-                    return false
+            session_info = if @client.session_id && @client.pass_session
+               "?session_id=#{@client.session_id}"
 
-                # skip the first three segments to provide a little cushion
-                # against them getting expired before playback
-                segments = @stream.hls_segmenter.segments[2..-1]
+            index = @opts.idx.index(session_info)
 
-                super "live_streaming"
-
+            if index
                 @opts.res.writeHead 200,
                     "Content-type": "application/vnd.apple.mpegurl"
 
-                @opts.res.write """
-                #EXTM3U
-                #EXT-X-VERSION:3
-                #EXT-X-TARGETDURATION:#{@stream.hls_segmenter.segment_length}
-                #EXT-X-MEDIA-SEQUENCE:#{segments[0].id}
-                #EXT-X-ALLOW-CACHE:NO
+                @opts.res.end index
 
-                """
-
-                # List all segments, skipping the first three (so that we don't
-                # deliver an index and then expire the segment a second later)
-
-                for seg in segments
-                    seg_record = seg.index_record ||= """
-                    #EXTINF:#{seg.duration / 1000},#{@stream.StreamTitle}
-                    #EXT-X-PROGRAM-DATE-TIME:#{@local(seg.ts,"%FT%T.%3N%:z")}
-                    /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
-                    """
-
-                    @opts.res.write seg_record
-
-                    if @client.session_id && @client.pass_session
-                       @opts.res.write "?session_id=#{@client.session_id}"
-
-                    @opts.res.write "\n"
-
-                @opts.res.end()
+            else
+                @opts.res.status(500).end "No data."
 
     #----------
 

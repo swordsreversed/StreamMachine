@@ -118,6 +118,8 @@ module.exports = class Slave extends require("events").EventEmitter
                 sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
                 sg.addStream @streams[key]
 
+                @streams[key].hls_segmenter?.syncToGroup sg
+
             # should this stream accept requests to /?
             if opts.root_route
                 @root_route = key

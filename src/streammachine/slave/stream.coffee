@@ -49,6 +49,8 @@ module.exports = class Stream extends require('../rewind_buffer')
 
         # -- Wait to Load Rewind Buffer -- #
 
+        @emit "_source_waiting"
+
         @_sourceInitializing = true
         @_sourceInitT = setTimeout =>
             @_sourceInitializing = false
@@ -63,6 +65,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                     @log.error "Source getRewind encountered an error: #{err}", error:err
                     @_sourceInitializing = false
                     @emit "_source_init"
+                    #@emit "rewind_loaded"
 
                     return false
 
@@ -72,6 +75,7 @@ module.exports = class Stream extends require('../rewind_buffer')
 
                     @_sourceInitializing = false
                     @emit "_source_init"
+                    #@emit "rewind_loaded"
 
     #----------
 
@@ -240,7 +244,8 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
-            @streams = {}
+            @streams    = {}
+            @hls_min_id = null
 
         #----------
 
@@ -255,11 +260,19 @@ module.exports = class Stream extends require('../rewind_buffer')
                     @log.debug "SG #{@key}: Stream disconnected: #{ stream.key }"
                     delete @streams[ stream.key ]
 
-
                 stream.on "disconnect", delFunc
 
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
+
+        #----------
+
+        hlsUpdateMinSegment: (id) ->
+            if !@hls_min_id || id > @hls_min_id
+                prev = @hls_min_id
+                @hls_min_id = id
+                @emit "hls_update_min_segment", id
+                @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
 
         #----------
 

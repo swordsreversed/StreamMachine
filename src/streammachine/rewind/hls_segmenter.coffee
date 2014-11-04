@@ -1,4 +1,5 @@
 _ = require "underscore"
+tz      = require 'timezone'
 
 # -- HTTP Live Streaming Segmenter -- #
 
@@ -8,11 +9,14 @@ _ = require "underscore"
 # buffers:  array of buffer refs
 # header:   computed ID3 header
 
-module.exports = class HLSSegmenter
+module.exports = class HLSSegmenter extends require("events").EventEmitter
     constructor: (@rewind,@segment_length,@log) ->
         @segments       = []
         @_segments      = []
         @segment_idx    = {}
+        @_rewindLoading = false
+
+        @_min_id        = null
 
         # The RewindBuffer can get data simultaneously inserted from two
         # directions.  New live data will be emitted as an rpush and will
@@ -32,9 +36,65 @@ module.exports = class HLSSegmenter
 
             if (f_s = @_segments[0])? && chunk.ts > f_s.ts
                 @_segments.shift()
-                if (i = @segments.indexOf(f_s)) > -1
-                    @segments.splice(i,1)
+                # FIXME: Could this segment ever be anything but the first one
+                # if it is in our segments array? Old code suggested yes, but
+                # I can't see how. Simplifying until proven wrong.
+
+                if @segments[0] == f_s
+                    @segments.shift()
                     delete @segment_idx[f_s.id]
+                    @emit "remove", f_s
+                    @group?.hlsUpdateMinSegment @segments[0].id
+
+        @rewind.once "_source_waiting", =>
+            @_rewindLoading = true
+
+        @rewind.once "_source_init", =>
+            @log.debug "HLS sees rewind loaded..."
+            @once_queue_settles =>
+                @log.debug "HLS rewind loaded and queue settled. Length: #{@segments.length}"
+                if @segments[0]
+                    @group?.hlsUpdateMinSegment @segments[0].id
+
+                @_rewindLoading = false
+
+        @_gSyncFunc = (id) =>
+            @_min_id = id
+
+            # we've received a group minimum segment number. shift off any
+            # segments before the id number given
+            @log.debug "Segmenter asked to set minimum ID of #{ id }"
+
+            # remove from _segments
+            loop
+                if (f_s = @_segments[0])? && f_s.id < id
+                    @_segments.shift()
+                else
+                    break
+
+            # remove from segments
+            loop
+                if (f_s = @segments[0])? && f_s.id < id
+                    @segments.shift()
+                    delete @segment_idx[ f_s.id ]
+                    @emit "remove", f_s
+                else
+                    break
+
+            @log.debug "First segment id is now #{ @segments[0]?.id } (Length #{ @segments.length })"
+
+
+    #----------
+
+    syncToGroup: (g) ->
+        if @group
+            @group = null
+            @group.removeListener "hls_update_min_segment", @_gSyncFunc
+
+        @group = g
+        @group.addListener "hls_update_min_segment", @_gSyncFunc
+
+        true
 
     #----------
 
@@ -50,7 +110,15 @@ module.exports = class HLSSegmenter
 
     _queueChunk: (c) ->
         @_q.push c
-        @_runQueue()
+        @_runQueue() if !@_qRunning
+
+    #----------
+
+    once_queue_settles: (cb) ->
+        if @_qRunning
+            @once "queue_settled", => cb()
+        else
+            cb()
 
     #----------
 
@@ -59,9 +127,10 @@ module.exports = class HLSSegmenter
 
         if @_q.length > 0
             c = @_q.shift()
-            @_inject c, => @_runQueue
+            @_inject c, => @_runQueue()
         else
             @_qRunning = false
+            @emit "queue_settled"
 
     #----------
 
@@ -83,6 +152,11 @@ module.exports = class HLSSegmenter
         else if !last_seg || (chunk.ts >= last_seg.end_ts)
             # create a new segment for it
             seg = @_createSegment chunk.ts
+
+            if !seg
+                cb()
+                return false
+
             seg.buffers.push chunk
 
             @_segments.push seg
@@ -100,6 +174,11 @@ module.exports = class HLSSegmenter
         else if chunk.ts < first_seg.ts
             # create a new segment for it
             seg = @_createSegment chunk.ts
+
+            if !seg
+                cb()
+                return false
+
             seg.buffers.push chunk
 
             @_segments.unshift seg
@@ -121,6 +200,10 @@ module.exports = class HLSSegmenter
 
     _createSegment: (ts) ->
         seg_id = Math.floor( Number(ts) / 1000 / @segment_length )
+
+        # don't create a segment we've been told not to have
+        if @_min_id && seg_id < @_min_id
+            return false
 
         id:         seg_id
         ts:         new Date( seg_id * 1000 * @segment_length )
@@ -146,6 +229,11 @@ module.exports = class HLSSegmenter
         # add the segment to our index lookup
         @segment_idx[ segment.id ] = segment
 
+        @emit "add", segment
+
+        # if this was our first segment (after rewind load), alert the StreamGroup
+        @group?.hlsUpdateMinSegment @segments[0].id if @segments.length == 1 && !@_rewindLoading
+
         cb()
 
     #----------
@@ -156,4 +244,4 @@ module.exports = class HLSSegmenter
         else
             cb new Error "HTTP Live Streaming segment not found."
 
-#----------
+    #----------
