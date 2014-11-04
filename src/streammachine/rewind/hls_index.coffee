@@ -93,6 +93,7 @@ module.exports = class HLSIndex
             #console.log "Seg ts / Last seg ts ", seg.ts, last_end_ts
             if seg.id - 1 == last_id
                 # yes...
+
                 idx_segs.push new Buffer """
                 #EXTINF:#{seg.duration / 1000},
                 /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
@@ -100,13 +101,6 @@ module.exports = class HLSIndex
 
             else
                 # no... mark discontinuity
-
-                # inject empty "segments" in the gap
-                #for id in [last_id+1..seg.id-1]
-                #    idx_segs.push new Buffer """
-                #    #EXTINF:0,
-                #    /#{@stream.key}/ts/#{id}.#{@stream.opts.format}
-                #    """
 
                 idx_segs.push new Buffer """
                 #EXT-X-DISCONTINUITY

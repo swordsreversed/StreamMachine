@@ -37,7 +37,7 @@
         "campfire":             "~0.1.1",
         "pagerduty":            "~0.0.3",
         "temp":                 "~0.5.0",
-        "timezone":             "~0.0.30",
+        "timezone":             "0.0.34",
         "fluent-ffmpeg":        "~1.7.1",
         "elasticsearch":        "~2.2.0",
         "throttle":             "~1.0.0",
