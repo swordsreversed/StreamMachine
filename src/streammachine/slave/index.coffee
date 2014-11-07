@@ -7,6 +7,7 @@ IO      = require "./slave_io"
 
 URL     = require "url"
 HTTP    = require "http"
+tz      = require 'timezone'
 
 module.exports = class Slave extends require("events").EventEmitter
     DefaultOptions:
@@ -103,8 +104,12 @@ module.exports = class Slave extends require("events").EventEmitter
             else
                 @log.debug "Starting up stream: #{key}", opts:opts
 
-                if @options.hls
-                    opts.hls_chunk = @options.hls.segment_duration
+                # HLS support?
+                opts.hls = true if @options.hls
+
+                # FIXME: Eventually it would make sense to allow a per-stream
+                # value here
+                opts.tz = tz(require "timezone/zones")(@options.timezone||"UTC")
 
                 stream = @streams[key] = new Stream @, key, @log.child(stream:key), opts
 
@@ -118,7 +123,7 @@ module.exports = class Slave extends require("events").EventEmitter
                 sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
                 sg.addStream @streams[key]
 
-                @streams[key].hls_segmenter?.syncToGroup sg
+                #@streams[key].hls_segmenter?.syncToGroup sg
 
             # should this stream accept requests to /?
             if opts.root_route
@@ -284,6 +289,9 @@ module.exports = class Slave extends require("events").EventEmitter
             @slave.io.on "audio:#{@stream.key}", (chunk) =>
                 @emit "data", chunk
 
+            @slave.io.on "hls_snapshot:#{@stream.key}", (snapshot) =>
+                @emit "hls_snapshot", snapshot
+
             @_streamKey = null
 
             @slave.io.vitals @stream.key, (err,obj) =>
@@ -309,6 +317,11 @@ module.exports = class Slave extends require("events").EventEmitter
                 cb? @_streamKey
             else
                 @once "vitals", => cb? @_streamKey
+
+        #----------
+
+        getHLSSnapshot: (cb) ->
+            @slave.io.hls_snapshot @stream.key, cb
 
         #----------
 

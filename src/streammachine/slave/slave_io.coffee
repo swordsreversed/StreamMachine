@@ -53,8 +53,6 @@ module.exports = class SlaveIO extends require("events").EventEmitter
                     @connected = true
                     @emit "connected"
 
-                    #@_log.proxyToMaster @master
-
                 else
                     @_log.error "Master OK ping response invalid: #{res}"
                     # FIXME: exit?
@@ -95,10 +93,22 @@ module.exports = class SlaveIO extends require("events").EventEmitter
 
             @emit "audio:#{obj.stream}", obj.chunk
 
+        @io.on "hls_snapshot", (obj) =>
+            # run through the snapshot and convert timestamps back into date
+            # objects
+            for s in obj.snapshot.segments||[]
+                s.ts        = new Date(s.ts) if s.ts
+                s.end_ts    = new Date(s.end_ts) if s.end_ts
+
+            @emit "hls_snapshot:#{obj.stream}", obj.snapshot
+
     #----------
 
     vitals: (key,cb) ->
         @io.emit "vitals", key, cb
+
+    hls_snapshot: (key,cb) ->
+        @io.emit "hls_snapshot", key, cb
 
     log: (obj) ->
         @io.emit "log", obj

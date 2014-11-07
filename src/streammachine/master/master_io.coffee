@@ -29,9 +29,6 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
         @log.info "Master now listening for slave connections."
 
-        # attach proxies for any streams that are already up
-        #@_attachIOProxy(s) for key,s of @streams
-
         # add our authentication
         @io.use (socket,next) =>
             @log.silly "Authenticating slave connection."
@@ -60,6 +57,12 @@ module.exports = class MasterIO extends require("events").EventEmitter
                 @slaves[sock.id].on "disconnect", =>
                     delete @slaves[ sock.id ]
                     @emit "disconnect", sock.id
+
+    #----------
+
+    broadcastHLSSnapshot: (k,snapshot) ->
+        for id,s of @slaves
+            s.sock.emit "hls_snapshot", {stream:k,snapshot:snapshot}
 
     #----------
 
@@ -121,6 +124,10 @@ module.exports = class MasterIO extends require("events").EventEmitter
             @sock.on "vitals", (key, cb) =>
                 # respond with the stream's vitals
                 @sio.master.vitals key, cb
+
+            @sock.on "hls_snapshot", (key,cb) =>
+                # respond with the current array of HLS segments for this stream
+                @sio.master.getHLSSnapshot key, cb
 
             # attach disconnect handler
             sock.on "disconnect", =>

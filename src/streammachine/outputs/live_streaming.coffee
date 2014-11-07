@@ -46,7 +46,7 @@ module.exports = class LiveStreaming extends BaseOutput
             session_info = if @client.session_id && @client.pass_session
                "?session_id=#{@client.session_id}"
 
-            index = @opts.idx.index(session_info)
+            index = @stream.hls.index(session_info) if @stream.hls
 
             if index
                 @opts.res.writeHead 200,

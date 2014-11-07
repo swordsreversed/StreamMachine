@@ -6,6 +6,7 @@ Rewind              = require '../rewind_buffer'
 FileSource          = require "../sources/file"
 ProxySource         = require '../sources/proxy_room'
 TranscodingSource   = require "../sources/transcoding"
+HLSSegmenter        = require "../rewind/hls_segmenter"
 
 # Master streams are about source management.
 
@@ -59,13 +60,23 @@ module.exports = class Stream extends require('events').EventEmitter
         # set up a rewind buffer, for use in bringing new slaves up to speed
         # or to transfer to a new master when restarting
         @log.info "Initializing RewindBuffer for master stream."
-        @rewind = new Rewind seconds:@opts.seconds, burst:@opts.burst, key:"master__#{@key}", log:@log.child(module:"rewind")
+        @rewind = new Rewind
+            seconds:    @opts.seconds
+            burst:      @opts.burst
+            key:        "master__#{@key}"
+            log:        @log.child(module:"rewind")
+            hls:        @opts.hls?.segment_duration
 
         # Rewind listens to us, not to our source
         @rewind.emit "source", @
 
         # Pass along buffer loads
         @rewind.on "buffer", (c) => @emit "buffer", c
+
+        # if we're doing HLS, pass along new segments
+        if @opts.hls?
+            @rewind.hls_segmenter.on "snapshot", (snap) =>
+                @emit "hls_snapshot", snap
 
         # -- Set up data functions -- #
 
@@ -149,6 +160,14 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
 
+    getHLSSnapshot: (cb) ->
+        if @rewind.hls_segmenter
+            @rewind.hls_segmenter.snapshot cb
+        else
+            cb "Stream does not support HLS"
+
+    #----------
+
     getStreamKey: (cb) ->
         if @_vitals
             cb? @_vitals.streamKey
@@ -158,12 +177,10 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
 
     status: ->
-        _u.defaults
-            id:         @key
-            sources:    ( s.info() for s in @sources )
-            rewind:     @rewind.bufferedSecs()
-            vitals:     @_vitals
-        , @opts
+        id:         @key
+        vitals:     @_vitals
+        sources:    ( s.info() for s in @sources )
+        rewind:     @rewind._rStatus()
 
     #----------
 
@@ -357,8 +374,11 @@ module.exports = class Stream extends require('events').EventEmitter
         constructor: (@key,@log) ->
             @streams        = {}
             @transcoders    = {}
+            @hls_min_id     = null
 
             @_stream = null
+
+        #----------
 
         addStream: (stream) ->
             if !@streams[ stream.key ]
@@ -385,6 +405,9 @@ module.exports = class Stream extends require('events').EventEmitter
                 if stream.opts.ffmpeg_args
                     tsource = @_startTranscoder stream
                     @transcoders[ stream.key ] = tsource
+
+                # if HLS is enabled, sync the stream to the rest of the group
+                stream.hls?.syncToGroup @
 
         #----------
 
@@ -413,6 +436,15 @@ module.exports = class Stream extends require('events').EventEmitter
                 @_startTranscoder(stream)
 
             tsource
+
+        #----------
+
+        hlsUpdateMinSegment: (id) ->
+            if !@hls_min_id || id > @hls_min_id
+                prev = @hls_min_id
+                @hls_min_id = id
+                @emit "hls_update_min_segment", id
+                @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
 
         #----------
 

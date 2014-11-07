@@ -4,6 +4,7 @@ MasterStream    = $src "master/stream"
 Logger          = $src "logger"
 FileSource      = $src "sources/file"
 RewindBuffer    = $src "rewind_buffer"
+HLSSegmenter    = $src "rewind/hls_segmenter"
 
 mp3 = $file "mp3/mp3-44100-64-m.mp3"
 
@@ -155,4 +156,30 @@ describe "Master Stream", ->
                         stream.promoteSource source2.uuid
                         stream.promoteSource source3.uuid
 
+    describe "HLS", ->
+        stream = null
+        source = null
+        before (done) ->
+            stream = new MasterStream null, "test1", logger, _.extend {}, STREAM1, hls:{segment_duration:10}
+            source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.5
+            stream.addSource source
 
+            source.once "_loaded", ->
+                # emit 45 seconds of data
+                start_ts = Number(new Date())
+                for i in [0..89]
+                    source._emitOnce new Date( start_ts + i*500 )
+
+                done()
+
+        it "should have created an HLS Segmenter", (done) ->
+            expect( stream.rewind.hls ).to.be.instanceof HLSSegmenter
+            done()
+
+        it "should have loaded data into the RewindBuffer", (done) ->
+            expect( stream.rewind._rbuffer.length() ).to.be.gt 1
+            done()
+
+        it "should have created HLS segments", (done) ->
+            expect( stream.hls.segments.length ).to.be.gt 1
+            done()

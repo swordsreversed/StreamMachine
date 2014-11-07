@@ -1,24 +1,20 @@
 _ = require "underscore"
 
 module.exports = class HLSIndex
-    constructor: (@stream,@segmenter,@tz,@group) ->
+    constructor: (@stream,@tz,@group) ->
         @_shouldRun = false
         @_running   = false
+
+        @_segments  = []
+        @_segment_length = null
 
         @header = null
         @_index  = null
 
-        _bounce_queue = _.debounce =>
-            @queueIndex()
-        , 1000
-
-        @segmenter.on "remove", (seg) =>
-            _bounce_queue()
-
-        @segmenter.on "add", (seg) =>
-            _bounce_queue()
-
-        _bounce_queue()
+    loadSnapshot: (snapshot) ->
+        @_segments          = snapshot.segments
+        @_segment_duration  = snapshot.segment_duration
+        @queueIndex()
 
     queueIndex: ->
         @_shouldRun = true
@@ -37,7 +33,10 @@ module.exports = class HLSIndex
             @_runIndex() if @_shouldRun
 
 
-        if @segmenter.segments.length < 3
+        # clone the segments array, in case it changes while we're running
+        segs = @_segments.slice(0)
+
+        if segs.length < 3
             # not enough buffer for a playlist yet
             @header = null
             @_index  = null
@@ -45,21 +44,19 @@ module.exports = class HLSIndex
             _after()
             return false
 
-        segs = @segmenter.segments.slice(0)
-        #console.log "_runIndex segs length is ", segs.length
-
         # -- build our header -- #
 
         head = new Buffer """
         #EXTM3U
         #EXT-X-VERSION:3
-        #EXT-X-TARGETDURATION:#{@segmenter.segment_length}
+        #EXT-X-TARGETDURATION:#{@_segment_duration}
         #EXT-X-MEDIA-SEQUENCE:#{segs[2].id}
+        #EXT-X-DISCONTINUITY-SEQUENCE:#{segs[2].discontinuitySeq}
         #EXT-X-ALLOW-CACHE:NO
 
         """
 
-        # run through segmenter.segments and build the index
+        # run through segments and build the index
         # We skip the first three segments for the index, but we'll use
         # segment #2 for our next ts
 
@@ -67,7 +64,7 @@ module.exports = class HLSIndex
 
         # -- special handling for our first segment -- #
 
-        if segs[2].id - 1 == segs[1].id
+        if segs[2].discontinuitySeq == segs[1].discontinuitySeq
             # no discontinuity
             idx_segs.push new Buffer """
             #EXTINF:#{segs[2].duration / 1000},
@@ -86,12 +83,11 @@ module.exports = class HLSIndex
 
         # -- loop through remaining segments -- #
 
-        last_id = segs[2].id
+        dseq = segs[2].discontinuitySeq
 
         for seg in segs[3..-1]
             # is the segment where we expect it in the timeline?
-            #console.log "Seg ts / Last seg ts ", seg.ts, last_end_ts
-            if seg.id - 1 == last_id
+            if seg.discontinuitySeq == dseq
                 # yes...
 
                 idx_segs.push new Buffer """
@@ -105,11 +101,11 @@ module.exports = class HLSIndex
                 idx_segs.push new Buffer """
                 #EXT-X-DISCONTINUITY
                 #EXTINF:#{seg.duration / 1000},
-                #EXT-X-PROGRAM-DATE-TIME:#{@tz(Number(seg.end_ts)-seg.duration,"%FT%T.%3N%:z")}
+                #EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts,"%FT%T.%3N%:z")}
                 /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
                 """
 
-            last_id = seg.id
+                dseq = seg.discontinuitySeq
 
         # -- set these as active -- #
 

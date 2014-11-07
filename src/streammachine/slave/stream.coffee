@@ -4,6 +4,7 @@ uuid    = require "node-uuid"
 
 Preroller   = require "./preroller"
 Rewind      = require "../rewind_buffer"
+HLSIndex    = require "../rewind/hls_index"
 
 # Streams are the endpoints that listeners connect to.
 
@@ -15,8 +16,8 @@ module.exports = class Stream extends require('../rewind_buffer')
     constructor: (@core,@key,@log,@opts) ->
         @STATUS = "Initializing"
 
-        # initialize RewindBuffer, with support for HTTP Live Streaming
-        super hls:@opts.hls_chunk, seconds:@opts.seconds, burst:@opts.burst
+        # initialize RewindBuffer
+        super seconds:@opts.seconds, burst:@opts.burst
 
         @StreamTitle  = @opts.metaTitle
         @StreamUrl    = ""
@@ -46,6 +47,18 @@ module.exports = class Stream extends require('../rewind_buffer')
 
         # now run configure...
         process.nextTick => @configure(opts)
+
+
+        # -- Set up HLS Index -- #
+
+        if @opts.hls
+            @log.debug "Enabling HLS Index for stream."
+            @hls = new HLSIndex @, @opts.tz
+            @on "hls_snapshot", (snapshot) => @hls.loadSnapshot(snapshot)
+
+            @once "source", (source) =>
+                source.getHLSSnapshot (err,snapshot) =>
+                    @hls.loadSnapshot(snapshot)
 
         # -- Wait to Load Rewind Buffer -- #
 

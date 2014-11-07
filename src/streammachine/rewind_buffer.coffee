@@ -43,13 +43,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # classes can work with those pieces
         @_rlisteners = []
 
-        # -- are we doing rewind dumps? -- #
-
-        #@_dump = null
-
-        #if nconf.get("rewind_dump")
-        #    @_dump = new Dumper @, nconf.get("rewind_dump")
-
         # -- instantiate our memory buffer -- #
 
         @_rbuffer = rewind_opts.buffer_store || new MemoryStore
@@ -60,6 +53,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         # -- set up Live Streaming segments -- #
 
         if rewind_opts.hls
+            @log.debug "Setting up HLS Segmenter.", segment_duration:rewind_opts.hls
             @hls_segmenter = new HLSSegmenter @, rewind_opts.hls, @log
 
         # -- set up header and frame functions -- #
@@ -194,8 +188,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # any incoming data.
 
     loadBuffer: (stream,cb) ->
+        @emit "rewind_loading"
+
         parser = Dissolve()
-            .uint8("header_length")
+            .uint32le("header_length")
             .tap ->
                 @buffer("header",@vars.header_length)
                     .tap ->
@@ -226,13 +222,19 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                     @emit "header", c
                     @_rChunkLength emitDuration:c.secs_per_chunk, streamKey:c.stream_key
 
+                    if c.hls && @hls_segmenter
+                        @hls_segmenter._loadMap c.hls
+
                 else
                     @_insertBuffer(c)
                     @emit "buffer", c
 
+                true
+
         parser.on "end", =>
             obj = seconds:@bufferedSecs(), length:@_rbuffer.length()
             @log.info "RewindBuffer is now at ", obj
+            @emit "rewind_loaded"
             cb? null, obj
 
     #----------
@@ -247,9 +249,18 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 cb err
                 return false
 
-            writer = new RewindBuffer.RewindWriter rbuf_copy, @_rsecsPerChunk, @_rstreamKey
+            go = (hls) =>
+                writer = new RewindBuffer.RewindWriter rbuf_copy, @_rsecsPerChunk, @_rstreamKey, hls
+                cb null, writer
 
-            cb null, writer
+            if @hls_segmenter
+                @hls_segmenter._dumpMap (err,info) =>
+                    return cb err if err
+                    go info
+
+            else
+                go()
+
 
     #----------
 
@@ -383,7 +394,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     class @RewindWriter extends require("stream").Readable
-        constructor: (@buf,@secs,@streamKey) ->
+        constructor: (@buf,@secs,@streamKey,@hls) ->
             @c          = Concentrate()
             @slices     = 0
             @i          = @buf.length - 1
@@ -408,9 +419,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 end_ts:         @buf[ @buf.length - 1 ].ts
                 secs_per_chunk: @secs
                 stream_key:     @streamKey
+                hls:            @hls
 
             # header buffer length
-            @c.uint8 header_buf.length
+            @c.uint32le header_buf.length
 
             # header buffer json
             @c.buffer header_buf

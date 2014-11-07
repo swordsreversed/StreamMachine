@@ -77,3 +77,5 @@ describe "Slave Mode", ->
                 expect(w.streams[ STREAM1.key ].buffer_length).to.eql 0
 
             done()
+
+

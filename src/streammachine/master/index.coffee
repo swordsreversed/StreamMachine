@@ -175,7 +175,8 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _startStream: (key,opts) ->
-        stream = new Stream @, key, @log.child(stream:key), opts
+        stream = new Stream @, key, @log.child(stream:key), _.extend opts,
+            hls:        @options.hls
 
         if stream
             # attach a listener for configs
@@ -263,6 +264,14 @@ module.exports = class Master extends require("events").EventEmitter
     vitals: (stream,cb) ->
         if s = @streams[ stream ]
             s.vitals cb
+        else
+            cb "Invalid Stream"
+
+    #----------
+
+    getHLSSnapshot: (stream,cb) ->
+        if s = @streams[ stream ]
+            s.getHLSSnapshot cb
         else
             cb "Invalid Stream"
 
@@ -489,9 +498,14 @@ module.exports = class Master extends require("events").EventEmitter
             @dataFunc = (chunk) =>
                 @master.slaves.broadcastAudio @key, chunk
 
+            @hlsSnapFunc = (snapshot) =>
+                @master.slaves.broadcastHLSSnapshot @key, snapshot
+
             @stream.on "data", @dataFunc
+            @stream.on "hls_snapshot", @hlsSnapFunc
 
         destroy: ->
             @stream.removeListener "data", @dataFunc
+            @stream.removeListener "hls_snapshot", @hlsSnapFunc
 
     #----------

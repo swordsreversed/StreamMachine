@@ -4,9 +4,6 @@ util    = require 'util'
 fs      = require 'fs'
 path    = require 'path'
 uuid    = require 'node-uuid'
-tz      = require 'timezone'
-
-HLSIndex    = require "../rewind/hls_index"
 
 module.exports = class Server extends require('events').EventEmitter
     DefaultOptions:
@@ -19,16 +16,6 @@ module.exports = class Server extends require('events').EventEmitter
         @core   = @opts.core
         @logger = @opts.logger
         @config = @opts.config
-
-        @local = tz(require "timezone/zones")(@config.timezone||"UTC")
-
-        # -- maintain HLS Index Objects -- #
-
-        @hls_indices = {}
-        if @opts.config.hls?
-            @opts.core.once_configured =>
-                @_setUpHLSIndices @opts.core.streams
-                @opts.core.on "streams", (streams) => @_setUpHLSIndices(streams)
 
         # -- set up our express app -- #
 
@@ -136,7 +123,7 @@ module.exports = class Server extends require('events').EventEmitter
             new @core.Outputs.live_streaming.GroupIndex req.group, req:req, res:res
 
         @app.get "/:stream.m3u8", (req,res) =>
-            new @core.Outputs.live_streaming.Index req.stream, req:req, res:res, idx:@hls_indices[ req.stream.key ]
+            new @core.Outputs.live_streaming.Index req.stream, req:req, res:res
 
         @app.get "/:stream/ts/:seg.(:format)", (req,res) =>
             new @core.Outputs.live_streaming req.stream, req:req, res:res, format:req.param("format")
@@ -199,19 +186,5 @@ module.exports = class Server extends require('events').EventEmitter
     close: ->
         console.log "stopListening"
         @hserver?.close => console.log "listening stopped."
-
-    #----------
-
-    _setUpHLSIndices: (streams) ->
-        for k,s of streams
-            console.log "Setting up HLS Index for #{k}"
-            @hls_indices[k] ||= new HLSIndex s, s.hls_segmenter, @local
-
-        # any to remove?
-        for k,idx of @hls_indices
-            if !streams[k]
-                console.log "Removing HLS Index for #{k}"
-                idx.stop()
-                delete @hls_indices[ k ]
 
     #----------
