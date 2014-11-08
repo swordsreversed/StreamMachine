@@ -54,9 +54,9 @@ module.exports = class Stream extends require('../rewind_buffer')
         if @opts.hls
             @log.debug "Enabling HLS Index for stream."
             @hls = new HLSIndex @, @opts.tz
-            @on "hls_snapshot", (snapshot) => @hls.loadSnapshot(snapshot)
 
             @once "source", (source) =>
+                source.on "hls_snapshot", (snapshot) => @hls.loadSnapshot(snapshot)
                 source.getHLSSnapshot (err,snapshot) =>
                     @hls.loadSnapshot(snapshot)
 

@@ -5,8 +5,9 @@ module.exports = class HLSIndex
         @_shouldRun = false
         @_running   = false
 
-        @_segments  = []
-        @_segment_length = null
+        @_segment_idx       = {}
+        @_segments          = []
+        @_segment_length    = null
 
         @header = null
         @_index  = null
@@ -31,7 +32,6 @@ module.exports = class HLSIndex
 
             @_running = false
             @_runIndex() if @_shouldRun
-
 
         # clone the segments array, in case it changes while we're running
         segs = @_segments.slice(0)
@@ -107,10 +107,17 @@ module.exports = class HLSIndex
 
                 dseq = seg.discontinuitySeq
 
+        # -- build the segment map -- #
+
+        seg_map = {}
+        for s in segs
+            seg_map[ s.id ] = s
+
         # -- set these as active -- #
 
         @header = head
         @_index = idx_segs
+        @_segment_idx = seg_map
 
         _after()
 
@@ -125,3 +132,19 @@ module.exports = class HLSIndex
         b = [@header]
         b.push seg,session for seg in @_index
         return Buffer.concat(b).toString()
+
+    #----------
+
+    pumpSegment: (rewinder,id,cb) ->
+        # given a segment id, look the segment up in our store to get start ts
+        # and duration, then ask the RewindBuffer for the appropriate data
+
+        if s = @_segment_idx[ Number(id) ]
+            # valid segment...
+            dur = @stream.secsToOffset s.duration / 1000
+            console.log "Finding offset for timestamp ", s.ts
+            @stream.findTimestamp s.ts, (err,offset) =>
+                console.log "Segment #{ id } offset/duration is ", offset, dur
+                @stream.pumpFrom rewinder, offset, dur, false, cb
+        else
+            cb "Segment not found in index."

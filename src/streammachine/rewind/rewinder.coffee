@@ -65,14 +65,12 @@ module.exports = class Rewinder extends require("stream").Readable
             if opts?.live_segment
                 # we're sending a segment of HTTP Live Streaming data
                 @_pumpOnly = true
-                @rewind.hls_segmenter.pumpSegment opts.live_segment, (err,segment) =>
+                @rewind.hls.pumpSegment @, opts.live_segment, (err,info) =>
                     return cb err if err
 
-                    @_insert segment
+                    @rewind.log.silly "Pumping Live segment with ", duration:info.duration, length:info.length
 
-                    # return pump information
-                    @rewind.log.silly "Pumping Live segment with ", duration:segment.duration, length:segment.data.length
-                    finalizeFunc duration:segment.duration, length:segment.data.length
+                    finalizeFunc info
 
             else if opts?.pumpOnly
                 # we're just giving one pump of data, then EOF

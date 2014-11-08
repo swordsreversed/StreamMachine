@@ -108,7 +108,12 @@ module.exports = class SlaveIO extends require("events").EventEmitter
         @io.emit "vitals", key, cb
 
     hls_snapshot: (key,cb) ->
-        @io.emit "hls_snapshot", key, cb
+        @io.emit "hls_snapshot", key, (err,snapshot) =>
+            for s in snapshot.segments||[]
+                s.ts        = new Date(s.ts) if s.ts
+                s.end_ts    = new Date(s.end_ts) if s.end_ts
+
+            cb err,snapshot
 
     log: (obj) ->
         @io.emit "log", obj
