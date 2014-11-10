@@ -142,9 +142,6 @@ module.exports = class HLSIndex
         if s = @_segment_idx[ Number(id) ]
             # valid segment...
             dur = @stream.secsToOffset s.duration / 1000
-            console.log "Finding offset for timestamp ", s.ts
-            @stream.findTimestamp s.ts, (err,offset) =>
-                console.log "Segment #{ id } offset/duration is ", offset, dur
-                @stream.pumpFrom rewinder, offset, dur, false, cb
+            @stream.pumpFrom rewinder, s.ts, dur, false, cb
         else
             cb "Segment not found in index."

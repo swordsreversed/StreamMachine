@@ -2,6 +2,8 @@ _u = require "underscore"
 uuid = require "node-uuid"
 nconf = require "nconf"
 
+Debounce = require "../util/debounce"
+
 module.exports = class Source extends require("events").EventEmitter
 
     #----------
@@ -33,7 +35,7 @@ module.exports = class Source extends require("events").EventEmitter
             # creates a sort of dead mans switch that we use to kill the connection
             # if it stops sending data
 
-            @_pingData = new Source.Debounce @opts.heartbeatTimeout || 30*1000, (last_ts) =>
+            @_pingData = new Debounce @opts.heartbeatTimeout || 30*1000, (last_ts) =>
                 if !@_isDisconnected
                     # data has stopped flowing. kill the connection.
                     @log?.info "Source data stopped flowing.  Killing connection."
@@ -103,38 +105,6 @@ module.exports = class Source extends require("events").EventEmitter
         @_isDisconnected = true
         @chunker.removeAllListeners()
         @parser.removeAllListeners()
-
-    #----------
-
-    class @Debounce
-        constructor: (@wait,@only_once,@cb) ->
-            if _u.isFunction(@only_once)
-                @cb = @only_once
-                @only_once = false
-
-            @last = null
-            @timeout = null
-
-            @_t = =>
-                ago = _u.now() - @last
-
-                if ago < @wait && ago >= 0
-                    @timeout = setTimeout @_t, @wait - ago
-                else
-                    @timeout = null
-                    @cb @last
-
-        ping: ->
-            @last = _u.now()
-
-            if !@timeout
-                @timeout = setTimeout @_t, @wait
-
-            true
-
-        kill: ->
-            clearTimeout @timeout if @timeout
-            @cb = null
 
     #----------
 

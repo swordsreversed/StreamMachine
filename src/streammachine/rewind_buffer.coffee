@@ -295,26 +295,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
-    # convert timestamp to an offset number, if the offset exists in our
-    # buffer.  If not, return an error
-    findTimestamp: (ts,cb) ->
-        req_ts      = Number(ts)
-        first_ts    = Number( @_rbuffer.first().ts )
-        last_ts     = Number( @_rbuffer.last().ts )
-
-        if first_ts <= req_ts <= last_ts
-            # it's in there...
-
-            # how many seconds ago?
-            secs_ago = Math.ceil( (last_ts - req_ts) / 1000 )
-            offset = @secsToOffset secs_ago
-            cb null, offset
-
-        else
-            cb new Error "Timestamp not found in buffer."
-
-    #----------
-
     pumpSeconds: (rewinder,seconds,concat,cb) ->
         # pump the most recent X seconds
         frames = @checkOffsetSecs seconds
@@ -328,12 +308,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         if offset == 0 || length == 0
             cb? null, null
             return true
-
-        # sanity checks...
-        offset = @checkOffset offset
-
-        # can't pump into the future, obviously
-        length = offset if length > offset
 
         @_rbuffer.range offset, length, (err,chunks) =>
             pumpLen     = 0

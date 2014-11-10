@@ -2,6 +2,8 @@ _               = require "underscore"
 FFmpeg          = require "fluent-ffmpeg"
 PassThrough     = require("stream").PassThrough
 
+Debounce        = require "../util/debounce"
+
 module.exports = class TranscodingSource extends require("./base")
     TYPE: -> "Transcoding (#{if @connected then "Connected" else "Waiting"})"
 
@@ -42,7 +44,7 @@ module.exports = class TranscodingSource extends require("./base")
 
             # -- watch for discontinuities -- #
 
-            @_pingData = new TranscodingSource.Debounce (@opts.discontinuityTimeout || 30*1000), (last_ts) =>
+            @_pingData = new Debounce (@opts.discontinuityTimeout || 30*1000), (last_ts) =>
                 # data has stopped flowing. mark a discontinuity in the chunker.
                 @log?.info "Transcoder data interupted. Marking discontinuity."
                 @emit "discontinuity_begin", last_ts
@@ -118,5 +120,3 @@ module.exports = class TranscodingSource extends require("./base")
                 @connected = false
 
             @d.dispose()
-
-
