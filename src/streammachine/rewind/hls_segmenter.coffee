@@ -44,6 +44,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         @injector.once "readable", =>
             # we'll give one more second for a map to come in. Data will just
             # queue up in the injector
+            console.log "HLSSegmenter injector is readable... timeout to finalizer"
             setTimeout =>
                 @_createFinalizer()
             , 1000
@@ -106,7 +107,10 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
     _dumpMap: (cb) ->
         # dump our sequence information and a segment map from the finalizer
-        @finalizer.dumpMap cb
+        if @finalizer
+            @finalizer.dumpMap cb
+        else
+            cb null, null
 
     _loadMap: (map) ->
         @_createFinalizer map
@@ -124,10 +128,13 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
     #----------
 
     snapshot: (cb) ->
-        @finalizer.snapshot (err,segments) =>
-            cb null,
-                segments:           segments
-                segment_duration:   @segment_length
+        if @finalizer
+            @finalizer.snapshot (err,segments) =>
+                cb null,
+                    segments:           segments
+                    segment_duration:   @segment_length
+        else
+            cb null, null
 
     #----------
 
@@ -149,6 +156,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         #----------
 
         _transform: (chunk,encoding,cb) ->
+            console.log "chunk in injector"
             if @last_seg && ( @last_seg.ts <= chunk.ts < @last_seg.end_ts )
                 # in our chunk going forward
                 @last_seg.buffers.push chunk
