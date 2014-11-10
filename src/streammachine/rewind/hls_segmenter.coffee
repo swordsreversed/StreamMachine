@@ -313,13 +313,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         #----------
 
         snapshot: (cb) ->
-            # A snapshot is the segments array with the data stripped out
-            snapshot = []
-            for seg in @segments
-                seg = _.clone(seg)
-                delete seg.data
-                snapshot.push seg
-
+            snapshot = @segments.slice(0)
             cb null, snapshot
 
         #----------
