@@ -407,7 +407,7 @@ module.exports = class Stream extends require('events').EventEmitter
                     @transcoders[ stream.key ] = tsource
 
                 # if HLS is enabled, sync the stream to the rest of the group
-                stream.hls?.syncToGroup @
+                stream.rewind.hls_segmenter?.syncToGroup @
 
         #----------
 
