@@ -41,7 +41,8 @@
         "fluent-ffmpeg":        "~1.7.1",
         "elasticsearch":        "~2.2.0",
         "throttle":             "~1.0.0",
-        "ipc-rpc":              "StreamMachine/ipc-rpc"
+        "ipc-rpc":              "StreamMachine/ipc-rpc",
+        "binary-search": 	"~1.2.0"
     },
     "devDependencies": {
         "webkit-devtools-agent":  "~0.3.1",
