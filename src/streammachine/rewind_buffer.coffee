@@ -190,6 +190,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     loadBuffer: (stream,cb) ->
         @emit "rewind_loading"
 
+        if !stream
+            # Calling loadBuffer with no stream is really just for testing
+            process.nextTick => @emit "rewind_loaded"
+
+            @hls_segmenter._loadMap null if @hls_segmenter
+
+            return cb null, seconds:0, length:0
+
         parser = Dissolve()
             .uint32le("header_length")
             .tap ->

@@ -36,10 +36,10 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             @injector.pipe(@finalizer)
             @segments = @finalizer.segments
 
-            # The 'add' event is only emitted for forward-facing segments
-            # and discontinuities
             @finalizer.on "add", => @_snapDebounce.ping()
-            #@finalizer.on "add", (seg) => @emit "segment", seg
+            @finalizer.on "remove", =>
+                @_snapDebounce.ping()
+                @group?.hlsUpdateMinSegment @segments[0].id if !@_rewindLoading
 
             @emit "_finalizer"
 
@@ -63,13 +63,10 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             # Data is being removed from the rewind buffer.  we should
             # clean up our segments as needed
 
-            @finalizer.expire chunk.ts, (err,seg) =>
+            @finalizer.expire chunk.ts, (err,seg_id) =>
                 if err
                     @log.error "Error expiring audio chunk: #{err}"
                     return false
-
-                if seg
-                    @group?.hlsUpdateMinSegment @finalizer.segments[0].id
 
         # This event is triggered when RewindBuffer gets a call to loadBuffer.
         # We use it to make sure we don't emit an UpdateMinSegment call while
@@ -81,15 +78,16 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         # Once we're done processing the data it received, we should update our
         # group with our first segment ID.
         @rewind.once "rewind_loaded", =>
-            # @once_queue_settles =>
-            #     @log.debug "HLS rewind loaded and settled. Length: #{@segments.length}"
-            #     if @segments[0]
-            #         @group?.hlsUpdateMinSegment @segments[0].id
-
+            @once "snapshot", ->
+                @log.debug "HLS rewind loaded and settled. Length: #{@segments.length}"
                 @_rewindLoading = false
 
+                if @segments[0]
+                    @group?.hlsUpdateMinSegment @segments[0].id
+
         @_gSyncFunc = (id) =>
-            @finalizer.setMinID id
+            @finalizer.setMinID id, (err,seg_id) =>
+                @log.silly "Synced min segment ID to #{id}. Got #{seg_id}."
 
     #----------
 
@@ -223,7 +221,6 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                     duration += b.duration for b in seg.buffers
 
                     if duration >= @segment_length
-                        #console.log "Inj flush pushing ", seg
                         @emit "push", seg
                         @push seg
 
@@ -415,8 +412,5 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             @segment_idx[ segment.id ] = segment
 
             @emit "add", segment
-
-            # if this was our first segment (after rewind load), alert the StreamGroup
-            #@group?.hlsUpdateMinSegment @segments[0].id if @segments.length == 1 && !@_rewindLoading
 
             cb()

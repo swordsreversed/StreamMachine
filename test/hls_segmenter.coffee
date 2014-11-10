@@ -435,111 +435,48 @@ describe "HTTP Live Streaming Segmenter", ->
 
     #----------
 
-    return false
-
-    describe "Standalone", ->
-        beforeEach (done) ->
-            # Set up rewind buffer with HLS enabled using 10-second chunks
-            rewind = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
-            rewind._rChunkLength emitDuration:0.5, streamKey:"testing"
-            done()
-
-        it "creates the Live Streaming Segmenter", (done) ->
-            expect(rewind.hls_segmenter).to.be.an.object
-            expect(rewind.hls_segmenter).to.be.an.instanceof(HLSSegmenter)
-            done()
-
-        it "segments forward-facing data", (done) ->
-            # we'll inject 100 chunks of fake 0.5 second audio data
-
-            for c in f_chunks
-                rewind._insertBuffer c
-
-            # 50 seconds of audio data should have produced four HLS segments
-            # (four whole ones, plus some change)
-
-            expect(rewind.hls_segmenter._segments).to.have.length 7
-            expect(rewind.hls_segmenter.segments).to.have.length 5
-
-            for seg in rewind.hls_segmenter._segments
-                if seg.data
-                    expect(seg.duration).to.be.equal 10
-                else
-                    expect(seg.buffers).to.have.length.below 20
-
-            first_seg = rewind.hls_segmenter._segments[0]
-            # there are 11 half-seconds between our start time and the next segment
-            expect(first_seg.buffers).to.have.length 11
-            expect(first_seg.duration).to.be.undefined
-
-            done()
-
-
-        it "segments injected buffer data", (done) ->
-            for c in b_chunks
-                rewind._insertBuffer c
-
-            expect(rewind.hls_segmenter._segments).to.have.length 7
-            expect(rewind.hls_segmenter.segments).to.have.length 5
-
-            for seg in rewind.hls_segmenter._segments
-                if seg.data
-                    expect(seg.duration).to.be.equal 10
-                else
-                    expect(seg.buffers).to.have.length.below 20
-
-            done()
-
-        it "segments mixed data", (done) ->
-            _(f_chunks).each (c) -> rewind._insertBuffer c
-            _(b_chunks).each (c) -> rewind._insertBuffer c
-
-            expect(rewind.hls_segmenter._segments).to.have.length 13
-
-            for seg in rewind.hls_segmenter._segments
-                if seg.data
-                    expect(seg.duration).to.be.equal 10
-                else
-                    expect(seg.buffers).to.have.length.below 20
-
-            done()
-
-        it "removes segments as needed", (done) ->
-            rewind.setRewind(30,30)
-
-            for c in f_chunks
-                rewind._rdataFunc c
-
-            expect(rewind._rbuffer.length()).to.be.equal 60
-            expect(rewind.hls_segmenter.segments).to.have.length 2
-            expect(rewind.hls_segmenter._segments).to.have.length 3
-            expect(Object.keys(rewind.hls_segmenter.segment_idx)).to.have.length 2
-            done()
-
     describe "Stream Group Coordination", ->
         r1 = null
         r2 = null
         sg = null
 
+        g1 = null
+        g2 = null
+
         before (done) ->
             r1 = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
             r1._rChunkLength emitDuration:0.5, streamKey:"testing"
+            r1.loadBuffer null, (err,stats) ->
 
             r2 = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
             r2._rChunkLength emitDuration:0.5, streamKey:"testing"
+            r2.loadBuffer null, (err,stats) ->
 
             sg = new FakeStreamGroup [r1,r2]
+
+            d = new Date()
+            g1 = new ChunkGenerator d, 1000
+            g2 = new ChunkGenerator d, 1000
+
+            g1.on "readable", ->
+                r1._insertBuffer c while c = g1.read()
+
+            g2.on "readable", ->
+                r2._insertBuffer c while c = g2.read()
 
             done()
 
         it "should trigger updates to stream group min segment ID", (done) ->
             # stream all f_chunks into r1, but skip some for r2
-            for c,i in f_chunks
-                r1._insertBuffer c
-                r2._insertBuffer c if i > 25
+            g1.forward 120
+            g2.skip_forward 30, -> g2.forward 90
 
-            expect(sg.updates.length).to.eql 2
-            done()
+            af = _.after 2, ->
+                expect(sg.updates.length).to.eql 2
+                done()
+
+            r1.hls_segmenter.once "snapshot", af
+            r2.hls_segmenter.once "snapshot", af
 
         it "both RewindBuffers should have the correct first segment", (done) ->
             expect(r1._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
@@ -547,9 +484,14 @@ describe "HTTP Live Streaming Segmenter", ->
             done()
 
         it "should stay correct when data is expired unevenly", (done) ->
+            this.timeout 5000
+
             r1.setRewind(30,30)
 
-            expect(sg.updates.length).to.eql 4
-            expect(r1._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
-            expect(r2._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
-            done()
+            af = _.after 2, ->
+                expect(r1._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
+                expect(r2._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
+                done()
+
+            r1.hls_segmenter.once "snapshot", af
+            r2.hls_segmenter.once "snapshot", af
