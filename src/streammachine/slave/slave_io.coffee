@@ -97,8 +97,8 @@ module.exports = class SlaveIO extends require("events").EventEmitter
             # run through the snapshot and convert timestamps back into date
             # objects
             for s in obj.snapshot.segments||[]
-                s.ts        = new Date(s.ts) if s.ts
-                s.end_ts    = new Date(s.end_ts) if s.end_ts
+                for k in ['ts','end_ts','ts_actual','end_ts_actual']
+                    s[k] = new Date(s[k]) if s[k]
 
             @emit "hls_snapshot:#{obj.stream}", obj.snapshot
 
@@ -110,8 +110,8 @@ module.exports = class SlaveIO extends require("events").EventEmitter
     hls_snapshot: (key,cb) ->
         @io.emit "hls_snapshot", key, (err,snapshot) =>
             for s in snapshot.segments||[]
-                s.ts        = new Date(s.ts) if s.ts
-                s.end_ts    = new Date(s.end_ts) if s.end_ts
+                for k in ['ts','end_ts','ts_actual','end_ts_actual']
+                    s[k] = new Date(s[k]) if s[k]
 
             cb err,snapshot
 

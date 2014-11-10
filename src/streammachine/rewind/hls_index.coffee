@@ -142,6 +142,6 @@ module.exports = class HLSIndex
         if s = @_segment_idx[ Number(id) ]
             # valid segment...
             dur = @stream.secsToOffset s.duration / 1000
-            @stream.pumpFrom rewinder, s.ts, dur, false, cb
+            @stream.pumpFrom rewinder, s.ts_actual, dur, false, cb
         else
             cb "Segment not found in index."

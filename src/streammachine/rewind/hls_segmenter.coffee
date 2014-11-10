@@ -291,7 +291,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                 else
                     break
 
-            @log.debug "First segment id is now #{ @segments[0]?.id } (Length #{ @segments.length })"
+            @log.silly "First segment id is now #{ @segments[0]?.id } (Length #{ @segments.length })"
             cb null, @segments[0]?.id
 
         #----------
@@ -333,7 +333,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             seg_id = null
             if @segment_map[ Number(segment.ts) ]?
                 seg_id = @segment_map[ Number(segment.ts) ]
-                @log.debug "Pulling segment ID from loaded segment map", id:seg_id, ts:segment.ts
+                @log.silly "Pulling segment ID from loaded segment map", id:seg_id, ts:segment.ts
 
                 # don't create a segment we've been told not to have
                 if @_min_id && seg_id < @_min_id
@@ -360,8 +360,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             sorted_buffers  = _(segment.buffers).sortBy("ts")
             last_buf        = sorted_buffers[ sorted_buffers.length - 1 ]
 
-            actual_ts   = sorted_buffers[0].ts
-            actual_end  = new Date( Number(last_buf.ts) + last_buf.duration )
+            segment.ts_actual       = sorted_buffers[0].ts
+            segment.end_ts_actual   = new Date( Number(last_buf.ts) + last_buf.duration )
 
             duration        = 0
             data_length     = 0
@@ -370,14 +370,17 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                 duration    += b.duration
                 data_length += b.data.length
 
-            segment.data        = Buffer.concat( b.data for b in sorted_buffers )
+            segment.data_length = data_length
             segment.duration    = duration
 
+
+            # we don't need the actual data any more. The HLSIndex will look the
+            # data up in the RewindBuffer based on the timestamps
             delete segment.buffers
 
             # FIXME: This logic for this should be based on the target segment duration
-            segment.ts      = actual_ts     if Math.abs( segment.ts - actual_ts ) > 3000
-            segment.end_ts  = actual_end    if Math.abs( segment.end_ts - actual_end ) > 3000
+            segment.ts      = segment.ts_actual     if Math.abs( segment.ts - segment.ts_actual ) > 3000
+            segment.end_ts  = segment.ts_end_actual if Math.abs( segment.end_ts - segment.ts_end_actual ) > 3000
 
             # -- Look for Gaps -- #
 
