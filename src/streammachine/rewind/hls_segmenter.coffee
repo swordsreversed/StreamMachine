@@ -1,5 +1,6 @@
-_ = require "underscore"
-tz      = require 'timezone'
+_           = require "underscore"
+tz          = require 'timezone'
+Debounce    = require "../util/debounce"
 
 # -- HTTP Live Streaming Segmenter -- #
 
@@ -24,10 +25,9 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         # either a) data starts coming into the injector or b) we get a map
         # loaded
 
-        @_snapDebounce = _.debounce =>
+        @_snapDebounce = new Debounce 1000, =>
             @finalizer.snapshot (err,snap) =>
                 @emit "snapshot", segment_duration:@segment_length,segments:snap
-        , 1000
 
         @finalizer = null
 
@@ -38,13 +38,14 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
             # The 'add' event is only emitted for forward-facing segments
             # and discontinuities
-            @finalizer.on "add", => @_snapDebounce()
+            @finalizer.on "add", => @_snapDebounce.ping()
             #@finalizer.on "add", (seg) => @emit "segment", seg
+
+            @emit "_finalizer"
 
         @injector.once "readable", =>
             # we'll give one more second for a map to come in. Data will just
             # queue up in the injector
-            console.log "HLSSegmenter injector is readable... timeout to finalizer"
             setTimeout =>
                 @_createFinalizer()
             , 1000
@@ -156,7 +157,6 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         #----------
 
         _transform: (chunk,encoding,cb) ->
-            console.log "chunk in injector"
             if @last_seg && ( @last_seg.ts <= chunk.ts < @last_seg.end_ts )
                 # in our chunk going forward
                 @last_seg.buffers.push chunk

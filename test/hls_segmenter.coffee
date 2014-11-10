@@ -351,15 +351,87 @@ describe "HTTP Live Streaming Segmenter", ->
                 done()
 
             generator.forward 120, ->
-                console.log "Sent 120 segments."
                 exp_ts = new Date( Number(start_ts) + 65*1000 )
 
                 process.nextTick ->
                     finalizer.expire exp_ts, (err,min_id) ->
-                        console.log "Expired up to ", exp_ts
                         expect(min_id).to.eql 5
                         generator.end()
 
+    #----------
+
+    # now put it all together. This time, create an HLSSegmenter and a
+    # RewindBuffer and feed audio through its normal course.
+    describe "RewindBuffer -> Segmenter", ->
+        rewind      = null
+        generator   = null
+
+        before (done) ->
+            rewind = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
+            rewind._rChunkLength emitDuration:1, streamKey:"testing"
+
+            generator = new ChunkGenerator new Date(), 1000
+
+            generator.on "readable", ->
+                while c = generator.read()
+                    rewind._insertBuffer c
+
+            done()
+
+        it "creates the HLS Segmenter", (done) ->
+            expect(rewind.hls_segmenter).to.be.an.instanceof HLSSegmenter
+            done()
+
+        it "segments source data", (done) ->
+            injector_pushes = 0
+            rewind.hls_segmenter.injector.on "push", ->
+                injector_pushes += 1
+
+            rewind.hls_segmenter.once "_finalizer", ->
+                setTimeout ->
+                    expect(injector_pushes).to.eql 5
+                    expect(rewind.hls_segmenter.finalizer.segments).to.have.length 5
+                    done()
+                , 200
+
+            generator.forward 60
+
+        it "expires segments when the RewindBuffer fills", (done) ->
+            rewind.hls_segmenter.once "snapshot", (snap) ->
+                expect(rewind.bufferedSecs()).to.eql 120
+                expect(snap.segments).to.have.length 12
+                done()
+
+            generator.forward 120
+
+        it "loads segment data from a RewindBuffer dump", (done) ->
+            pt = new require("stream").PassThrough()
+
+            r2 = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
+            r2._rChunkLength emitDuration:1, streamKey:"testing"
+
+            rewind.hls_segmenter.snapshot (err,snap1) ->
+                throw err if err
+
+                r2.loadBuffer pt, (err,stats) ->
+                    throw err if err
+
+                    # -- r2 loaded -- #
+
+                    r2.hls_segmenter.snapshot (err,snap2) ->
+                        throw err if err
+
+                        # FIXME: Currently, this loads in one less than the
+                        # snapshot we exported, since the Injector doesn't see
+                        # that the last segment should be finalized (no data
+                        # pushed beyond the end_ts)
+                        expect(snap2.segments).to.have.length 11
+
+                        done()
+
+                rewind.dumpBuffer (err,writer) ->
+                    throw err if err
+                    writer.pipe(pt)
 
     #----------
 
