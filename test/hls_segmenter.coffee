@@ -342,6 +342,24 @@ describe "HTTP Live Streaming Segmenter", ->
 
             generator.forward 41, -> generator.end()
 
+        it "can expire segments using the expire function", (done) ->
+            finalizer = new HLSSegmenter.Finalizer (new Logger {})
+            injector.pipe(finalizer)
+
+            finalizer.once "finish", ->
+                expect(finalizer.segments.length).to.eql 6
+                done()
+
+            generator.forward 120, ->
+                console.log "Sent 120 segments."
+                exp_ts = new Date( Number(start_ts) + 65*1000 )
+
+                process.nextTick ->
+                    finalizer.expire exp_ts, (err,min_id) ->
+                        console.log "Expired up to ", exp_ts
+                        expect(min_id).to.eql 5
+                        generator.end()
+
 
     #----------
 

@@ -260,7 +260,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
         #----------
 
-        expire: (ts) ->
+        expire: (ts,cb) ->
             # expire any segments whose end_ts values are below this given ts
             loop
                 if (f_s = @segments[0])? && f_s.end_ts < ts
@@ -269,6 +269,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                     @emit "remove", f_s
                 else
                     break
+
+            cb null, @segments[0]?.id
 
         #----------
 
