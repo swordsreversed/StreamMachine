@@ -11,7 +11,7 @@ Throttle        = require "throttle"
 Users = require "./users"
 
 module.exports = class Router
-    constructor: (@master) ->
+    constructor: (@master,require_auth=false) ->
         @log = @master.log.child component:"admin"
 
         @app = express()
@@ -29,12 +29,13 @@ module.exports = class Router
 
         @users = new Users.Local @
 
-        passport.use new BasicStrategy (user,passwd,done) =>
-            @users.validate user, passwd, done
+        if require_auth
+            passport.use new BasicStrategy (user,passwd,done) =>
+                @users.validate user, passwd, done
 
-        @app.use passport.initialize()
+            @app.use passport.initialize()
 
-        @app.use passport.authenticate('basic', { session: false })
+            @app.use passport.authenticate('basic', { session: false })
 
         # -- Param Handlers -- #
 

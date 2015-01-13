@@ -13,9 +13,10 @@ module.exports = class HLSIndex
         @_index  = null
 
     loadSnapshot: (snapshot) ->
-        @_segments          = snapshot.segments
-        @_segment_duration  = snapshot.segment_duration
-        @queueIndex()
+        if snapshot
+            @_segments          = snapshot.segments
+            @_segment_duration  = snapshot.segment_duration
+            @queueIndex()
 
     queueIndex: ->
         @_shouldRun = true

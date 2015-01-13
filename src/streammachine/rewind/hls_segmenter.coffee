@@ -86,7 +86,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                     @group?.hlsUpdateMinSegment @segments[0].id
 
         @_gSyncFunc = (id) =>
-            @finalizer.setMinID id, (err,seg_id) =>
+            @finalizer?.setMinID id, (err,seg_id) =>
                 @log.silly "Synced min segment ID to #{id}. Got #{seg_id}."
 
     #----------

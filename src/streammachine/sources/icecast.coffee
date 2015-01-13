@@ -31,17 +31,12 @@ module.exports = class IcecastSource extends require("./base")
             @emit "data", chunk
 
         @opts.sock.on "close", =>
-            @connected = false
             @log?.debug "Icecast source got close event"
-            @emit "disconnect"
-            @opts.sock.end()
+            @disconnect()
 
         @opts.sock.on "end", =>
-            @connected = false
             @log?.debug "Icecast source got end event"
-            # source has gone away
-            @emit "disconnect"
-            @opts.sock.end()
+            @disconnect()
 
         # return with success
         @connected = true
@@ -60,7 +55,9 @@ module.exports = class IcecastSource extends require("./base")
 
     disconnect: ->
         if @connected
+            super
             @opts.sock.destroy()
             @opts.sock.removeAllListeners()
             @connected = false
             @emit "disconnect"
+

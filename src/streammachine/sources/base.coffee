@@ -102,6 +102,7 @@ module.exports = class Source extends require("events").EventEmitter
     #----------
 
     disconnect: (cb) ->
+        @log?.debug "Setting _isDisconnected"
         @_isDisconnected = true
         @chunker.removeAllListeners()
         @parser.removeAllListeners()

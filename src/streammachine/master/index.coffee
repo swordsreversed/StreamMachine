@@ -70,7 +70,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- create a server to provide the admin -- #
 
-        @admin = new Admin @
+        @admin = new Admin @, @options.admin.require_auth
 
         # -- create a backend server for stream requests -- #
 

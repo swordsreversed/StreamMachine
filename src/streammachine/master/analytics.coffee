@@ -5,18 +5,6 @@ tz      = require "timezone"
 nconf   = require "nconf"
 elasticsearch = require "elasticsearch"
 
-pointsToObjects = (res) ->
-    return null if !res
-
-    objects = []
-    # convert res.columns and the arrays in res.points to objects with keys
-    keys = res.columns
-
-    for p in res.points||[]
-        objects.push _.object(keys,p)
-
-    objects
-
 # This module is responsible for:
 
 # * Listen for session_start and listen interactions
@@ -509,6 +497,10 @@ module.exports = class Analytics
 
     @EStemplates:
         sessions:
+            settings:
+                index:
+                    number_of_shards:   3
+                    number_of_replicas: 1
             mappings:
                 session:
                     properties: _.extend {}, @ESobjcore,
@@ -521,6 +513,10 @@ module.exports = class Analytics
                             type:   "ip"
                             index_name: "ip"
         listens:
+            settings:
+                index:
+                    number_of_shards:   3
+                    number_of_replicas: 1
             mappings:
                 start:
                     properties: _.extend {}, @ESobjcore
@@ -533,5 +529,6 @@ module.exports = class Analytics
                                 include_in_all: false
                             bytes:
                                 type:   "integer"
+
 
 

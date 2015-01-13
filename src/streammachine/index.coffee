@@ -24,3 +24,6 @@ module.exports = class StreamMachine
 
         chunk_duration: 2
 
+        admin:
+            require_auth: false
+
