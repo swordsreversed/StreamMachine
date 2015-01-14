@@ -130,7 +130,7 @@ module.exports = class Analytics
                         @es.index index:idx[0], type:"listen", body:
                             session_id:         obj.client.session_id
                             time:               new Date(obj.time)
-                            bytes:              obj.bytes
+                            kbytes:             obj.kbytes
                             duration:           obj.duration
                             session_duration:   dur
                             stream:             obj.stream
@@ -236,7 +236,7 @@ module.exports = class Analytics
         # This is a little ugly. We need to take several steps:
         # 1) Have we ever finalized this session id?
         # 2) Look up the session_start for the session_id
-        # 3) Compute the session's sent bytes, sent duration, and elapsed duration
+        # 3) Compute the session's sent kbytes, sent duration, and elapsed duration
         # 4) Write a session object
 
         session = {}
@@ -275,7 +275,7 @@ module.exports = class Analytics
                         time:       totals.last_listen
                         start_time: ts || start.time
                         client:     start.client
-                        bytes:      totals.bytes
+                        kbytes:     totals.kbytes
                         duration:   totals.duration
                         connected:  ( Number(totals.last_listen) - Number(ts||start.time) ) / 1000
 
@@ -344,7 +344,7 @@ module.exports = class Analytics
     #----------
 
     _selectListenTotals: (id,ts,cb) ->
-        # -- Query total duration and bytes sent -- #
+        # -- Query total duration and kbytes sent -- #
 
         filter =
             if ts
@@ -363,8 +363,8 @@ module.exports = class Analytics
             aggs:
                 duration:
                     sum:{ field:"duration" }
-                bytes:
-                    sum:{ field:"bytes" }
+                kbytes:
+                    sum:{ field:"kbytes" }
                 last_listen:
                     max:{ field:"time" }
 
@@ -376,7 +376,7 @@ module.exports = class Analytics
                     cb null,
                         requests:       res.hits.total
                         duration:       res.aggregations.duration.value
-                        bytes:          res.aggregations.bytes.value
+                        kbytes:         res.aggregations.kbytes.value
                         last_listen:    new Date(res.aggregations.last_listen.value)
                 else
                     cb null, null
