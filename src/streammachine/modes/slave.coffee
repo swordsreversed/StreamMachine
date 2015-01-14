@@ -30,6 +30,7 @@ module.exports = class SlaveMode extends require("./base")
         @_handle        = null
         @_haveHandle    = false
         @_shuttingDown  = false
+        @_inHandoff     = false
 
         @_lastAddress   = null
 
@@ -43,7 +44,14 @@ module.exports = class SlaveMode extends require("./base")
                     else
                         cb new Error "No address returned yet."
 
+                #---
+
                 workers: (msg,handle,cb) =>
+
+                #---
+
+                stream_listener: (msg,handle,cb) =>
+                    @_landListener msg, handle, cb
 
         # -- Set up Clustered Workers -- #
 
@@ -59,7 +67,10 @@ module.exports = class SlaveMode extends require("./base")
                 worker_configured: (msg,handle,cb) =>
                     if @_haveHandle && !w._listening
                         w.rpc.request "listen", {fd:@_handle?.fd}, (err,address) =>
-                            @log.error "Worker listen error: #{err}" if err
+                            if err
+                                @log.error "Worker listen error: #{err}" if err
+                                return false
+
                             w._listening = true
                             @lWorkers[ w.id ] = w
                             @_lastAddress = address
@@ -70,6 +81,22 @@ module.exports = class SlaveMode extends require("./base")
                                 @emit "full_strength"
 
                     cb null
+
+                #---
+
+                # a worker is allowed to shed listeners at any point by
+                # sending them here. This could be part of a handoff (where
+                # we've asked for the listeners), or part of the worker
+                # crashing / shutting down
+                send_listener: (msg,handle,cb) =>
+                    if @_inHandoff
+                        # we're in a handoff. ship the listener out there
+                        @_rpc.request "stream_listener", msg, handle, (err) =>
+                            cb err
+                    else
+                        # FIXME: Implement non-handoff listener redistribution
+
+                #---
 
                 config: (msg,handle,cb) =>
                     cb null, @opts
@@ -126,27 +153,33 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
-    _sendHandoff: (translator) ->
+    _landListener: (obj,handle,cb) ->
+        # pick a worker randomly...
+        worker_id = _.sample(Object.keys(@lWorkers))
+        @lWorkers[worker_id].rpc.request "land_listener", obj, handle, (err) =>
+            cb err
+
+    #----------
+
+    _sendHandoff: () ->
         @log.info "Starting slave handoff."
 
         # don't try to spawn new workers
-        @_shuttingDown = true
+        @_shuttingDown  = true
+        @_inHandoff     = true
 
         # Coordinate handing off our server handle
 
         _send = (handle) =>
-            translator.send "server_socket", {}, handle
+            @_rpc.request "server_socket", {}, handle, (err) =>
+                if err
+                    @log.error "Error sending socket across handoff: #{err}"
+                    # FIXME: Proceed? Cancel?
 
-            translator.once "server_socket_up", =>
                 @log.info "Server socket transferred. Sending listener connections."
 
                 # now we ask each worker to send its listeners. We proxy them through
                 # to the new process, which in turn hands them off to its workers
-
-                currentWorker = null
-
-                translator.on "stream_listener_ok", (msg) =>
-                    currentWorker.send "stream_listener_ok", msg
 
                 _proxyWorker = (cb) =>
                     # are we done yet?
@@ -159,26 +192,15 @@ module.exports = class SlaveMode extends require("./base")
 
                     console.log "#{process.pid} STARTING #{id}"
 
+                    @workers[id].rpc.request "send_listeners", (err,msg) =>
+                        if err
+                            @log.error "Worker hit error sending listeners during handoff: #{err}", error:err, worker:id
 
-                    currentWorker = @workers[id].t
-
-                    # set up proxy function
-                    @workers[id].t.on "stream_listener", (obj,handle) =>
-                        # send it on up river
-                        translator.send "stream_listener", obj, handle
-
-                    # listen for the all-clear
-                    @workers[id].t.once "sentAllListeners", =>
-                        console.log "#{process.pid} DONE WITH #{id}"
                         # tell the worker we're done with its services
                         @workers[id].w.kill()
 
                         # do it again...
                         _proxyWorker cb
-
-                    # ask for listeners
-                    @workers[id].t.send "sendListeners"
-
 
                 _proxyWorker =>
                     @log.event "Sent slave data to new process. Exiting."
@@ -195,13 +217,14 @@ module.exports = class SlaveMode extends require("./base")
             _send @_handle
         else
             _askHandle = (id,w) =>
-                w.t.once "handle", (msg,handle) =>
-                    if !_handleSent
+                @log.debug "Asking worker #{id} for server handle"
+                w.rpc.request "send_handle", (err,msg,handle) =>
+                    # error is going to be "I don't have a handle to send", so
+                    # we'll just check whether we got a handle back
+                    if handle? && !_handleSent
                         _handleSent = true
                         _send handle._handle
-
-                @log.debug "Sending req_handle to #{id}"
-                w.t.send "req_handle"
+                        @log.debug "Worker #{id} replied with server handle"
 
             _askHandle(id,w) for id,w of @lWorkers
 
@@ -215,9 +238,24 @@ module.exports = class SlaveMode extends require("./base")
             return false
 
         @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
+            @_rpc.once "server_socket", (msg,handle,cb) =>
+                @_handle        = handle
+                @_haveHandle    = true
+                @emit "server_socket"
+
+                _go = =>
+                    # let our sender know we're ready... we're already listening for
+                    # the stream_listener requests on our rpc, so our job in here is
+                    # done. The rest is on the sender.
+                    cb null
+
+                if Object.keys(@lWorkers).length > 0
+                    _go()
+                else
+                    @once "worker_listening", => _go()
+
+
             cb null, "GO"
-
-
 
         if !process.send?
             @log.error "Handoff called, but process has no send function. Aborting."
@@ -225,43 +263,5 @@ module.exports = class SlaveMode extends require("./base")
 
         console.log "Sending GO"
         process.send "HANDOFF_GO"
-
-        # set up our translator
-        translator = new SlaveMode.HandoffTranslator process
-
-        # signal that we are configured (even though we may not be...)
-        translator.send "streams"
-
-        translator.once "server_socket", (msg,handle) =>
-            @_handle = handle
-
-            # don't accept connections here...
-            #handle._handle.onconnection = (client) =>
-            #    console.log "CONNECTION IN SLAVE-MASTER>>> CLOSING"
-            #    client.close(); false
-
-            console.log "GOT SERVER SOCKET: ", handle
-            @_haveHandle = true
-            @emit "server_socket"
-
-            _go = =>
-                translator.send "server_socket_up"
-
-                # -- Watch for incoming listeners -- #
-
-                translator.on "stream_listener", (msg,handle) =>
-                    # pick a worker randomly...
-                    worker_id = _.sample(Object.keys(@lWorkers))
-                    console.log "Picked #{worker_id} for listener destination."
-
-                    @workers[worker_id].t.once "stream_listener_ok", (msg) =>
-                        translator.send "stream_listener_ok", msg
-
-                    @workers[worker_id].t.send "stream_listener", msg, handle
-
-            if Object.keys(@lWorkers).length > 0
-                _go()
-            else
-                @once "worker_listening", => _go()
 
     #----------

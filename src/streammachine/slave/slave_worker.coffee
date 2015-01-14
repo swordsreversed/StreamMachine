@@ -14,13 +14,33 @@ module.exports = class SlaveWorker
             status: (msg,handle,cb) =>
                 @slave._streamStatus cb
 
+            #---
+
             send_handle: (msg,handle,cb) =>
                 if @slave.server.hserver
                     cb null, null, @slave.server.hserver
                 else
                     cb new Error "Worker doesn't have a handle to send."
 
+            #---
+
+            # Accept a listener that we should now start serving
+            land_listener: (msg,handle,cb) =>
+                @slave.landListener msg, handle, cb
+
+            #---
+
+            # Request to send all our listeners to the main slave process,
+            # probably so that it can whack us
             send_listeners: (msg,handle,cb) =>
+                @slave.ejectListeners (obj,h,lcb) =>
+                    @_rpc.request "send_listener", obj, h, (err) =>
+                        lcb()
+
+                , (err) =>
+                    cb err
+
+            #---
 
             listen: (msg,handle,cb) =>
                 listen_via = if msg.fd? then { fd:msg.fd } else @_config.port
@@ -35,6 +55,8 @@ module.exports = class SlaveWorker
                 @slave.server.listen listen_via, =>
                     @log.debug "SlaveWorker listening via #{ listen_via }."
                     cb null, @slave.server.hserver.address()
+
+            #---
 
         , (err,rpc) =>
             @_rpc = rpc
@@ -57,13 +79,3 @@ module.exports = class SlaveWorker
                             @log.error "Error sending worker_configured: #{err}"
                         else
                             @log.debug "Controller ACKed that we're configured."
-
-        # Listen for the order to send our listeners to the cluster master,
-        # most likely as part of a handoff
-        #@_t.once "sendListeners", (msg) =>
-        #    @slave.sendHandoffData @_t, =>
-        #        @log.debug "All listeners sent."
-        #        @_t.send "sentAllListeners"
-
-        # We always register to be able to accept listeners
-        #@slave.loadHandoffData @_t

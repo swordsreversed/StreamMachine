@@ -152,129 +152,84 @@ module.exports = class Slave extends require("events").EventEmitter
 
     #----------
 
-    sendHandoffData: (translator,cb) ->
-        # need to transfer listeners and their offsets to the new process
+    ejectListeners: (lFunc,cb) ->
+        # transfer listeners, one at a time
 
-        # Internally, node has to send sockets one at a time and wait for an
-        # ack. Because of this (and because of an issue where handles aren't
-        # checked to see if they're still valid before Node tries to send
-        # them), we need to send listeners one at a time, waiting for an ack
-        # each time.
+        @log.info "Preparing to eject listeners from slave."
 
-        @log.info "Sending slave handoff data."
+        @_enqueued = []
 
-        # we need to track in-flight listeners to make sure they get there
-        @_boarding  = []
-        @_inflight  = null
-
-        # -- prep our connections -- #
-
-        # we've already handed off our server socket, so we don't need to
-        # worry about new listeners coming in.  Existing listeners could
-        # drop between now and when we actually send, though.
+        # -- prep our listeners -- #
 
         for k,s of @streams
-            @log.info "Handoff preparing #{ Object.keys(s._lmeta).length } listeners for #{ s.key }."
-            @_boarding.push [s,obj] for id,obj of s._lmeta
+            @log.info "Preparing #{ Object.keys(s._lmeta).length } listeners for #{ s.key }"
+            @_enqueued.push [s,obj] for id,obj of s._lmeta
 
         # -- short-circuit if there are no listeners -- #
 
-        if @_boarding.length == 0
+        if @_enqueued.length == 0
             cb?()
             return true
 
         # -- now send them one-by-one -- #
 
         sFunc = =>
-            if sl = @_boarding.shift()
-                [stream,l] = sl
+            sl = @_enqueued.shift()
 
-                # wrap the listener send in an error domain to try as
-                # hard as we can to get it all there
-                d = require("domain").create()
-                d.on "error", (err) =>
-                    console.error "Handoff error: #{err}"
-                    @log.error "Send handoff listener for #{l.id} hit error: #{err}"
-                    d.exit()
-                    sFunc()
+            if !sl
+                @log.info "All listeners have been ejected."
+                return cb null
 
-                d.run =>
-                    l.obj.prepForHandoff =>
-                        lobj =
-                            timer:  null,
-                            ack:    false,
-                            socket: l.obj.socket,
-                            opts:
-                                key:        [stream.key,l.id].join("::"),
-                                stream:     stream.key
-                                id:         l.id
-                                startTime:  l.startTime
-                                client:     l.obj.client
+            [stream,l] = sl
 
-                        # there's a chance that the connection could end
-                        # after we recorded the id but before we get here.
-                        # don't send in that case...
-                        if lobj.socket && !lobj.socket.destroyed
-                            translator.send "stream_listener", lobj.opts, lobj.socket
-
-                            # mark them as in-flight
-                            @_inflight = lobj.opts.key
-
-                        else
-                            @log.info "Lost listener #{lobj.opts.id} during taxi. Moving on."
-                            sFunc()
-
-            else
-                # all done!
-                @log.info "Last listener is in flight."
-
-                if !@_inflight
-                    @log.info "All listeners are arrived or lost."
-                    cb?()
-
-        # -- register a listener for acks -- #
-
-        translator.on "stream_listener_ok", (msg) =>
-            console.log "Got ACK on ", msg
-            if @_inflight == msg.key
-                @log.info "Successful ack for listener #{msg.key}. Boarding length is #{@_boarding.length}"
-
-            @_inflight = null
-
-            if @_boarding.length > 0
+            # wrap the listener send in an error domain to try as
+            # hard as we can to get it all there
+            d = require("domain").create()
+            d.on "error", (err) =>
+                console.error "Handoff error: #{err}"
+                @log.error "Eject listener for #{l.id} hit error: #{err}"
+                d.exit()
                 sFunc()
 
-            else
-                @log.info "All listeners are arrived."
-                cb?()
+            d.run =>
+                l.obj.prepForHandoff =>
+                    socket = l.obj.socket
+                    lopts =
+                        key:        [stream.key,l.id].join("::"),
+                        stream:     stream.key
+                        id:         l.id
+                        startTime:  l.startTime
+                        client:     l.obj.client
 
-        # start the show...
+                    # there's a chance that the connection could end
+                    # after we recorded the id but before we get here.
+                    # don't send in that case...
+                    if socket && !socket.destroyed
+                        lFunc lopts, socket, (err) =>
+                            # move on to the next one...
+                            sFunc()
+
+                    else
+                        @log.info "Listener #{lopts.id} perished in the queue. Moving on."
+                        sFunc()
 
         sFunc()
 
     #----------
 
-    loadHandoffData: (translator,cb) ->
+    landListener: (obj,socket,cb) ->
+        # check and make sure they haven't disconnected mid-flight
+        if socket && !socket.destroyed
+            # create an output and attach it to the proper stream
+            output = new @Outputs[ obj.client.output ] @streams[ obj.stream ],
+                socket:     socket
+                client:     obj.client
+                startTime:  new Date(obj.startTime)
 
-        @_seen = {}
+            cb null
 
-        # -- look for transferred listeners -- #
-
-        translator.on "stream_listener", (obj,socket) =>
-            if !@_seen[ obj.key ]
-                # check and make sure they haven't disconnected mid-flight
-                if socket && !socket.destroyed
-                    # create an output and attach it to the proper stream
-                    output = new @Outputs[ obj.client.output ] @streams[ obj.stream ],
-                        socket:     socket
-                        client:     obj.client
-                        startTime:  new Date(obj.startTime)
-
-                @_seen[obj.key] = 1
-
-            # -- ACK that we received the listener -- #
-
-            translator.send "stream_listener_ok", key:obj.key
+        else
+            cb "Listener disconnected in-flight"
 
     #----------
 
