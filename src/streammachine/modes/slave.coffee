@@ -37,7 +37,7 @@ module.exports = class SlaveMode extends require("./base")
         # -- Set up Internal RPC -- #
 
         if process.send?
-            @_rpc = new RPC process, functions:
+            @_rpc = new RPC process, timeout:5000, functions:
                 slave_port: (msg,handle,cb) =>
                     if @_lastAddress
                         cb null, @_lastAddress.port
@@ -154,10 +154,14 @@ module.exports = class SlaveMode extends require("./base")
     #----------
 
     _landListener: (obj,handle,cb) ->
-        # pick a worker randomly...
-        worker_id = _.sample(Object.keys(@lWorkers))
-        @lWorkers[worker_id].rpc.request "land_listener", obj, handle, (err) =>
-            cb err
+        worker_ids = Object.keys(@workers)
+
+        if worker_ids.length == 0
+            cb "No workers ready to receive listeners."
+        else
+            id = _.sample(worker_ids)
+            @workers[id].rpc.request "land_listener", obj, handle, (err) =>
+                cb err
 
     #----------
 
