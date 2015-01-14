@@ -11,18 +11,17 @@
         "node": ">=0.10.0"
     },
     "dependencies": {
-        "coffee-script":        "~1.4.0",
+        "coffee-script":        "~1.7.1",
         "express":              "~3.3.0",
         "icecast":              "~1.3.1",
         "nconf":                "~0.6.7",
         "prettydate":           "0.0.1",
         "redis":                "0.8.3",
-        "socket.io":            "~0.9.16",
-        "socket.io-client":     "~0.9.16",
+        "socket.io":            "~1.2.0",
+        "socket.io-client":     "~1.2.0",
         "strtok":               "0.1.1",
-        "underscore":           "~1.5.2",
+        "underscore":           "~1.7.0",
         "winston":              "~0.7.2",
-        "cube":                 "0.2.0",
         "haml-coffee":          "1.4.1",
         "mincer":               "~0.5.6",
         "express-api-helper":   "~0.0.1",
@@ -37,11 +36,19 @@
         "dissolve":             "~0.3.1",
         "campfire":             "~0.1.1",
         "pagerduty":            "~0.0.3",
-        "temp":                 "~0.5.0"
+        "temp":                 "~0.5.0",
+        "timezone":             "0.0.34",
+        "fluent-ffmpeg":        "~1.7.1",
+        "elasticsearch":        "~2.2.0",
+        "throttle":             "~1.0.0",
+        "ipc-rpc":              "StreamMachine/ipc-rpc",
+        "binary-search": 	"~1.2.0"
     },
     "devDependencies": {
-        "mocha":                "~1.18.2",
-        "chai":                 "~1.9.1"
+        "webkit-devtools-agent":  "~0.3.1",
+        "mocha":                  "~1.20.1",
+        "chai":                   "~1.9.1",
+        "optimist":               "~0.5.2"
     },
     "bin": {
       "streammachine":        "./streammachine-cmd"

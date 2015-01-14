@@ -4,11 +4,13 @@ MasterStream    = $src "master/stream"
 Logger          = $src "logger"
 FileSource      = $src "sources/file"
 RewindBuffer    = $src "rewind_buffer"
+HLSSegmenter    = $src "rewind/hls_segmenter"
 
 mp3 = $file "mp3/mp3-44100-64-m.mp3"
 
-nconf   = require "nconf"
 _       = require "underscore"
+
+#process.exit()
 
 STREAM1 =
     key:                "test1"
@@ -18,7 +20,7 @@ STREAM1 =
     format:             "mp3"
 
 describe "Master Stream", ->
-    logger = new Logger {}
+    logger = new Logger stdout:false
 
 
     describe "Startup", ->
@@ -33,8 +35,8 @@ describe "Master Stream", ->
     describe "Typical Source Connections", ->
         stream = new MasterStream null, "test1", logger, STREAM1
 
-        source  = new FileSource stream, mp3
-        source2 = new FileSource stream, mp3
+        source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.1
+        source2 = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.1
 
         it "activates the first source to connect", (done) ->
             expect(stream.source).to.be.null
@@ -85,9 +87,9 @@ describe "Master Stream", ->
 
         beforeEach (done) ->
             stream = new MasterStream null, "test1", logger, STREAM1
-            source1 = new FileSource stream, mp3a
-            source2 = new FileSource stream, mp3b
-            source3 = new FileSource stream, mp3c
+            source1 = new FileSource format:"mp3", filePath:mp3a, chunkDuration:0.1
+            source2 = new FileSource format:"mp3", filePath:mp3b, chunkDuration:0.1
+            source3 = new FileSource format:"mp3", filePath:mp3c, chunkDuration:0.1
             done()
 
         afterEach (done) ->
@@ -98,8 +100,6 @@ describe "Master Stream", ->
             done()
 
         it "doesn't get confused by simultaneous addSource calls", (done) ->
-            this.timeout 6000
-
             stream.once "source", ->
                 # listen for five data emits.  they should all come from
                 # the same source uuid
@@ -123,12 +123,17 @@ describe "Master Stream", ->
             stream.addSource source1
             stream.addSource source2
 
-        it "doesn't get confused by quick promoteSource calls", (done) ->
-            this.timeout 6000
+            source1.start()
+            source2.start()
 
+        it "doesn't get confused by quick promoteSource calls", (done) ->
             stream.addSource source1, ->
                 stream.addSource source2, ->
                     stream.addSource source3, ->
+                        source1.start()
+                        source2.start()
+                        source3.start()
+
                         # listen for five data emits.  they should all come from
                         # the same source uuid
                         emits = []
@@ -151,4 +156,30 @@ describe "Master Stream", ->
                         stream.promoteSource source2.uuid
                         stream.promoteSource source3.uuid
 
+    describe "HLS", ->
+        stream = null
+        source = null
+        before (done) ->
+            stream = new MasterStream null, "test1", logger, _.extend {}, STREAM1, hls:{segment_duration:10}
+            source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.5
+            stream.addSource source
 
+            source.once "_loaded", ->
+                # emit 45 seconds of data
+                start_ts = Number(new Date())
+                for i in [0..89]
+                    source._emitOnce new Date( start_ts + i*500 )
+
+                done()
+
+        it "should have created an HLS Segmenter", (done) ->
+            expect( stream.rewind.hls ).to.be.instanceof HLSSegmenter
+            done()
+
+        it "should have loaded data into the RewindBuffer", (done) ->
+            expect( stream.rewind._rbuffer.length() ).to.be.gt 1
+            done()
+
+        it "should have created HLS segments", (done) ->
+            expect( stream.hls.segments.length ).to.be.gt 1
+            done()

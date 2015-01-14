@@ -1,15 +1,15 @@
 _u      = require 'underscore'
 icecast = require "icecast"
 
-module.exports = class Shoutcast
+BaseOutput = require "./base"
+
+module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
         @id = null
-        @socket = null
 
-        @stream.log.debug "request is in Shoutcast output", stream:@stream.key
+        super "shoutcast"
 
-        @client = output:"shoutcast"
         @pump = true
 
         @_lastMeta = null
@@ -17,9 +17,6 @@ module.exports = class Shoutcast
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #
 
-            @client.ip          = @opts.req.connection.remoteAddress
-            @client.path        = @opts.req.url
-            @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
             @client.offsetSecs  = @opts.req.param("offset") || -1
             @client.meta_int    = @stream.opts.meta_interval
 
@@ -39,15 +36,13 @@ module.exports = class Shoutcast
             @opts.res.writeHead 200, @headers
             @opts.res._send ''
 
-            @socket = @opts.req.connection
-
-            process.nextTick => @_startAudio(true)
+            @stream.startSession @client, (err,session_id) =>
+                @client.session_id = session_id
+                process.nextTick => @_startAudio(true)
 
         else if @opts.socket
             # -- socket mode... just data -- #
 
-            @client = @opts.client
-            @socket = @opts.socket
             @pump = false
             process.nextTick => @_startAudio(false)
 
@@ -69,6 +64,7 @@ module.exports = class Shoutcast
         # about timing
         @ice = new icecast.Writer @client.bytesToNextMeta||@client.meta_int
         @ice.metaint = @client.meta_int
+        delete @client.bytesToNextMeta
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
             @stream.preroll.pump @socket, @ice, => @connectToStream()
@@ -107,8 +103,15 @@ module.exports = class Shoutcast
                 offset:     @client.offset,
                 pump:       @pump,
                 startTime:  @opts.startTime,
-                minuteTime: @opts.minuteTime
                 (err,@source) =>
+                    if err
+                        if @opts.res?
+                            @opts.res.status(500).end err
+                        else
+                            @socket?.end()
+
+                        return false
+
                     # set our offset (in chunks) now that it's been checked for availability
                     @client.offset = @source.offset()
 

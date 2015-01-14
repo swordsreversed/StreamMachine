@@ -4,27 +4,36 @@
 
 .modal-body
   %form.form-horizontal
-  
+
     .control-group
       %label.control-label Stream Key
       .controls
         %input(type="text" name="key")
         %span.help-block Unique identifier for this stream.
-  
+
+    .control-group
+      %label.control-label Stream Group
+      .controls
+        %input(type="text" name="group")
+        %span.help-block
+          Text identifier used to identify variants of the same content
+          stream for HTTP Live Streaming. Leave blank if stream should
+          not be part of a group.
+
     .control-group
       %label.control-label Monitored?
       %label.checkbox.controls
-        %input(type="checkbox" name="monitored") 
+        %input(type="checkbox" name="monitored")
         Generate alert if this stream does not have a source.
-        
+
     .control-group
       %label.control-label Root Stream?
       %label.checkbox.controls
-        %input(type="checkbox" name="root_route") 
+        %input(type="checkbox" name="root_route")
         Should this stream be used on requests for /?
         %br/
         Only one stream can usefully have this setting.
-  
+
     .control-group
       %label.control-label Stream Title
       .controls
@@ -36,7 +45,7 @@
       .controls
         %input(type="text" name="seconds")
         %span.help-block Number of seconds of audio data that should be kept in memory for rewind usage.
-        
+
     .control-group
       %label.control-label Stream Format
       .controls
@@ -45,7 +54,7 @@
           %option(value="mp3") MP3
           %option(value="aac") AAC
 
-    .control-group    
+    .control-group
       %label.control-label Hostname
       .controls
         %input(type="text" name="host")
@@ -56,12 +65,12 @@
       .controls
         %input(type="text" name="source_password")
         %span.help-block Required to allow Icecast clients to connect as sources.
-        
+
     .control-group
       %label.control-label Preroll URL
       .controls
         %input(type="text" name="preroll")
-        %span.help-block URL to a preroll server.  Requests will go to 
+        %span.help-block URL to a preroll server.  Requests will go to
           %i (preroll)/(key)/(stream-key),
           where stream-key is the audio format.
 
@@ -81,10 +90,35 @@
     .control-group
       %label.control-label Accept Source Metadata?
       .controls
-        %input(type="checkbox" name="acceptSourceMeta") 
+        %input(type="checkbox" name="acceptSourceMeta")
         Should we rebroadcast metadata?
         %br/
         Only applies to fallback sources at the moment.
+
+    .control-group
+      %label.control-label Bandwidth
+      .controls
+        %input(type="text" name="bandwidth")
+        %span.help-block
+          Number that should be sent as the "BANDWIDTH" attribute in an HTTP
+          Live Streaming master playlist.
+
+    .control-group
+      %label.control-label Codec
+      .controls
+        %input(type="text" name="codec")
+        %span.help-block
+          String that should be sent as the "CODECS" attribute in an HTTP
+          Live Streaming master playlist.
+
+    .control-group
+      %label.control-label FFMpeg Arguments
+      .controls
+        %input(type="text" name="ffmpeg_args")
+        %span.help-block
+          Arguments to use for transcoding. Arguments should be separated by
+          "|" pipe characters.
+
 
 .modal-footer
   %button.btn.btn-primary.save Save

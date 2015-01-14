@@ -2,9 +2,11 @@ _u      = require "underscore"
 uuid    = require "node-uuid"
 URL     = require "url"
 
-Rewind      = require '../rewind_buffer'
-FileSource  = require "../sources/file"
-ProxySource = require '../sources/proxy_room'
+Rewind              = require '../rewind_buffer'
+FileSource          = require "../sources/file"
+ProxySource         = require '../sources/proxy_room'
+TranscodingSource   = require "../sources/transcoding"
+HLSSegmenter        = require "../rewind/hls_segmenter"
 
 # Master streams are about source management.
 
@@ -26,13 +28,17 @@ module.exports = class Stream extends require('events').EventEmitter
         fallback:           null
         acceptSourceMeta:   false
         log_minutes:        true
-        monitored:          true
+        monitored:          false
         metaTitle:          ""
         metaUrl:            ""
         format:             "mp3"
         preroll:            ""
         preroll_key:        ""
         root_route:         false
+        group:              null
+        bandwidth:          0
+        codec:              null
+        ffmpeg_args:        null
 
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
@@ -55,14 +61,22 @@ module.exports = class Stream extends require('events').EventEmitter
         # or to transfer to a new master when restarting
         @log.info "Initializing RewindBuffer for master stream."
         @rewind = new Rewind
-        @rewind.opts = @opts
-        @rewind.log = @log.child module:"rewind"
+            seconds:    @opts.seconds
+            burst:      @opts.burst
+            key:        "master__#{@key}"
+            log:        @log.child(module:"rewind")
+            hls:        @opts.hls?.segment_duration
 
         # Rewind listens to us, not to our source
         @rewind.emit "source", @
 
         # Pass along buffer loads
         @rewind.on "buffer", (c) => @emit "buffer", c
+
+        # if we're doing HLS, pass along new segments
+        if @opts.hls?
+            @rewind.hls_segmenter.on "snapshot", (snap) =>
+                @emit "hls_snapshot", snap
 
         # -- Set up data functions -- #
 
@@ -82,6 +96,10 @@ module.exports = class Stream extends require('events').EventEmitter
             @_vitals = vitals
             @emit "vitals", vitals
 
+        # -- Stream Variants -- #
+
+
+
         # -- Hardcoded Source -- #
 
         # This is an initial source like a proxy that should be connected from
@@ -93,10 +111,17 @@ module.exports = class Stream extends require('events').EventEmitter
 
             newsource = switch uri.protocol
                 when "file:"
-                    new FileSource @, uri.path
+                    new FileSource
+                        format:     @opts.format
+                        filePath:   uri.path
+                        logger:     @log
 
                 when "http:"
-                    new ProxySource @, @opts.fallback, true
+                    new ProxySource
+                        format:     @opts.format
+                        url:        @opts.fallback
+                        fallback:   true
+                        logger:     @log
 
                 else
                     null
@@ -114,24 +139,6 @@ module.exports = class Stream extends require('events').EventEmitter
 
             else
                 @log.error "Unable to determine fallback source type for #{@opts.fallback}"
-
-        # -- Listener Tracking -- #
-
-        # We track listener counts from each slave. They get reported by
-        # the slave to the master, which then calls recordSlaveListeners
-        # to record them here.
-
-        # We need to also get rid of old counts from a slave that goes
-        # offline, though, so we attach an interval function to remove
-        # numbers that haven't been updated in the last two minutes.
-
-        @_listeners = {}
-
-        setInterval =>
-            now = Number(new Date)
-            for s,c of @_listeners
-                delete @_listeners[s] if now - (120 * 1000) > c.last_at||0
-        , 60 * 1000
 
     #----------
 
@@ -153,6 +160,14 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
 
+    getHLSSnapshot: (cb) ->
+        if @rewind.hls_segmenter
+            @rewind.hls_segmenter.snapshot cb
+        else
+            cb "Stream does not support HLS"
+
+    #----------
+
     getStreamKey: (cb) ->
         if @_vitals
             cb? @_vitals.streamKey
@@ -162,13 +177,10 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
 
     status: ->
-        _u.defaults
-            id:         @key
-            sources:    ( s.info() for s in @sources )
-            listeners:  @listeners()
-            rewind:     @rewind.bufferedSecs()
-            vitals:     @_vitals
-        , @opts
+        id:         @key
+        vitals:     @_vitals
+        sources:    ( s.info() for s in @sources )
+        rewind:     @rewind._rStatus()
 
     #----------
 
@@ -253,7 +265,7 @@ module.exports = class Stream extends require('events').EventEmitter
         , 5000
 
         # Look for a header before switching
-        newsource.vitals (vitals) =>
+        newsource.vitals (err,vitals) =>
             if @source && old_source != @source
                 # source changed while we were waiting for vitals. we'll
                 # abort our change attempt
@@ -335,28 +347,18 @@ module.exports = class Stream extends require('events').EventEmitter
         if new_opts.metaTitle
             @setMetadata title:new_opts.metaTitle
 
+        # Update our rewind settings
+        @rewind.setRewind @opts.seconds, @opts.burst
+
         @emit "config"
 
         cb? null, @status()
 
     #----------
 
-    listeners: ->
-        total = 0
-        total += c.count for s,c of @_listeners
-        total
-
-    listenersBySlave: ->
-        @_listeners
-
-    #----------
-
-    recordSlaveListeners: (slave,count) ->
-        if !@_listeners[slave]
-            @_listeners[slave] = count:0, last_at:null
-
-        @_listeners[slave].count = count
-        @_listeners[slave].last_at = Number(new Date)
+    getRewind: (cb) ->
+        @rewind.dumpBuffer (err,writer) =>
+            cb? null, writer
 
     #----------
 
@@ -365,3 +367,88 @@ module.exports = class Stream extends require('events').EventEmitter
         s.disconnect() for s in @sources
         @emit "destroy"
         true
+
+    #----------
+
+    class @StreamGroup extends require("events").EventEmitter
+        constructor: (@key,@log) ->
+            @streams        = {}
+            @transcoders    = {}
+            @hls_min_id     = null
+
+            @_stream = null
+
+        #----------
+
+        addStream: (stream) ->
+            if !@streams[ stream.key ]
+                @log.debug "SG #{@key}: Adding stream #{stream.key}"
+
+                @streams[ stream.key ] = stream
+
+                @_cloneStream(stream) if !@_stream
+
+                # listen in case it goes away
+                delFunc = =>
+                    @log.debug "SG #{@key}: Stream disconnected: #{ stream.key }"
+                    delete @streams[ stream.key ]
+
+                stream.on "disconnect", delFunc
+
+                stream.on "config", =>
+                    delFunc() if stream.opts.group != @key
+
+                    if stream.opts.ffmpeg_args && !@transcoders[ stream.key ]
+                        tsource = @_startTranscoder stream
+                        @transcoders[ stream.key ] = tsource
+
+                if stream.opts.ffmpeg_args
+                    tsource = @_startTranscoder stream
+                    @transcoders[ stream.key ] = tsource
+
+                # if HLS is enabled, sync the stream to the rest of the group
+                stream.rewind.hls_segmenter?.syncToGroup @
+
+        #----------
+
+        status: ->
+            id:         @key
+            sources:    ( s.info() for s in @_stream.sources )
+
+        #----------
+
+        _startTranscoder: (stream) ->
+            @log.debug "SG #{@key}: Setting up transcoding source for #{ stream.key }"
+
+            # -- create a transcoding source -- #
+
+            tsource = new TranscodingSource
+                stream:         @_stream
+                ffmpeg_args:    stream.opts.ffmpeg_args
+                format:         stream.opts.format
+                logger:         stream.log
+
+            stream.addSource tsource
+
+            # if our transcoder goes down, restart it
+            tsource.once "disconnect", =>
+                @log.info "SG #{@key}: Transcoder disconnected for #{ stream.key}. Restarting."
+                @_startTranscoder(stream)
+
+            tsource
+
+        #----------
+
+        hlsUpdateMinSegment: (id) ->
+            if !@hls_min_id || id > @hls_min_id
+                prev = @hls_min_id
+                @hls_min_id = id
+                @emit "hls_update_min_segment", id
+                @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
+
+        #----------
+
+        _cloneStream: (stream) ->
+            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts, seconds:30
+
+        #----------

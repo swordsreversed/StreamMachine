@@ -1,195 +1,156 @@
-_u      = require "underscore"
+_       = require "underscore"
 temp    = require "temp"
 net     = require "net"
 fs      = require "fs"
-express = require "express"
+express     = require "express"
+Throttle    = require "throttle"
 
-Redis       = require "../redis_config"
+Redis       = require "../redis"
+RedisConfig = require "../redis_config"
 Admin       = require "./admin/router"
 Stream      = require "./stream"
 SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
+Analytics   = require "./analytics"
+Monitoring  = require "./monitoring"
+SlaveIO     = require "./master_io"
+
+RewindDumpRestore   = require "../rewind/dump_restore"
 
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
 module.exports = class Master extends require("events").EventEmitter
     DefaultOptions:
         max_zombie_life:    1000 * 60 * 60
-    
+
     constructor: (opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
-        
-        @slaves     = {}
-        @streams    = {}
-        @proxies    = {}
-        
-        @listeners = slaves:{}, streams:{}, total:0
-        
+        @options = _.defaults opts||{}, @DefaultOptions
+
+        @_configured = false
+
+        @streams        = {}
+        @stream_groups  = {}
+        @proxies        = {}
+
         # -- set up logging -- #
-        
+
         @log = @options.logger
-            
-        # -- look for hard-coded configuration -- #
 
-        if @options.streams         
-            process.nextTick =>
-                console.log "options.streams is ", @options.streams
-                @configureStreams @options.streams
 
-        # -- load our streams configuration from redis -- #
-        
         if @options.redis?
-            _slaveUpdate = =>
-                # pass config on to any connected slaves
-                for id,sock of @slaves
-                    sock.emit "config", @config()
-            
-            @log.debug "initializing redis config"
+            # -- load our streams configuration from redis -- #
+
+            @log.debug "Initializing Redis connection"
             @redis = new Redis @options.redis
-            @redis.on "config", (config) =>
+            @redis_config = new RedisConfig @redis
+            @redis_config.on "config", (config) =>
                 # stash the configuration
-                @options = _u.defaults config||{}, @options
+                @options = _.defaults config||{}, @options
 
                 # (re-)configure our master stream objects
                 @configureStreams @options.streams
-                
-                _slaveUpdate()
-            
-            # save changed configuration to Redis        
-            console.log "Registering config_update listener"
+
+            # Persist changed configuration to Redis
+            @log.debug "Registering config_update listener"
             @on "config_update", =>
-                console.log "Redis got config_update: ", @config()
-                @redis._update @config()
-                
+                @redis_config._update @config()
+
+        else if @options.streams
+            # -- look for hard-coded configuration -- #
+
+            process.nextTick =>
+                @configureStreams @options.streams
+        else
+            # nothing there...
+            process.nextTick =>
+                @configureStreams {}
+
+        @once "streams", =>
+            @_configured = true
+
         # -- create a server to provide the admin -- #
-        
-        @admin = new Admin @
-        
+
+        @admin = new Admin @, @options.admin.require_auth
+
         # -- create a backend server for stream requests -- #
-        
+
         @transport = new Master.StreamTransport @
-                
+
         # -- start the source listener -- #
-        
+
         @sourcein = new SourceIn core:@, port:opts.source_port
-        
+
         # -- create an alerts object -- #
-        
+
         @alerts = new Alerts logger:@log.child(module:"alerts")
-        
-        # set an interval to check monitored streams for sources
-        setInterval =>
-            for k,s of @streams
-                @alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
-        , 5*1000
-        
-        # -- Buffer Stats -- #
-        
-        @_buffer_interval = setInterval =>
-            counts = []
-            for k,s of @streams
-                counts.push [s.key,s.rewind._rbuffer?.length].join(":")
-                
-            @log.debug "Rewind buffers: " + counts.join(" -- ")
-            
-        , 5 * 1000
-                        
+
+        # -- create a listener for slaves -- #
+
+        if @options.master
+            @slaves = new SlaveIO @, @log.child(module:"master_io"), @options.master
+            @on "streams", =>
+                @slaves.updateConfig @config()
+
+        # -- Analytics -- #
+
+        if opts.analytics
+            @analytics = new Analytics
+                config: opts.analytics
+                log:    @log.child(module:"analytics")
+                redis:  @redis
+
+            # add a log transport
+            @log.logger.add new Analytics.LogTransport(@analytics), {}, true
+
+        # -- Rewind Dump and Restore -- #
+
+        @rewind_dr = new RewindDumpRestore @, opts.rewind_dump if opts.rewind_dump
+
+        # -- Set up our monitoring module -- #
+
+        @monitoring = new Monitoring @, @log.child(module:"monitoring")
+
     #----------
-    
-    listenForSlaves: (server) ->
-        # fire up a socket listener on our slave port
-        @io = require("socket.io").listen server
-        
-        @log.info "Master now listening for slave connections."
-        
-        # attach proxies for any streams that are already up
-        @_attachIOProxy(s) for key,s of @streams
-                
-        # add our authentication
-        @io.configure =>
-            # don't bombard us with stream data
-            @io.disable "log"
-            
-            @io.set "authorization", (data,cb) =>
-                @log.debug "In authorization for slave connection."
-                # look for password                    
-                if @options.master.password == data.query?.password
-                    @log.debug "Slave password is valid."
-                    cb null, true
-                else
-                    @log.debug "Slave password is incorrect."
-                    cb "Invalid slave password.", false
-        
-        # look for slave connections    
-        @io.on "connection", (sock) =>
-            @log.debug "slave connection is #{sock.id}"
-            
-            if @options.streams
-                # emit our configuration
-                @log.debug "Sending config information to slave."
-                sock.emit "config", @config()
-                
-            @slaves[sock.id] = sock
-            
-            # attach event handler for log reporting
-            socklogger = @log.child slave:sock.handshake.address.address
-            sock.on "log", (obj = {}) => 
-                socklogger[obj.level||'debug'].apply socklogger, [obj.msg||"",obj.meta||{}]
-                
-            # look for listener counts
-            sock.on "listeners", (obj = {}) =>
-                @_recordListeners sock.id, obj
-                
-            sock.on "stream_stats", (key, cb) =>
-                # respond with the stream's vitals
-                @streams[key].vitals cb                
-            
-            # attach disconnect handler
-            sock.on "disconnect", =>
-                @log.debug "slave disconnect from #{sock.id}"
-                
-                # need to unregister this slave's listeners
-                s.recordSlaveListeners sock.id, 0 for k,s of @streams
-                
-                delete @slaves[sock.id]
-            
-        @on "config_update", =>
-            config = @config()
-            s.emit "config", config for id,s of @slaves
-            
+
+    once_configured: (cb) ->
+        if @_configured
+            cb()
+        else
+            @once "streams", => cb()
+
     #----------
-    
+
+    loadRewinds: (cb) ->
+        @once "streams", =>
+            @rewind_dr?.load cb
+
+    #----------
+
     config: ->
         config = streams:{}
-        
+
         config.streams[k] = s.config() for k,s of @streams
-        
+
         return config
-    
+
     #----------
-    
-    _recordListeners: (slave,obj) ->
-        @log.debug "slave #{slave} sent #{obj.total} listeners"
-        @listeners.slaves[ slave ] = obj.total
-        for k,c of obj.counts
-            @streams[k]?.recordSlaveListeners slave, c
-    
-    # configureStreams can be called on a new core, or it can be called to 
+
+    # configureStreams can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
     configureStreams: (options,cb) ->
         @log.debug "In configure with ", options
 
         # -- Sources -- #
-        
-        # are any of our current streams missing from the new options? if so, 
+
+        # are any of our current streams missing from the new options? if so,
         # disconnect them
         for k,obj of @streams
             @log.debug "calling destroy on ", k
             if !options?[k]
                 obj.destroy()
                 delete @streams[ k ]
-        
-        # run through the streams we've been passed, initializing sources and 
+
+        # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
         for key,opts of options
             @log.debug "Parsing stream for #{key}"
@@ -200,205 +161,302 @@ module.exports = class Master extends require("events").EventEmitter
             else
                 @log.debug "Starting up master stream: #{key}", opts:opts
                 @_startStream key, opts
-                
+
+            # part of a stream group?
+            if g = @streams[key].opts.group
+                # do we have a matching group?
+                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
+                sg.addStream @streams[key]
+
         @emit "streams", @streams
-        
+
         cb? null, @streams
-        
+
     #----------
-    
+
     _startStream: (key,opts) ->
-        stream = new Stream @, key, @log.child(stream:key), opts
-        
+        stream = new Stream @, key, @log.child(stream:key), _.extend opts,
+            hls:        @options.hls
+
         if stream
             # attach a listener for configs
             stream.on "config", => @emit "config_update"; @emit "streams", @streams
-            
+
             @streams[ key ] = stream
             @_attachIOProxy stream
+
+            @emit "new_stream", stream
             return stream
         else
             return false
-    
+
     #----------
-    
+
     createStream: (opts,cb) ->
         @log.debug "createStream called with ", opts
-        
+
         # -- make sure the stream key is present and unique -- #
-        
+
         if !opts.key
             cb? "Cannot create stream without key."
             return false
-            
+
         if @streams[ opts.key ]
             cb? "Stream key must be unique."
             return false
-            
+
         # -- create the stream -- #
-        
+
         if stream = @_startStream opts.key, opts
             @emit "config_update"
             @emit "streams"
             cb? null, stream.status()
         else
             cb? "Stream failed to start."
-            
+
     #----------
-    
+
     updateStream: (stream,opts,cb) ->
         @log.info "updateStream called for ", key:stream.key, opts:opts
-                
+
         # -- if they want to rename, the key must be unique -- #
-        
+
         if stream.key != opts.key
             if @streams[ opts.key ]
                 cb? "Stream key must be unique."
                 return false
-                
+
             @streams[ opts.key ] = stream
             delete @streams[ stream.key ]
-                
+
         # -- if we're good, ask the stream to configure -- #
-        
+
         stream.configure opts, (err,config) =>
             if err
                 cb? err
                 return false
-                
-                
+
+
             cb? null, config
-        
+
     #----------
-    
+
     removeStream: (stream,cb) ->
         @log.info "removeStream called for ", key:stream.key
-        
+
         delete @streams[ stream.key ]
         stream.destroy()
-        
+
         @emit "config_update"
-        
+
         cb? null, "OK"
-        
+
     #----------
-    
+
     streamsInfo: ->
         obj.status() for k,obj of @streams
-        
+
+    groupsInfo: ->
+        obj.status() for k,obj of @stream_groups
+
     #----------
-    
+
+    vitals: (stream,cb) ->
+        if s = @streams[ stream ]
+            s.vitals cb
+        else
+            cb "Invalid Stream"
+
+    #----------
+
+    getHLSSnapshot: (stream,cb) ->
+        if s = @streams[ stream ]
+            s.getHLSSnapshot cb
+        else
+            cb "Invalid Stream"
+
+    #----------
+
+    # Get a status snapshot by looping through each stream to get buffer stats
+    _rewindStatus: ->
+        status = {}
+        status[ key ] = s.rewind._rStatus() for key,s of @streams
+        status
+
+    #----------
+
     slavesInfo: ->
-        slaveCount: Object.keys(@slaves).length
-        slaves: { id:k, listeners:@listeners.slaves[k]||0 } for k in Object.keys(@slaves)
-        
+        if @slaves
+            slaveCount: Object.keys(@slaves.slaves).length
+            slaves:     ( { id:k, status:s.last_status||"WARMING UP" } for k,s of @slaves.slaves )
+            master:     @_rewindStatus()
+        else
+            slaveCount: 0
+            slaves:     []
+            master:     @_rewindStatus()
+
     #----------
-    
-    sendHandoffData: (translator,cb) ->
-        # -- Send Rewind buffers -- #
-        
-        @log.info "Sending Rewind buffers for handoff."
-        
-        fFunc = _u.after Object.keys(@streams).length, =>
+
+    sendHandoffData: (rpc,cb) ->
+        streams_sent = {}
+
+        fFunc = _.after (Object.keys(@streams).length+Object.keys(@stream_groups).length), =>
             @log.info "Rewind buffers and sources sent."
             cb null
-        
-        lFunc = (stream) =>
+
+        # -- Stream Group Sources -- #
+
+        # no rewind buffers, only sources
+
+        rpc.on "group_sources", (msg,handle,cb) =>
+            @log.info "StreamGroup sources requested for #{ msg.key }"
+
+            sg = @stream_groups[ msg.key ]
+
+            af = _.after sg._stream.sources.length, =>
+                fFunc()
+                cb null
+
+            for source in sg._stream.sources
+                if source._shouldHandoff
+                    do (source) =>
+                        @log.info "Sending StreamGroup source #{msg.key}/#{source.uuid}"
+                        rpc.request "group_source",
+                            group:      sg.key
+                            type:       source.HANDOFF_TYPE
+                            opts:       format:source.opts.format, uuid:source.uuid
+                        , source.opts.sock
+                        , (err,reply) =>
+                            @log.error "Error sending group source #{msg.key}/#{source.uuid}: #{err}" if err
+                            af()
+                else
+                    af()
+
+
+        # -- Stream Rewind Buffers and Sources -- #
+
+        rpc.on "stream_rewind", (msg,handle,cb) =>
+            @log.info "Rewind buffer requested for #{ msg.key }"
+            stream = @streams[msg.key]
+
+            # go ahead and send over any sources...
+            for source in stream.sources
+                if source._shouldHandoff
+                    do (source) =>
+                        rpc.request "stream_source",
+                            stream:     stream.key
+                            type:       source.HANDOFF_TYPE
+                            opts:       format:source.opts.format, uuid:source.uuid
+                        , source.opts.sock
+                        , (err,reply) =>
+                            @log.error "Error sending stream source #{msg.key}/#{source.uuid}: #{err}" if err
+
             if stream.rewind.bufferedSecs() > 0
+                @log.info "RewindBuffer write for #{ msg.key } to #{ msg.path }"
+                sock = net.connect msg.path, (err) =>
+                    @log.info "Writer socket connected for rewind buffer #{msg.key}", error:err
+                    return cb err if err
+
+                    stream.getRewind (err,writer) =>
+                        return cb err if err
+
+                        writer.pipe(sock)
+                        writer.on "end", =>
+                            @log.info "RewindBuffer for #{ msg.key } written to socket."
+
+                        @log.info "Waiting for sock close for #{ msg.key }..."
+                        sock.on "close", (err) =>
+                            @log.info "Dumped buffer for #{msg.key}", bytesWritten:sock.bytesWritten, error:err
+                            fFunc()
+                            cb null
+
+            else
+                @log.info "No rewind buffer to send for #{msg.key}."
+                fFunc()
+                cb null
+
+    #----------
+
+    loadHandoffData: (rpc,cb) ->
+        # -- set up a listener for sources -- #
+
+        rpc.on "stream_source", (msg,handle,cb) =>
+            stream = @streams[ msg.stream ]
+            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
+            stream.addSource source
+            @log.info "Added stream source: #{stream.key}/#{source.uuid}"
+            cb null
+
+        rpc.on "group_source", (msg,handle,cb) =>
+            sg = @stream_groups[ msg.group ]
+            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
+            sg._stream.addSource source
+            @log.info "Added group source: #{stream.key}/#{source.uuid}"
+            cb null
+
+        af = _.after (Object.keys(@streams).length+Object.keys(@stream_groups).length), =>
+            cb null
+
+        for key,group of @stream_groups
+            do (key,group) =>
+                # we don't need rewind buffers for stream groups, but we do
+                # need sources.
+                rpc.request "group_sources", key:key, null, timeout:10000, (err) =>
+                    @log.error "Error getting StreamGroup sources: #{err}" if err
+                    @log.info "Sources received for StreamGroup #{ key }."
+                    af()
+
+        for key,stream of @streams
+            do (key,stream) =>
+                # set up a socket to accept the buffer on
                 # create a socket
                 spath = temp.path suffix:".sock"
-            
-                @log.info "Sending rewind buffer for #{stream.key} over #{spath}."
-            
-                sock = net.createServer (c) =>
-                    # write the buffer to the socket
-                    @log.info "Got socket connection on #{spath}"
-                    
-                    stream.rewind.dumpBuffer c, =>
-                        @log.info "Dumped buffer for #{stream.key}", bytesWritten:c.bytesWritten
-                        
-                        c.on "close", (err) =>
-                            @log.info "Rewind buffer sock is done.", error:err
-                        
-                            # cleanup...
-                            sock.close => fs.unlink spath, (err) =>
-                                @log.info "RewindBuffer socket unlinked.", error:err
-                        
-                            fFunc()
 
-                sock.listen spath
-            
-                sock.on "listening", => 
-                    # pass the socket to the new child and wait for acknowledgement
-                    translator.send "master_rewind", { stream:stream.key, path:spath, rsecsPerChunk:stream.rewind._rsecsPerChunk }
-            
-                # OK!
-            else
-                fFunc()
-                
-            # -- send source connections -- #
-            
-            sFunc = (source) ->
-                if source.sock                    
-                    translator.send "stream_source", { stream:stream.key, headers:source.headers, uuid:source.uuid }, source.sock
-                
-            for source in stream.sources
-                sFunc(source)
-        
-        # run 'em    
-        lFunc(s) for k,s of @streams
-        
+                @log.info "Asking to get rewind buffer for #{key} over #{spath}."
+
+                sock = net.createServer()
+
+                sock.listen spath, =>
+                    sock.once "connection", (c) =>
+                        stream.rewind.loadBuffer c, (err) =>
+                            @log.error "Error loading rewind buffer: #{err}" if err
+                            c.end()
+
+                    rpc.request "stream_rewind", key:key,path:spath, null, timeout:10000, (err) =>
+                        return @log.error "Error loading rewind buffer for #{key}: #{err}" if err
+                        @log.info "Rewind buffer loaded for #{key}"
+
+                        # cleanup...
+                        sock.close => fs.unlink spath, (err) =>
+                            @log.info "RewindBuffer socket unlinked.", error:err
+                            af()
+
+
     #----------
-    
-    loadHandoffData: (translator,cb) ->
-        # listen for the start of RewindBuffer transactions
-        translator.on "master_rewind", (data) =>
-            @log.info "Got Rewind load signal for #{data.stream} on #{data.path}"
-            
-            # set emit duration on the rewinder if the source hasn't 
-            # connected yet
-            @streams[ data.stream ].rewind._rChunkLength data.rsecsPerChunk
-            
-            # create a socket connection
-            sock = net.connect path:data.path, allowHalfOpen:true, =>
-                @streams[ data.stream ].rewind.loadBuffer sock, (err) =>
-                    @log.info "Loaded rewind buffer.", bytesRead:sock.bytesRead
-                    sock.end()
-                    
-        # listen for source connections
-        translator.on "stream_source", (data,sock) =>
-            @log.info "Got source socket for #{data.stream}"
-            stream = @streams[ data.stream ]
-            
-            #sock = new net.Socket fd:handle, type:"tcp4"
-            source = new (require "../sources/icecast") stream, sock, data.headers, data.uuid
-            stream.addSource source
-    
-    #----------
-    
+
     _attachIOProxy: (stream) ->
-        @log.debug "attachIOProxy call for #{stream.key}.", io:@io?, proxy:@proxies[stream.key]?
-        return false if !@io
-        
+        @log.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@proxies[stream.key]?
+        return false if !@slaves
+
         if @proxies[ stream.key ]
             return false
-        
-        # create a new proxy    
+
+        # create a new proxy
         @log.debug "Creating StreamProxy for #{stream.key}"
         @proxies[ stream.key ] = new Master.StreamProxy key:stream.key, stream:stream, master:@
-        
+
         # and attach a listener to destroy it if the stream is removed
         stream.once "destroy", =>
             @proxies[ stream.key ]?.destroy()
-    
+
     #----------
-    
+
     class @StreamTransport
         constructor: (@master) ->
             @app = express()
-            
+
             # -- Param Handlers -- #
-        
+
             @app.param "stream", (req,res,next,key) =>
                 # make sure it's a valid stream key
                 if key? && s = @master.streams[ key ]
@@ -406,42 +464,48 @@ module.exports = class Master extends require("events").EventEmitter
                     next()
                 else
                     res.status(404).end "Invalid stream.\n"
-                    
+
             # -- Validate slave id -- #
-            
+
             @app.use (req,res,next) =>
                 sock_id = req.get 'stream-slave-id'
-                if sock_id && @master.slaves[ sock_id ]
-                    req.slave_socket = @master.slaves[ sock_id ]
+                if sock_id && @master.slaves.slaves[ sock_id ]
+                    #req.slave_socket = @master.slaves[ sock_id ]
                     next()
-                
+
                 else
                     @master.log.debug "Rejecting StreamTransport request with missing or invalid socket ID.", sock_id:sock_id
                     res.status(401).end "Missing or invalid socket ID.\n"
-                    
+
             # -- Routes -- #
-            
+
             @app.get "/:stream/rewind", (req,res) =>
                 @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
-                req.stream.rewind.dumpBuffer res, (err) =>
-                    @master.log.debug "Rewind dumpBuffer finished."                
-    
+                req.stream.getRewind (err,writer) =>
+                    writer.pipe( new Throttle 100*1024*1024 ).pipe(res)
+                    res.on "end", =>
+                        @master.log.debug "Rewind dumpBuffer finished."
+
     #----------
-        
+
     class @StreamProxy extends require("events").EventEmitter
         constructor: (opts) ->
             @key = opts.key
             @stream = opts.stream
             @master = opts.master
-                        
+
             @dataFunc = (chunk) =>
-                for id,s of @master.slaves
-                    s.emit "streamdata:#{@key}", chunk
-                    
+                @master.slaves.broadcastAudio @key, chunk
+
+            @hlsSnapFunc = (snapshot) =>
+                @master.slaves.broadcastHLSSnapshot @key, snapshot
+
             @stream.on "data", @dataFunc
-            
+            @stream.on "hls_snapshot", @hlsSnapFunc
+
         destroy: ->
             @stream.removeListener "data", @dataFunc
-            
+            @stream.removeListener "hls_snapshot", @hlsSnapFunc
+
     #----------
