@@ -24,6 +24,7 @@ module.exports = class Rewinder extends require("stream").Readable
         @_sentDuration  = 0
         @_sentBytes     = 0
         @_offsetSeconds = null
+        @_contentTime   = null
 
         @_pumpOnly = false
 
@@ -46,13 +47,15 @@ module.exports = class Rewinder extends require("stream").Readable
                 # same analytics pipeline as we do for HLS pumped data
                 @_segTimer = setInterval =>
                     @rewind.recordListen
-                        id:         @conn_id
-                        bytes:      @_sentBytes
-                        seconds:    @_sentDuration
+                        id:             @conn_id
+                        bytes:          @_sentBytes
+                        seconds:        @_sentDuration
+                        contentTime:    @_contentTime
 
                     # reset our stats
                     @_sentBytes     = 0
                     @_sentDuration  = 0
+                    @_contentTime   = null
 
                 , 30*1000
 
@@ -222,6 +225,11 @@ module.exports = class Rewinder extends require("stream").Readable
         @_queue.push b
         @_queuedBytes += b.data.length
 
+        # we set contentTime the first time we find it unset, which will be
+        # either on our first insert or on our first insert after logging
+        # has happened
+        @_contentTime = b.ts if !@_contentTime
+
         @emit "readable" if !@_reading
 
     #----------
@@ -272,6 +280,7 @@ module.exports = class Rewinder extends require("stream").Readable
             bytes:          @_sentBytes
             seconds:        @_sentDuration
             offsetSeconds:  @_offsetSeconds
+            contentTime:    @_contentTime
 
         # This just takes the listener out of lmeta. This will probably go
         # away at some point or be rolled into the function above

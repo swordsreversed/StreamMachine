@@ -136,6 +136,7 @@ module.exports = class Analytics
                             stream:             obj.stream
                             client:             obj.client
                             offsetSeconds:      obj.offsetSeconds
+                            contentTime:        obj.contentTime
                         , (err) =>
                             if err
                                 @log.error "ES write error: #{err}"
@@ -535,6 +536,6 @@ module.exports = class Analytics
                             offsetSeconds:
                                 type:   "integer"
                                 include_in_all: false
-
-
-
+                            contentTime:
+                                type:   "date"
+                                format: "date_time"

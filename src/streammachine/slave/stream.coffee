@@ -245,6 +245,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                 kbytes:         opts.kbytes
                 duration:       opts.seconds
                 offsetSeconds:  opts.offsetSeconds
+                contentTime:    opts.contentTime
 
     #----------
 
