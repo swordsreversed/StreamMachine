@@ -234,13 +234,17 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     # Log a partial listening segment
     recordListen: (opts) ->
+        # temporary conversion support...
+        opts.kbytes = Math.floor( opts.bytes / 1024 ) if opts.bytes
+
         if lmeta = @_lmeta[opts.id]
             @log.interaction "",
-                type:       "listen"
-                client:     lmeta.obj.client
-                time:       new Date()
-                bytes:      opts.bytes
-                duration:   opts.seconds
+                type:           "listen"
+                client:         lmeta.obj.client
+                time:           new Date()
+                kbytes:         opts.kbytes
+                duration:       opts.seconds
+                offsetSeconds:  opts.offsetSeconds
 
     #----------
 

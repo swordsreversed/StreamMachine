@@ -23,6 +23,7 @@ module.exports = class Rewinder extends require("stream").Readable
         # as we report listening segments
         @_sentDuration  = 0
         @_sentBytes     = 0
+        @_offsetSeconds = null
 
         @_pumpOnly = false
 
@@ -68,7 +69,9 @@ module.exports = class Rewinder extends require("stream").Readable
                 @rewind.hls.pumpSegment @, opts.live_segment, (err,info) =>
                     return cb err if err
 
-                    @rewind.log.silly "Pumping Live segment with ", duration:info.duration, length:info.length
+                    @rewind.log.silly "Pumping HLS segment with ", duration:info.duration, length:info.length, offsetSeconds:info.offsetSeconds
+
+                    @_offsetSeconds = info.offsetSeconds
 
                     finalizeFunc info
 
@@ -265,9 +268,10 @@ module.exports = class Rewinder extends require("stream").Readable
         # b) the portion of the request that we haven't already recorded
         # (non-pump requests)
         @rewind.recordListen
-            id:         @conn_id
-            bytes:      @_sentBytes
-            seconds:    @_sentDuration
+            id:             @conn_id
+            bytes:          @_sentBytes
+            seconds:        @_sentDuration
+            offsetSeconds:  @_offsetSeconds
 
         # This just takes the listener out of lmeta. This will probably go
         # away at some point or be rolled into the function above

@@ -335,12 +335,18 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 meta = b.meta if !meta
 
             if concat
-              cbuf = Buffer.concat(buffers)
-              rewinder._insert { data:cbuf, meta:meta, duration:duration }
+                cbuf = Buffer.concat(buffers)
+                rewinder._insert { data:cbuf, meta:meta, duration:duration }
 
-            @log.silly "Pumped buffer of ", pumpLen:pumpLen, offset:offset, length:length
+            offsetSeconds = if (offset instanceof Date)
+                # how many seconds are between this date and the end of the
+                # buffer?
+                ( Number(@_rbuffer.last().ts) - Number(offset) ) / 1000
+            else
+                @offsetToSecs(offset)
 
-            cb? null, meta:meta, duration:duration, length:pumpLen
+            @log?.silly "Converting offset to seconds: ", offset:offset, secs:offsetSeconds
+            cb? null, meta:meta, duration:duration, length:pumpLen, offsetSeconds:offsetSeconds
 
     #----------
 

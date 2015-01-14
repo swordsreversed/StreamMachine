@@ -20,8 +20,6 @@ module.exports = class MemoryStore extends require("./base_store")
     _findTimestampOffset: (ts) ->
         foffset = bs @buffer, {ts:ts}, (a,b) -> Number(a.ts) - Number(b.ts)
 
-
-        console.log "foffset is ", foffset
         if foffset >= 0
             # if exact, return right away
             return @buffer.length - 1 - foffset

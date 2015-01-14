@@ -135,6 +135,7 @@ module.exports = class Analytics
                             session_duration:   dur
                             stream:             obj.stream
                             client:             obj.client
+                            offsetSeconds:      obj.offsetSeconds
                         , (err) =>
                             if err
                                 @log.error "ES write error: #{err}"
@@ -507,8 +508,9 @@ module.exports = class Analytics
                         duration:
                             type:   "float"
                             include_in_all: false
-                        bytes:
-                            type:   "integer"
+                        kbytes:
+                            type:   "long"
+                            include_in_all: false
                         ips:
                             type:   "ip"
                             index_name: "ip"
@@ -527,8 +529,12 @@ module.exports = class Analytics
                             duration:
                                 type:   "float"
                                 include_in_all: false
-                            bytes:
+                            kbytes:
+                                type:   "long"
+                                include_in_all: false
+                            offsetSeconds:
                                 type:   "integer"
+                                include_in_all: false
 
 
 
