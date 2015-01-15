@@ -27,13 +27,15 @@ START =
     time:           new Date(start_time)
     stream_group:   "test"
 
+before
+
 describe "Analytics", ->
     analytics   = null
     es          = null
     idx_prefix  = null
 
     sent_dur    = 0
-    sent_bytes  = 0
+    sent_kbytes = 0
     last_ts     = null
 
     before (done) ->
@@ -154,13 +156,13 @@ describe "Analytics", ->
                     type:       "listen"
                     client:     START.client
                     time:       new Date( start_time + i*10*1000 )
-                    bytes:      300000
+                    kbytes:     300
                     duration:   10.0
                     stream:     "test-256"
 
                 listens.push listen
                 sent_dur    += listen.duration
-                sent_bytes  += listen.bytes
+                sent_kbytes += listen.kbytes
                 last_ts     = listen.time
 
             lFunc = (cb) ->
@@ -184,7 +186,7 @@ describe "Analytics", ->
 
                     expect(totals).to.be.object
                     expect(totals.duration).to.eq sent_dur
-                    expect(totals.bytes).to.eq sent_bytes
+                    expect(totals.kbytes).to.eq sent_kbytes
                     done()
 
             it "selects last listen correctly", (done) ->
@@ -202,7 +204,7 @@ describe "Analytics", ->
                 done()
 
         it "gets bytes sent correct", (done) ->
-            expect(session.bytes).to.eq sent_bytes
+            expect(session.kbytes).to.eq sent_kbytes
             done()
 
         it "gets duration sent correct", (done) ->
@@ -232,6 +234,6 @@ describe "Analytics", ->
 
                 expect(s.session_id).to.eql session.session_id
                 expect(s.client.user_id).to.eql START.client.user_id
-                expect(s.bytes).to.eql sent_bytes
+                expect(s.kbytes).to.eql sent_kbytes
 
                 done()
