@@ -23,6 +23,12 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
     _connection: (sock) =>
         @log.debug "Incoming source attempt."
+
+        # immediately attach an error listener so that a connection reset
+        # doesn't crash the whole system
+        sock.on "error", (err) =>
+            @log.debug "Source socket errored with #{err}"
+
         # -- incoming data -- #
 
         parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
