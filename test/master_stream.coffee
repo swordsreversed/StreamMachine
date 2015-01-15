@@ -160,20 +160,20 @@ describe "Master Stream", ->
         stream = null
         source = null
         before (done) ->
-            stream = new MasterStream null, "test1", logger, _.extend {}, STREAM1, hls:{segment_duration:10}
+            stream  = new MasterStream null, "test1", logger, _.extend {}, STREAM1, hls:{segment_duration:10}
             source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.5
             stream.addSource source
 
             source.once "_loaded", ->
-                # emit 45 seconds of data
+                # emit 49 seconds of data
                 start_ts = Number(new Date())
-                for i in [0..89]
+                for i in [0..98]
                     source._emitOnce new Date( start_ts + i*500 )
 
                 done()
 
         it "should have created an HLS Segmenter", (done) ->
-            expect( stream.rewind.hls ).to.be.instanceof HLSSegmenter
+            expect( stream.rewind.hls_segmenter ).to.be.instanceof HLSSegmenter
             done()
 
         it "should have loaded data into the RewindBuffer", (done) ->
@@ -181,5 +181,8 @@ describe "Master Stream", ->
             done()
 
         it "should have created HLS segments", (done) ->
-            expect( stream.hls.segments.length ).to.be.gt 1
-            done()
+            this.timeout 5000
+            stream.rewind.hls_segmenter.once "snapshot", (snapshot) =>
+                expect(snapshot.segments).to.have.length 4
+                expect(snapshot.segment_duration).to.eq 10
+                done()

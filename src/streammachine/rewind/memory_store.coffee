@@ -123,7 +123,7 @@ module.exports = class MemoryStore extends require("./base_store")
 
         else
             # need to insert in the middle.
-            console.error "PUSH IN MIDDLE NOT IMPLEMENTED"
+            console.error "PUSH IN MIDDLE NOT IMPLEMENTED", cts, fb, lb
 
         @_truncate()
 
