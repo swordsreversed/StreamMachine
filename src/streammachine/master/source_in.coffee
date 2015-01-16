@@ -61,8 +61,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
                 # if we're behind a proxy, look for the true IP address
                 source_ip = sock.remoteAddress
-                if @behind_proxy && info.headers['X-Forwarded-For']
-                    source_ip = info.headers['X-Forwarded-For']
+                if @behind_proxy && info.headers['x-forwarded-for']
+                    source_ip = info.headers['x-forwarded-for']
 
                 # now create a new source
                 source = new IcecastSource

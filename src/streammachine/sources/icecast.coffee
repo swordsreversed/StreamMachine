@@ -1,7 +1,7 @@
 _u = require "underscore"
 
 module.exports = class IcecastSource extends require("./base")
-    TYPE: -> "Icecast (#{[@opts.sock.remoteAddress,@opts.sock.remotePort].join(":")})"
+    TYPE: -> "Icecast (#{[@opts.source_ip,@opts.sock.remotePort].join(":")})"
     HANDOFF_TYPE: "icecast"
 
     # opts should include:

@@ -28,7 +28,7 @@ module.exports = class Server extends require('events').EventEmitter
         # -- are we behind a proxy? -- #
 
         if @config.behind_proxy
-            @log.info "Enabling 'trust proxy' for Express.js"
+            @logger.info "Enabling 'trust proxy' for Express.js"
             @app.set "trust proxy", true
 
         # -- Set up sessions -- #
