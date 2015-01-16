@@ -23,6 +23,14 @@ module.exports = class Server extends require('events').EventEmitter
         @app.httpAllowHalfOpen = true
         @app.useChunkedEncodingByDefault = false
 
+        @app.set "x-powered-by", "StreamMachine"
+
+        # -- are we behind a proxy? -- #
+
+        if @config.behind_proxy
+            @log.info "Enabling 'trust proxy' for Express.js"
+            @app.set "trust proxy", true
+
         # -- Set up sessions -- #
 
         if @config.session?.secret && @config.session?.key
@@ -109,7 +117,6 @@ module.exports = class Server extends require('events').EventEmitter
 
         # playlist file
         @app.get "/:stream.pls", (req,res) =>
-            res.set "X-Powered-By", "StreamMachine"
             res.set "content-type", "audio/x-scpls"
             res.set "connection", "close"
 
@@ -146,7 +153,7 @@ module.exports = class Server extends require('events').EventEmitter
                 # page instead of the audio content.  One exception: if the
                 # requested path contained a ";", it gave the audio.
                 @logger.debug "Request from banned User-Agent: #{req.headers['user-agent']}",
-                    ip:     req.connection.remoteAddress
+                    ip:     req.ip
                     url:    req.url
 
                 res.status(200).end("Invalid User Agent.")

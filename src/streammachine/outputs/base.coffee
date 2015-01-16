@@ -11,7 +11,9 @@ module.exports = class BaseOutput
         if @opts.req && @opts.res
             # -- startup mode...  sending headers -- #
 
-            @client.ip          = @opts.req.connection.remoteAddress
+            @client.ip          = @opts.req.ip
+
+            #@client.ip          = @opts.req.connection.remoteAddress
             @client.path        = @opts.req.url
             @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
             @client.user_id     = @opts.req.user_id

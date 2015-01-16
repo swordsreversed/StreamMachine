@@ -2,22 +2,7 @@ _u = require 'underscore'
 
 module.exports = class Pumper
     constructor: (@stream,@opts) ->
-        @stream = stream
-
-        @req = @opts.req
-        @res = @opts.res
-
-        @client = output:"pumper"
-
-        # -- set up client information -- #
-
-        @client.ip          = @opts.req.connection.remoteAddress
-        @client.path        = @opts.req.url
-        @client.ua          = _u.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
-        @client.offsetSecs  = @req.param("from") || @req.param("pump")
-        @client.meta_int    = @stream.opts.meta_interval
-
-        @socket = @opts.req.connection
+        super "pumper"
 
         # figure out what we're pulling
         @stream.listen @,

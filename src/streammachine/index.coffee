@@ -24,6 +24,8 @@ module.exports = class StreamMachine
 
         chunk_duration: 2
 
+        behind_proxy:   false
+
         admin:
             require_auth: false
 

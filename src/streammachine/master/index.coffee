@@ -78,7 +78,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- start the source listener -- #
 
-        @sourcein = new SourceIn core:@, port:opts.source_port
+        @sourcein = new SourceIn core:@, port:opts.source_port, behind_proxy:opts.behind_proxy
 
         # -- create an alerts object -- #
 
@@ -330,7 +330,7 @@ module.exports = class Master extends require("events").EventEmitter
                         rpc.request "group_source",
                             group:      sg.key
                             type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid
+                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip
                         , source.opts.sock
                         , (err,reply) =>
                             @log.error "Error sending group source #{msg.key}/#{source.uuid}: #{err}" if err
@@ -352,7 +352,7 @@ module.exports = class Master extends require("events").EventEmitter
                         rpc.request "stream_source",
                             stream:     stream.key
                             type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid
+                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip
                         , source.opts.sock
                         , (err,reply) =>
                             @log.error "Error sending stream source #{msg.key}/#{source.uuid}: #{err}" if err

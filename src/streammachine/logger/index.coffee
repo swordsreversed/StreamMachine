@@ -63,7 +63,7 @@ module.exports = class LogController
         # -- Remote -- #
 
         # create a winston logger for this instance
-        @logger = new (winston.Logger) transports:transports, levels:@CustomLevels, rewriters:[@RequestRewriter]
+        @logger = new (winston.Logger) transports:transports, levels:@CustomLevels #, rewriters:[@RequestRewriter]
         @logger.extend(@)
 
     #----------
@@ -78,21 +78,6 @@ module.exports = class LogController
     proxyToMaster: (sock) ->
         @logger.remove(@logger.transports['socket']) if @logger.transports['socket']
         @logger.add (new LogController.SocketLogger sock, level:"interaction"), {}, true if sock
-
-    #----------
-
-    RequestRewriter: (level,msg,meta) ->
-        if meta?.req
-            req = meta.req
-
-            meta.req =
-                method:         req.method
-                url:            req.url
-                headers:        req.headers
-                remoteAddress:  req.connection.remoteAddress
-                remotePort:     req.connection.remotePort
-
-        meta
 
     #----------
 

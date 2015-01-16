@@ -49,9 +49,7 @@ module.exports = class Shoutcast extends BaseOutput
         # register our various means of disconnection
         @socket.on "end",   => @disconnect()
         @socket.on "close", => @disconnect()
-        @socket.on "error", (err) =>
-            @stream.log.debug "Got client socket error: #{err}"
-            @disconnect()
+        @socket.on "error", => @disconnect()
 
     #----------
 

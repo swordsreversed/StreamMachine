@@ -13,6 +13,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
         # grab our listening port
         @port = opts.port
 
+        @behind_proxy = opts.behind_proxy
+
         # create our server
 
         @server = net.createServer (c) => @_connection(c)
@@ -57,12 +59,18 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 sock.write "HTTP/1.0 200 OK\n\n"
                 @log.debug "ICY source authenticated for #{stream.key}."
 
+                # if we're behind a proxy, look for the true IP address
+                source_ip = sock.remoteAddress
+                if @behind_proxy && info.headers['X-Forwarded-For']
+                    source_ip = info.headers['X-Forwarded-For']
+
                 # now create a new source
                 source = new IcecastSource
                     format:     stream.opts.format
                     sock:       sock
                     headers:    info.headers
                     logger:     stream.log
+                    source_ip:  source_ip
 
                 stream.addSource source
 
@@ -189,4 +197,4 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 @info.headers[match[1].toLowerCase()] = match[2]
             else
                 @emit "headersComplete", @info.headers
-                @state = "BODY"
+                #@state = "BODY"

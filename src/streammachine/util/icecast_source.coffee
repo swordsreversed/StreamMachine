@@ -57,12 +57,14 @@ module.exports = class IcecastSource extends require("events").EventEmitter
                     cb err
                     @disconnect()
 
-            @sock.write "SOURCE /#{@opts.stream} ICE/1.0\r\n"
+            @sock.write "SOURCE /#{@opts.stream} HTTP/1.0\r\n"
+
+            #@sock.write "User-Agent: StreamMachine IcecastSource"
 
             if @opts.password
                 # username doesn't matter.
                 auth = new Buffer("source:#{@opts.password}",'ascii').toString("base64")
-                @sock.write "Authorization: basic #{auth}\r\n\r\n"
+                @sock.write "Authorization: Basic #{auth}\r\n\r\n"
                 console.log "Writing auth with #{ auth }."
 
             else
