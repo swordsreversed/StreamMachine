@@ -313,6 +313,12 @@ module.exports = class Master extends require("events").EventEmitter
 
             sg = @stream_groups[ msg.key ]
 
+            if sg._stream.sources.length == 0
+                # no sources to send... return right away
+                fFunc()
+                return cb null
+
+            # if we have sources, count up to make sure we return them all
             af = _.after sg._stream.sources.length, =>
                 fFunc()
                 cb null
