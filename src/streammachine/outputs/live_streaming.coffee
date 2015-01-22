@@ -46,6 +46,11 @@ module.exports = class LiveStreaming extends BaseOutput
             session_info = if @client.session_id && @client.pass_session
                "?session_id=#{@client.session_id}"
 
+            # HACK: This is needed to get ua information on segments until we
+            # can fix client ua for AppleCoreMedia
+            if @opts.req.param("ua")
+                session_info = if session_info then "#{session_info}&ua=#{@opts.req.param("ua")}" else "?ua=#{@opts.req.param("ua")}"
+
             index = @stream.hls.index(session_info) if @stream.hls
 
             if index
@@ -75,15 +80,21 @@ module.exports = class LiveStreaming extends BaseOutput
                 """
 
                 for key,s of @group.streams
-                    @opts.res.write """
-                    #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"\n
-                    """
-                    url =
-                        if @client.pass_session
-                            "/#{s.key}.m3u8?session_id=#{@client.session_id}"
-                        else
-                            "/#{s.key}.m3u8"
+                    url = "/#{s.key}.m3u8"
+                    session_bits = []
 
-                    @opts.res.write url + "\n"
+                    if @client.pass_session
+                        session_bits.push "session_id=#{@client.session_id}"
+
+                    if @opts.req.param("ua")
+                        session_bits.push "ua=#{@opts.req.param("ua")}"
+
+                    if session_bits.length > 0
+                        url = "#{url}?#{session_bits.join("&")}"
+
+                    @opts.res.write """
+                    #EXT-X-STREAM-INF:BANDWIDTH=#{s.opts.bandwidth},CODECS="#{s.opts.codec}"
+                    #{url}\n
+                    """
 
                 @opts.res.end()
