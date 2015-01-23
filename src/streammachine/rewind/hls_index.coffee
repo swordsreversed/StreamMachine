@@ -9,8 +9,13 @@ module.exports = class HLSIndex
         @_segments          = []
         @_segment_length    = null
 
-        @header = null
+        @_header = null
         @_index  = null
+
+        @_short_header   = null
+        @_short_index    = null
+
+    #----------
 
     loadSnapshot: (snapshot) ->
         if snapshot
@@ -18,9 +23,13 @@ module.exports = class HLSIndex
             @_segment_duration  = snapshot.segment_duration
             @queueIndex()
 
+    #----------
+
     queueIndex: ->
         @_shouldRun = true
         @_runIndex()
+
+    #----------
 
     _runIndex: ->
         return false if @_running || !@stream
@@ -45,6 +54,12 @@ module.exports = class HLSIndex
             _after()
             return false
 
+        # -- Determine Short Index Start -- #
+
+        _short_length   = 120 / @_segment_duration
+        _short_start    = segs.length - 1 - _short_length
+        _short_start    = 2 if _short_start < 2
+
         # -- build our header -- #
 
         head = new Buffer """
@@ -57,56 +72,41 @@ module.exports = class HLSIndex
 
         """
 
+        short_head = new Buffer """
+        #EXTM3U
+        #EXT-X-VERSION:3
+        #EXT-X-TARGETDURATION:#{@_segment_duration}
+        #EXT-X-MEDIA-SEQUENCE:#{segs[_short_start].id}
+        #EXT-X-DISCONTINUITY-SEQUENCE:#{segs[_short_start].discontinuitySeq}
+        #EXT-X-ALLOW-CACHE:NO
+
+        """
+
         # run through segments and build the index
         # We skip the first three segments for the index, but we'll use
         # segment #2 for our next ts
 
         idx_segs = []
 
-        # -- special handling for our first segment -- #
-
-        if segs[2].discontinuitySeq == segs[1].discontinuitySeq
-            # no discontinuity
-            idx_segs.push new Buffer """
-            #EXTINF:#{segs[2].duration / 1000},
-            #EXT-X-PROGRAM-DATE-TIME:#{@tz(segs[2].ts,"%FT%T.%3N%:z")}
-            /#{@stream.key}/ts/#{segs[2].id}.#{@stream.opts.format}
-            """
-
-        else
-            # discontinuity
-            idx_segs.push new Buffer """
-            #EXT-X-DISCONTINUITY
-            #EXTINF:#{segs[2].duration / 1000},
-            #EXT-X-PROGRAM-DATE-TIME:#{@tz(segs[2].ts,"%FT%T.%3N%:z")}
-            /#{@stream.key}/ts/#{segs[2].id}.#{@stream.opts.format}
-            """
-
         # -- loop through remaining segments -- #
 
-        dseq = segs[2].discontinuitySeq
+        dseq = segs[1].discontinuitySeq
 
-        for seg in segs[3..-1]
+        _short_start = _short_start - 2
+
+        for seg,i in segs[2..-1]
             # is the segment where we expect it in the timeline?
-            if seg.discontinuitySeq == dseq
-                # yes...
+            has_disc = !(seg.discontinuitySeq == dseq)
 
-                idx_segs.push new Buffer """
-                #EXTINF:#{seg.duration / 1000},
-                /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
-                """
+            datetime = if i == 0 || i == _short_start || has_disc
+                "#EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts,"%FT%T.%3N%:z")}"
 
-            else
-                # no... mark discontinuity
+            idx_segs.push new Buffer """
+            #{ if has_disc then "#EXT-X-DISCONTINUITY\n" else "" }#EXTINF:#{seg.duration / 1000},
+            #{ if datetime then "#{datetime}\n" else "" }/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+            """
 
-                idx_segs.push new Buffer """
-                #EXT-X-DISCONTINUITY
-                #EXTINF:#{seg.duration / 1000},
-                #EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts,"%FT%T.%3N%:z")}
-                /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
-                """
-
-                dseq = seg.discontinuitySeq
+            dseq = seg.discontinuitySeq
 
         # -- build the segment map -- #
 
@@ -116,21 +116,37 @@ module.exports = class HLSIndex
 
         # -- set these as active -- #
 
-        @header = head
+        @_header = head
         @_index = idx_segs
+
+        @_short_header  = short_head
+        @_short_index   = idx_segs[ _short_start.. ]
+
         @_segment_idx = seg_map
 
         _after()
 
     #----------
 
+    short_index: (session) ->
+        session = if session then new Buffer(session+"\n") else new Buffer("\n")
+
+        if !@_short_header
+            return false
+
+        b = [@_short_header]
+        b.push seg,session for seg in @_short_index
+        return Buffer.concat(b).toString()
+
+    #----------
+
     index: (session) ->
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
-        if !@header
+        if !@_header
             return false
 
-        b = [@header]
+        b = [@_header]
         b.push seg,session for seg in @_index
         return Buffer.concat(b).toString()
 

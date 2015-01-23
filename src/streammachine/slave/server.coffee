@@ -87,6 +87,20 @@ module.exports = class Server extends require('events').EventEmitter
             else
                 next()
 
+        # -- HLS Full Index Test -- #
+
+        if @config.hls.limit_full_index
+            idx_match = ///#{@config.hls.limit_full_index}///
+            @app.use (req,res,next) =>
+                ua = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+
+                if idx_match.test(ua)
+                    # do nothing...
+                else
+                    req.hls_limit = true
+
+                next()
+
         # -- Utility Routes -- #
 
         @app.get "/index.html", (req,res) =>

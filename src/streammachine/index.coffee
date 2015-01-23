@@ -21,6 +21,7 @@ module.exports = class StreamMachine
         ua_skip:        false
         hls:
             segment_duration:   10
+            limit_full_index:   false
 
         chunk_duration: 2
 

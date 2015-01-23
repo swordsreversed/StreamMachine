@@ -51,7 +51,16 @@ module.exports = class LiveStreaming extends BaseOutput
             if @opts.req.param("ua")
                 session_info = if session_info then "#{session_info}&ua=#{@opts.req.param("ua")}" else "?ua=#{@opts.req.param("ua")}"
 
-            index = @stream.hls.index(session_info) if @stream.hls
+            if !@stream.hls
+                @opts.res.status(500).end "No data."
+                return
+
+            # which index should we give them?
+            index =
+                if @opts.req.hls_limit
+                    @stream.hls.short_index(session_info)
+                else
+                    @stream.hls.index(session_info)
 
             if index
                 @opts.res.writeHead 200,
