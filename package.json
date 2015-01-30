@@ -1,11 +1,11 @@
 {
     "name":         "streammachine",
-    "version":      "0.3.2",
+    "version":      "0.4.0",
     "description":  "Flexible live streaming for broadcast audio.",
     "keywords":     ["audio","broadcast","shoutcast","icecast"],
-    "homepage":     "http://github.com/StreamMachine/StreamMachine/",
+    "homepage":     "https://github.com/StreamMachine/StreamMachine/",
     "author":       {"name": "Eric Richardson", "url": "http://ewr.is"},
-    "repository":   {"type": "git", "url": "http://github.com/StreamMachine/StreamMachine.git"},
+    "repository":   {"type": "git", "url": "https://github.com/StreamMachine/StreamMachine.git"},
     "main":         "./index.js",
     "engines": {
         "node": ">=0.10.0"
@@ -41,7 +41,7 @@
         "fluent-ffmpeg":        "~1.7.1",
         "elasticsearch":        "~2.2.0",
         "throttle":             "~1.0.0",
-        "ipc-rpc":              "StreamMachine/ipc-rpc",
+        "ipc-rpc":              "~0.1.1",
         "binary-search": 	"~1.2.0"
     },
     "devDependencies": {
