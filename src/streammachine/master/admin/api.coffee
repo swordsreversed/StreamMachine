@@ -93,6 +93,10 @@ module.exports = class API
             # get detailed stream information
             api.ok req, res, req.stream.status()
 
+        # get stream configuration
+        @app.get "/streams/:stream/config", (req,res) =>
+            api.ok req, res, req.stream.config()
+
         # update stream metadata
         @app.post "/streams/:stream/metadata", express.bodyParser(), (req,res) =>
             req.stream.setMetadata req.body||req.query, (err,meta) =>
@@ -119,7 +123,7 @@ module.exports = class API
 
 
         # Update a stream's configuration
-        @app.put "/config/:stream", express.bodyParser(), (req,res) =>
+        @app.put "/streams/:stream/config", express.bodyParser(), (req,res) =>
             @master.updateStream req.stream, req.body, (err,obj) =>
                 if err
                     api.invalid req, res, err
@@ -127,7 +131,7 @@ module.exports = class API
                     api.ok req, res, obj
 
         # Delete a stream
-        @app.delete "/config/:stream", (req,res) =>
+        @app.delete "/streams/:stream", (req,res) =>
             @master.removeStream req.stream, (err,obj) =>
                 if err
                     api.invalid req, res, err
