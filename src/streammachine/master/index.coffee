@@ -7,7 +7,7 @@ Throttle    = require "throttle"
 
 Redis       = require "../redis"
 RedisConfig = require "../redis_config"
-Admin       = require "./admin/router"
+API         = require "./admin/api"
 Stream      = require "./stream"
 SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
@@ -68,9 +68,9 @@ module.exports = class Master extends require("events").EventEmitter
         @once "streams", =>
             @_configured = true
 
-        # -- create a server to provide the admin -- #
+        # -- create a server to provide the API -- #
 
-        @admin = new Admin @, @options.admin?.require_auth
+        @api = new API @, @options.admin?.require_auth
 
         # -- create a backend server for stream requests -- #
 

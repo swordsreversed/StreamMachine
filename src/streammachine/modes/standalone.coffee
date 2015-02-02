@@ -28,7 +28,7 @@ module.exports = class StandaloneMode extends require("./base")
         # -- Set up combined server -- #
 
         @server = express()
-        @server.use "/admin", @master.admin.app
+        @server.use "/api", @master.api.app
         @server.use @slave.server.app
 
         # -- Handoff? -- #

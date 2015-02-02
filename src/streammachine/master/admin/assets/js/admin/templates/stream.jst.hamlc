@@ -1,6 +1,0 @@
-%td
-  = @stream
-%td
-  --
-%td
-  = @sources[0]?.source
