@@ -303,6 +303,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    timestampToOffset: (time,cb) ->
+        cb null, @_rbuffer._findTimestampOffset time
+
+    #----------
+
     pumpSeconds: (rewinder,seconds,concat,cb) ->
         # pump the most recent X seconds
         frames = @checkOffsetSecs seconds
