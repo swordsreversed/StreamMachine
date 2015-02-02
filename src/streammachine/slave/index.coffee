@@ -192,7 +192,11 @@ module.exports = class Slave extends require("events").EventEmitter
                 sFunc()
 
             d.run =>
-                l.obj.prepForHandoff =>
+                l.obj.prepForHandoff (skipHandoff=false) =>
+                    # some listeners don't need handoffs
+                    if skipHandoff
+                        return sFunc()
+
                     socket = l.obj.socket
                     lopts =
                         key:        [stream.key,l.id].join("::"),

@@ -39,6 +39,12 @@ module.exports = class LiveStreaming extends BaseOutput
 
     #----------
 
+    prepForHandoff: (cb) ->
+        # we don't do handoffs, so send skip = true
+        cb true
+
+    #----------
+
     class @Index extends BaseOutput
         constructor: (@stream,@opts) ->
             super "live_streaming"
