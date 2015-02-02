@@ -31,18 +31,12 @@ describe "HTTP Live Streaming Segmenter", ->
     chunk_duration      = 1000
     segment_duration    = 10000
 
-    start_ts = new Date(1415290170623)
-    #start_ts = new Date()
+    start_ts = new Date()
 
-    # If our start_ts falls exactly on a segment start, we need to give a bump
-    # to expected segment counts where we're going backward and forward
+    # to make life easy to reason about, we'll put start_ts on a segment start.
+    start_ts = new Date( Math.round(start_ts / segment_duration) * segment_duration )
 
-    seg_bonus = 0
-    start_sec = Math.floor( Number(start_ts) / 1000 ) * 1000
-    if Math.floor( start_sec / segment_duration ) * segment_duration == start_sec
-        seg_bonus = 1
-
-    console.log "Start ts is ", start_ts, seg_bonus
+    console.log "Start ts is ", start_ts
 
     #----------
 
@@ -74,7 +68,7 @@ describe "HTTP Live Streaming Segmenter", ->
                     segments.push s
 
             injector.once "finish", ->
-                expect(segments.length).to.eql 3
+                expect(segments.length).to.be.eql 3
                 expect( Number(segments[1].ts) - Number(segments[0].ts) ).to.eql segment_duration
 
                 done()
@@ -101,7 +95,7 @@ describe "HTTP Live Streaming Segmenter", ->
                     segments.push s
 
             injector.once "finish", ->
-                expect(segments.length).to.eql 3
+                expect(segments.length).to.be.eql 3
                 expect( Number(segments[0].ts) - Number(segments[1].ts) ).to.eql segment_duration
 
                 done()
@@ -110,15 +104,13 @@ describe "HTTP Live Streaming Segmenter", ->
                 generator.end()
 
         it "emits mixed segments when given mixed data", (done) ->
-            expected_segs = 5 + seg_bonus
-
             segments = []
             injector.on "readable", ->
                 while s = injector.read()
                     segments.push s
 
             injector.once "finish", ->
-                expect(segments.length).to.eql expected_segs
+                expect(segments).to.have.length.within 6,7
 
                 # sort by ts
                 segments = _(segments).sortBy (s) -> Number(s.ts)
@@ -161,7 +153,10 @@ describe "HTTP Live Streaming Segmenter", ->
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
-                expect( finalizer.segmentSeq ).to.eql 2
+                # even though three segments worth of data gets pushed into
+                # the injector, it currently doesn't know how to trigger the
+                # emit of its first segment into the finalizer.
+                expect( finalizer.segmentSeq ).to.be.eql 2
                 expect( finalizer.discontinuitySeq ).to.eql 0
                 expect( finalizer.segments ).to.have.length 2
                 expect( finalizer.segments[0].id ).to.eql 0
@@ -171,15 +166,11 @@ describe "HTTP Live Streaming Segmenter", ->
             generator.forward 31, -> generator.end()
 
         it "creates a discontinuity when given a gap", (done) ->
-            # if our start aligned, we don't get the truncated segment that
-            # would have otherwise been emitted
-            expected_seq = 3 - seg_bonus
-
             finalizer = new HLSSegmenter.Finalizer (new Logger {})
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
-                expect( finalizer.segmentSeq ).to.eql expected_seq
+                expect( finalizer.segmentSeq ).to.be.eql 3
                 expect( finalizer.discontinuitySeq ).to.eql 1
 
                 expect( finalizer.segments[ 0 ].discontinuitySeq ).to.eql 0
@@ -187,8 +178,8 @@ describe "HTTP Live Streaming Segmenter", ->
 
                 done()
 
-            generator.forward 20, -> generator.skip_forward 10, ->
-                generator.forward 10, -> generator.end()
+            generator.forward 30, -> generator.skip_forward 15, ->
+                generator.forward 11, -> generator.end()
 
         it "will use a segment map to assign sequence numbers", (done) ->
             f_seg = injector._createSegment start_ts
@@ -196,8 +187,7 @@ describe "HTTP Live Streaming Segmenter", ->
             seq = 5
             seg_map = {}
             for i in [0..2]
-                seg_map[ Number(f_seg.ts) + i*segment_duration ] = seq
-                seq += 1
+                seg_map[ Number(f_seg.ts) + i*segment_duration ] = seq + i
 
             finalizer = new HLSSegmenter.Finalizer (new Logger {}),
                 segmentSeq:         8
@@ -208,11 +198,14 @@ describe "HTTP Live Streaming Segmenter", ->
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
-                expect(finalizer.segments).to.have.length 4
-                expect(finalizer.segments[0].id).to.eql 5
-                expect(finalizer.segments[1].id).to.eql 6
-                expect(finalizer.segments[2].id).to.eql 7
-                expect(finalizer.segments[3].id).to.eql 8
+                expect(finalizer.segments).to.have.length.within 4,5
+
+                if finalizer.segments.length == 4
+                    expect(finalizer.segments[ finalizer.segments.length - 4 ].id).to.eql 5
+
+                expect(finalizer.segments[ finalizer.segments.length - 3 ].id).to.eql 6
+                expect(finalizer.segments[ finalizer.segments.length - 2 ].id).to.eql 7
+                expect(finalizer.segments[ finalizer.segments.length - 1 ].id).to.eql 8
 
                 done()
 
@@ -239,12 +232,13 @@ describe "HTTP Live Streaming Segmenter", ->
                 expect(finalizer.segments).to.have.length 4
 
                 for seg in finalizer.segments
-                    if Number(seg.ts) == start_sec
-                        expect(seg.id).to.eql 8
-                    else
+                    if seg.id < 8
                         map_id = seg_map[ Number( seg.ts ) ]
                         expect(map_id).to.not.be.undefined
                         expect(seg.id).to.eql map_id
+
+                    else
+                        expect(seg.id).to.eql 8
 
                 done()
 
@@ -389,8 +383,9 @@ describe "HTTP Live Streaming Segmenter", ->
 
             rewind.hls_segmenter.once "_finalizer", ->
                 setTimeout ->
-                    expect(injector_pushes).to.eql 5
-                    expect(rewind.hls_segmenter.finalizer.segments).to.have.length 5
+
+                    expect(injector_pushes).to.be.within 4,5
+                    expect(rewind.hls_segmenter.finalizer.segments).to.have.length.within 4,5
                     done()
                 , 200
 
@@ -425,7 +420,7 @@ describe "HTTP Live Streaming Segmenter", ->
                         # snapshot we exported, since the Injector doesn't see
                         # that the last segment should be finalized (no data
                         # pushed beyond the end_ts)
-                        expect(snap2.segments).to.have.length 11
+                        expect(snap2.segments).to.have.length snap1.segments.length - 1
 
                         done()
 
