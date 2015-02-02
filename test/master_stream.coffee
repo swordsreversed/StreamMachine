@@ -161,7 +161,7 @@ describe "Master Stream", ->
         source = null
         before (done) ->
             stream  = new MasterStream null, "test1", logger, _.extend {}, STREAM1, hls:{segment_duration:10}
-            source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.5
+            source  = new FileSource format:"mp3", filePath:mp3, chunkDuration:0.5, do_not_emit:true
             stream.addSource source
 
             source.once "_loaded", ->
@@ -183,6 +183,8 @@ describe "Master Stream", ->
         it "should have created HLS segments", (done) ->
             this.timeout 5000
             stream.rewind.hls_segmenter.once "snapshot", (snapshot) =>
-                expect(snapshot.segments).to.have.length 4
+                # depending on how our segment boundary falls, this could be
+                # three or four
+                expect(snapshot.segments).to.have.length.within 3,4
                 expect(snapshot.segment_duration).to.eq 10
                 done()
