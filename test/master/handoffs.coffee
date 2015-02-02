@@ -181,6 +181,7 @@ describe "Master Handoffs", ->
 
             m1.on "exit", (code) =>
                 expect(code).to.eql 0
+                clearTimeout t
                 done()
 
         it "source should be connected to new master", (done) ->
