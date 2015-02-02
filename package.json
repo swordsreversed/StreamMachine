@@ -7,6 +7,7 @@
     "author":       {"name": "Eric Richardson", "url": "http://ewr.is"},
     "repository":   {"type": "git", "url": "https://github.com/StreamMachine/StreamMachine.git"},
     "main":         "./index.js",
+    "license":      "BSD",
     "engines": {
         "node": ">=0.10.0"
     },
