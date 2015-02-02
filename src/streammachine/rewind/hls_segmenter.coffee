@@ -39,7 +39,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             @finalizer.on "add", => @_snapDebounce.ping()
             @finalizer.on "remove", =>
                 @_snapDebounce.ping()
-                @group?.hlsUpdateMinSegment @segments[0].id if !@_rewindLoading
+                @group?.hlsUpdateMinSegment Number(@segments[0].ts) if !@_rewindLoading
 
             @emit "_finalizer"
 
@@ -83,11 +83,11 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                 @_rewindLoading = false
 
                 if @segments[0]
-                    @group?.hlsUpdateMinSegment @segments[0].id
+                    @group?.hlsUpdateMinSegment Number(@segments[0].ts)
 
-        @_gSyncFunc = (id) =>
-            @finalizer?.setMinID id, (err,seg_id) =>
-                @log.silly "Synced min segment ID to #{id}. Got #{seg_id}."
+        @_gSyncFunc = (ts) =>
+            @finalizer?.setMinTS ts, (err,seg_id) =>
+                @log.silly "Synced min segment TS to #{ts}. Got #{seg_id}."
 
     #----------
 
@@ -259,7 +259,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             # this starts out the same and diverges backward
             @discontinuitySeqR  = @discontinuitySeq
 
-            @_min_id        = null
+            @_min_ts        = null
 
             super objectMode:true
 
@@ -268,7 +268,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         expire: (ts,cb) ->
             # expire any segments whose end_ts values are below this given ts
             loop
-                if (f_s = @segments[0])? && f_s.end_ts < ts
+                if (f_s = @segments[0])? && f_s.end_ts <= ts
                     @segments.shift()
                     delete @segment_idx[ f_s.id ]
                     @emit "remove", f_s
@@ -279,20 +279,11 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
         #----------
 
-        setMinID: (id,cb) ->
-            @_min_id = id
+        setMinTS: (ts,cb) ->
+            ts = Number(ts) if ts instanceof Date
 
-            # remove from segments
-            loop
-                if (f_s = @segments[0])? && f_s.id < id
-                    @segments.shift()
-                    delete @segment_idx[ f_s.id ]
-                    @emit "remove", f_s
-                else
-                    break
-
-            @log.silly "First segment id is now #{ @segments[0]?.id } (Length #{ @segments.length })"
-            cb null, @segments[0]?.id
+            @_min_ts = ts
+            @expire ts, cb
 
         #----------
 
@@ -330,8 +321,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                 @log.silly "Pulling segment ID from loaded segment map", id:seg_id, ts:segment.ts
 
                 # don't create a segment we've been told not to have
-                if @_min_id && seg_id < @_min_id
-                    @log.debug "Discarding segment below our minimum ID.", segment_id:seg_id, min_id:@_min_id
+                if @_min_ts && segment.end_ts < @_min_ts
+                    @log.debug "Discarding segment below our minimum TS.", segment_id:seg_id, min_ts:@_min_ts
                     cb()
                     return false
 

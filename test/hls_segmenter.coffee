@@ -17,8 +17,8 @@ class FakeStreamGroup extends require("events").EventEmitter
             r.hls_segmenter.syncToGroup @
 
     hlsUpdateMinSegment: (id) ->
-        @updates.push id
         if !@hls_min_id || id > @hls_min_id
+            @updates.push id
             prev = @hls_min_id
             @hls_min_id = id
             @emit "hls_update_min_segment", id
@@ -461,7 +461,7 @@ describe "HTTP Live Streaming Segmenter", ->
 
             done()
 
-        it "should trigger updates to stream group min segment ID", (done) ->
+        it "should trigger updates to stream group min segment TS", (done) ->
             # stream all f_chunks into r1, but skip some for r2
             g1.forward 120
             g2.skip_forward 30, -> g2.forward 90
@@ -474,8 +474,8 @@ describe "HTTP Live Streaming Segmenter", ->
             r2.hls_segmenter.once "snapshot", af
 
         it "both RewindBuffers should have the correct first segment", (done) ->
-            expect(r1._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
-            expect(r2._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
+            expect(Number(r1._rStatus().hls_first_seg_ts)).to.eql sg.hls_min_id
+            expect(Number(r2._rStatus().hls_first_seg_ts)).to.eql sg.hls_min_id
             done()
 
         it "should stay correct when data is expired unevenly", (done) ->
@@ -484,8 +484,8 @@ describe "HTTP Live Streaming Segmenter", ->
             r1.setRewind(30,30)
 
             af = _.after 2, ->
-                expect(r1._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
-                expect(r2._rStatus().hls_first_seg_id).to.eql sg.hls_min_id
+                expect(Number(r1._rStatus().hls_first_seg_ts)).to.eql sg.hls_min_id
+                expect(Number(r2._rStatus().hls_first_seg_ts)).to.eql sg.hls_min_id
                 done()
 
             r1.hls_segmenter.once "snapshot", af
