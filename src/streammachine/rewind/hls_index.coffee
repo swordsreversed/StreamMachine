@@ -87,6 +87,7 @@ module.exports = class HLSIndex
         # segment #2 for our next ts
 
         idx_segs = []
+        short_segs = []
 
         # -- loop through remaining segments -- #
 
@@ -94,11 +95,11 @@ module.exports = class HLSIndex
 
         _short_start = _short_start - 2
 
-        for seg,i in segs[2..-1]
+        for seg,i in segs[2..]
             # is the segment where we expect it in the timeline?
             has_disc = !(seg.discontinuitySeq == dseq)
 
-            datetime = if i == 0 || i == _short_start || has_disc
+            datetime = if i == 0 || has_disc
                 "#EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts,"%FT%T.%3N%:z")}"
 
             idx_segs.push new Buffer """
@@ -120,7 +121,17 @@ module.exports = class HLSIndex
         @_index = idx_segs
 
         @_short_header  = short_head
-        @_short_index   = idx_segs[ _short_start.. ]
+
+
+        @_short_index   = idx_segs[ (_short_start+1).. ]
+
+        # FIXME: special case while we sort out an ios issue
+        _ss_seg = segs[_short_start+2]
+        @_short_index.unshift new Buffer """
+        #EXTINF:#{_ss_seg.duration / 1000},
+        #EXT-X-PROGRAM-DATE-TIME:#{@tz(_ss_seg.ts,"%FT%T.%3N%:z")}
+        /#{@stream.key}/ts/#{_ss_seg.id}.#{@stream.opts.format}
+        """
 
         @_segment_idx = seg_map
 
