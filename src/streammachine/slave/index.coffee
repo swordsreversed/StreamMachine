@@ -61,19 +61,6 @@ module.exports = class Slave extends require("events").EventEmitter
 
         @server = new Server core:@, logger:@log.child(subcomponent:"server"), config:@options
 
-        # -- Buffer Stats -- #
-
-        #@_buffer_interval = setInterval =>
-        #    return if !@connected?
-
-        #    counts = []
-        #    for k,s of @streams
-        #        counts.push [s.key,s._rbuffer?.length].join(":")
-
-        #    @log.debug "Rewind buffers: " + counts.join(" -- ")
-
-        #, 5 * 1000
-
     #----------
 
     once_configured: (cb) ->

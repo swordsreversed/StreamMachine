@@ -60,6 +60,8 @@ module.exports = class Rewinder extends require("stream").Readable
                 , 30*1000
 
             cb null, @, args...
+            finalizeFunc = null
+            cb = null
 
         oFunc = (@_offset) =>
             @rewind.log.silly "Rewinder: creation with ", opts:opts, offset:@_offset
@@ -285,6 +287,9 @@ module.exports = class Rewinder extends require("stream").Readable
         # This just takes the listener out of lmeta. This will probably go
         # away at some point or be rolled into the function above
         @rewind.disconnectListener @conn_id
+
+        # make sure we're freed up for GC
+        @removeAllListeners()
 
 
 #----------

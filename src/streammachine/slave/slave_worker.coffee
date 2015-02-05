@@ -68,6 +68,11 @@ module.exports = class SlaveWorker
 
                 @_config = obj
 
+                if @_config["enable-webkit-devtools-slaveworker"]
+                    console.log "ENABLING WEBKIT DEVTOOLS IN SLAVE WORKER"
+                    agent = require("webkit-devtools-agent")
+                    agent.start()
+
                 @log = (new Logger @_config.log).child mode:"slave_worker", pid:process.pid
                 @log.debug("SlaveWorker initialized")
 
