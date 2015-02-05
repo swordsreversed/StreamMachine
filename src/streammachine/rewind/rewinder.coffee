@@ -284,6 +284,9 @@ module.exports = class Rewinder extends require("stream").Readable
             offsetSeconds:  @_offsetSeconds
             contentTime:    @_contentTime
 
+        # clear our listen segment timer
+        clearInterval @_segTimer if @_segTimer
+
         # This just takes the listener out of lmeta. This will probably go
         # away at some point or be rolled into the function above
         @rewind.disconnectListener @conn_id
