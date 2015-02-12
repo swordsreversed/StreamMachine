@@ -34,11 +34,9 @@ module.exports = class SourceIn extends require("events").EventEmitter
         # -- incoming data -- #
 
         parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
-        parser.socket = sock
-        parser.incoming = null
 
-        sock.ondata = (d,start,end) =>
-            parser.execute d, start, end - start
+        sock.on "readable", =>
+            parser.execute d while d = sock.read()
 
         parser.on "headersComplete", (headers) =>
             if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
@@ -128,15 +126,16 @@ module.exports = class SourceIn extends require("events").EventEmitter
     class @IcyParser extends require("events").EventEmitter
         constructor: (type) ->
             @["INIT_"+type]()
+            @offset = 0
 
         @REQUEST:    "REQUEST"
         @RESPONSE:   "RESPONSE"
 
         reinitialize: @
 
-        execute: (@chunk,@offset,length) ->
-            @start = @offset
-            @end = @offset + length
+        execute: (@chunk) ->
+            @offset = 0
+            @end = @chunk.length
 
             while @offset < @end
                 @[@state]()
