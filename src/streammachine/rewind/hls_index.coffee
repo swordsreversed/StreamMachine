@@ -188,14 +188,16 @@ module.exports = class HLSIndex
         _read: (size) ->
             sent = 0
 
+            bufs = []
+
             if !@_sentHeader
-                @push @header
+                bufs.push @header
                 @_sentHeader = true
                 sent += @header.length
 
             loop
-                @push @index[@_idx]
-                @push @session
+                bufs.push @index[@_idx]
+                bufs.push @session
 
                 sent += @index[@_idx].length
                 sent += @session.length
@@ -203,6 +205,8 @@ module.exports = class HLSIndex
                 @_idx += 1
 
                 break if (sent > size) || @_idx == @index.length
+
+            @push Buffer.concat(bufs)
 
             if @_idx == @index.length
                 @push null
