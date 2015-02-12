@@ -66,9 +66,10 @@ module.exports = class LiveStreaming extends BaseOutput
                 if writer
                     @opts.res.writeHead 200,
                         "Content-type":     "application/vnd.apple.mpegurl"
-                        "Content-length":   writer.length()
+                        #"Content-length":   writer.length()
 
-                    writer.pipe(@opts.res)
+                    #writer.pipe(@opts.res)
+                    @opts.res.end(writer)
 
                 else
                    @opts.res.status(500).end "No data."
