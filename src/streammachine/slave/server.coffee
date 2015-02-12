@@ -4,6 +4,7 @@ util    = require 'util'
 fs      = require 'fs'
 path    = require 'path'
 uuid    = require 'node-uuid'
+compression = require "compression"
 
 module.exports = class Server extends require('events').EventEmitter
     DefaultOptions:
@@ -143,7 +144,7 @@ module.exports = class Server extends require('events').EventEmitter
         @app.get "/sg/:group.m3u8", (req,res) =>
             new @core.Outputs.live_streaming.GroupIndex req.group, req:req, res:res
 
-        @app.get "/:stream.m3u8", (req,res) =>
+        @app.get "/:stream.m3u8", compression(filter:->true), (req,res) =>
             new @core.Outputs.live_streaming.Index req.stream, req:req, res:res
 
         @app.get "/:stream/ts/:seg.(:format)", (req,res) =>
