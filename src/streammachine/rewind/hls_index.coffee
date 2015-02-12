@@ -91,22 +91,28 @@ module.exports = class HLSIndex
         idx_segs    = []
         idx_length  = 0
 
+        # what ids are in this segment list?
+        seg_ids = (String(seg.id) for seg in segs)
+
         # -- loop through remaining segments -- #
 
         dseq = segs[1].discontinuitySeq
 
         for seg,i in segs[2..]
-            # is the segment where we expect it in the timeline?
-            has_disc = !(seg.discontinuitySeq == dseq)
+            if !@_segment_idx[ seg.id ]
+                # is the segment where we expect it in the timeline?
+                has_disc = !(seg.discontinuitySeq == dseq)
 
-            b = new Buffer """
-            #{ if has_disc then "#EXT-X-DISCONTINUITY\n" else "" }#EXTINF:#{seg.duration / 1000},
-            #EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts_actual,"%FT%T.%3N%:z")}
-            /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
-            """
+                seg.idx_buffer = new Buffer """
+                #{ if has_disc then "#EXT-X-DISCONTINUITY\n" else "" }#EXTINF:#{seg.duration / 1000},
+                #EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts_actual,"%FT%T.%3N%:z")}
+                /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+                """
 
+                @_segment_idx[ seg.id ] = seg
+
+            b = @_segment_idx[ seg.id ].idx_buffer
             idx_length += b.length
-
             idx_segs.push b
 
             dseq = seg.discontinuitySeq
@@ -131,7 +137,11 @@ module.exports = class HLSIndex
 
         @_short_length  = short_length
 
-        @_segment_idx   = seg_map
+        # what segments should be removed from our index?
+        old_seg_ids = Object.keys(@_segment_idx)
+
+        for id in _(old_seg_ids).difference(seg_ids)
+            delete @_segment_idx[ id ] if @_segment_idx[ id ]
 
         _after()
 
@@ -141,14 +151,10 @@ module.exports = class HLSIndex
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_short_header
-            return null
-            #return cb null, null
+            return cb null, null
 
-        #writer = new HLSIndex.Writer @_short_header, @_short_index, @_short_length, session
-        #cb null, writer
-        b = [@_short_header]
-        b.push seg,session for seg in @_short_index
-        return Buffer.concat(b).toString()
+        writer = new HLSIndex.Writer @_short_header, @_short_index, @_short_length, session
+        cb null, writer
 
     #----------
 
@@ -156,15 +162,10 @@ module.exports = class HLSIndex
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_header
-            return null
-            #return cb null, null
+            return cb null, null
 
-        #writer = new HLSIndex.Writer @_header, @_index, @_index_length, session
-        #cb null, writer
-
-        b = [@_header]
-        b.push seg,session for seg in @_index
-        return Buffer.concat(b).toString()
+        writer = new HLSIndex.Writer @_header, @_index, @_index_length, session
+        cb null, writer
 
     #----------
 
@@ -215,7 +216,7 @@ module.exports = class HLSIndex
 
                 break if (sent > size) || @_idx == @index.length
 
-            @push Buffer.concat(bufs)
+            @push Buffer.concat(bufs,sent)
 
             if @_idx == @index.length
                 @push null
