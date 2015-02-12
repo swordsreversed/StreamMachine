@@ -69,6 +69,16 @@ module.exports = class Slave extends require("events").EventEmitter
         else
             @once "streams", => cb()
 
+    once_rewinds_loaded: (cb) ->
+        @once_configured =>
+            @log.debug "Looking for sources to load in #{ Object.keys(@streams).length } streams."
+            aFunc = _u.after Object.keys(@streams).length, =>
+                @log.debug "All sources are loaded."
+                cb()
+
+            # watch for each configured stream to have its rewind buffer loaded.
+            obj._once_source_loaded aFunc for k,obj of @streams
+
     #----------
 
     configureStreams: (options) ->
@@ -76,7 +86,7 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # are any of our current streams missing from the new options? if so,
         # disconnect them
-        for k,obj in @streams
+        for k,obj of @streams
             console.log "calling disconnect on ", k
             obj.disconnect() unless options?[k]
             @streams.delete k

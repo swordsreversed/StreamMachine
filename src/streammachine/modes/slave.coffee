@@ -33,6 +33,7 @@ module.exports = class SlaveMode extends require("./base")
         @_inHandoff     = false
 
         @_lastAddress   = null
+        @_initFull      = false
 
         # -- Set up Internal RPC -- #
 
@@ -64,6 +65,9 @@ module.exports = class SlaveMode extends require("./base")
             w = id:worker.id, w:worker, rpc:null, _listening:false, pid:worker.process.pid
 
             w.rpc = new RPC worker, functions:
+
+                # triggered by the worker once it has its streams configured
+                # (though they may not yet have data to give out)
                 worker_configured: (msg,handle,cb) =>
                     if @_haveHandle && !w._listening
                         w.rpc.request "listen", {fd:@_handle?.fd}, (err,address) =>
@@ -77,10 +81,18 @@ module.exports = class SlaveMode extends require("./base")
 
                             @emit "worker_listening"
 
-                            if Object.keys(@lWorkers).length >= @opts.cluster
-                                @emit "full_strength"
-
                     cb null
+
+                #---
+
+                # sent by the worker once its stream rewinds are loaded.
+                # tells us that it's safe to trigger a new worker launch
+                rewinds_loaded: (msg,handle,cb) =>
+                    # ACK
+                    cb null
+
+                    # now that we're done, see if any more workers need to start
+                    @_respawnWorkers()
 
                 #---
 
@@ -98,6 +110,7 @@ module.exports = class SlaveMode extends require("./base")
 
                 #---
 
+                # triggered by the worker to request configuration
                 config: (msg,handle,cb) =>
                     cb null, @opts
 
@@ -132,10 +145,19 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
+    # Launch more workers one-at-a-time until we're back to full strength
     _respawnWorkers: ->
-        # if our worker count has dropped below our minimum, launch more workers
-        wl = Object.keys(@workers).length
-        _.times ( @opts.cluster - wl ), => cluster.fork()
+        if Object.keys(@workers).length < @opts.cluster
+            @log.debug "Asking cluster to spawn a new worker."
+            cluster.fork()
+
+            # once the worker has forked and loaded its rewind, we'll get
+            # called again and can load another worker then
+
+        else
+            @log.debug "Slave is at full strength."
+            @_initFull = true
+            @emit "full_strength"
 
     #----------
 
@@ -253,10 +275,11 @@ module.exports = class SlaveMode extends require("./base")
                     # done. The rest is on the sender.
                     cb null
 
-                if Object.keys(@lWorkers).length > 0
+                # wait until we're at full strength to start transferring listeners
+                if @_initFull
                     _go()
                 else
-                    @once "worker_listening", => _go()
+                    @once "full_strength", => _go()
 
 
             cb null, "GO"

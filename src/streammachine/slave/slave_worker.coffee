@@ -84,3 +84,10 @@ module.exports = class SlaveWorker
                             @log.error "Error sending worker_configured: #{err}"
                         else
                             @log.debug "Controller ACKed that we're configured."
+
+                @slave.once_rewinds_loaded =>
+                    @_rpc.request "rewinds_loaded", (err) =>
+                        if err
+                            @log.error "Error sending rewinds_loaded: #{err}"
+                        else
+                            @log.debug "Controller ACKed that our rewinds are loaded."

@@ -68,7 +68,7 @@ module.exports = class Stream extends require('../rewind_buffer')
         @_sourceInitT = setTimeout =>
             @_sourceInitializing = false
             @emit "_source_init"
-        , 5*1000
+        , 15*1000
 
         @once "source", (source) =>
             clearTimeout @_sourceInitT
