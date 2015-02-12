@@ -35,8 +35,9 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
         parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
 
-        sock.on "readable", =>
+        readerF = =>
             parser.execute d while d = sock.read()
+        sock.on "readable", readerF
 
         parser.on "headersComplete", (headers) =>
             if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
@@ -44,7 +45,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 @_trySource sock, parser.info
 
                 # get out of the way
-                sock.ondata = null
+                sock.removeListener "readable", readerF
 
             # TODO: Need to add support for the shoutcast metadata admin URL
 
@@ -191,6 +192,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
             return if !line?
 
+            console.log "ICy line is !#{line}!"
             if line
                 match = @headerExp.exec line
                 @info.headers[match[1].toLowerCase()] = match[2]
