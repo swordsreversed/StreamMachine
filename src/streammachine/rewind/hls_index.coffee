@@ -141,13 +141,14 @@ module.exports = class HLSIndex
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_short_header
-            return cb null, null
+            return null
+            #return cb null, null
 
         #writer = new HLSIndex.Writer @_short_header, @_short_index, @_short_length, session
         #cb null, writer
         b = [@_short_header]
         b.push seg,session for seg in @_short_index
-        cb null, Buffer.concat(b).toString()
+        return Buffer.concat(b).toString()
 
     #----------
 
@@ -155,14 +156,15 @@ module.exports = class HLSIndex
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_header
-            return cb null, null
+            return null
+            #return cb null, null
 
         #writer = new HLSIndex.Writer @_header, @_index, @_index_length, session
         #cb null, writer
 
         b = [@_header]
         b.push seg,session for seg in @_index
-        cb null, Buffer.concat(b).toString()
+        return Buffer.concat(b).toString()
 
     #----------
 
