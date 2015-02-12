@@ -88,26 +88,26 @@ module.exports = class HLSIndex
         # We skip the first three segments for the index, but we'll use
         # segment #2 for our next ts
 
-        idx_segs = []
-        short_segs = []
+        idx_segs    = []
+        idx_length  = 0
 
         # -- loop through remaining segments -- #
 
         dseq = segs[1].discontinuitySeq
 
-        _short_start = _short_start - 2
-
         for seg,i in segs[2..]
             # is the segment where we expect it in the timeline?
             has_disc = !(seg.discontinuitySeq == dseq)
 
-            datetime = if i == 0 || has_disc
-                "#EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts,"%FT%T.%3N%:z")}"
-
-            idx_segs.push new Buffer """
+            b = new Buffer """
             #{ if has_disc then "#EXT-X-DISCONTINUITY\n" else "" }#EXTINF:#{seg.duration / 1000},
-            #{ if datetime then "#{datetime}\n" else "" }/#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
+            #EXT-X-PROGRAM-DATE-TIME:#{@tz(seg.ts_actual,"%FT%T.%3N%:z")}
+            /#{@stream.key}/ts/#{seg.id}.#{@stream.opts.format}
             """
+
+            idx_length += b.length
+
+            idx_segs.push b
 
             dseq = seg.discontinuitySeq
 
@@ -119,49 +119,43 @@ module.exports = class HLSIndex
 
         # -- set these as active -- #
 
-        @_header = head
-        @_index = idx_segs
+        @_header        = head
+        @_index         = idx_segs
+        @_index_length  = idx_length
 
         @_short_header  = short_head
+        @_short_index   = idx_segs[ _short_start.. ]
 
+        short_length    = 0
+        short_length += b.length for b in @_short_index
 
-        @_short_index   = idx_segs[ (_short_start+1).. ]
+        @_short_length  = short_length
 
-        # FIXME: special case while we sort out an ios issue
-        _ss_seg = segs[_short_start+2]
-        @_short_index.unshift new Buffer """
-        #EXTINF:#{_ss_seg.duration / 1000},
-        #EXT-X-PROGRAM-DATE-TIME:#{@tz(_ss_seg.ts,"%FT%T.%3N%:z")}
-        /#{@stream.key}/ts/#{_ss_seg.id}.#{@stream.opts.format}
-        """
-
-        @_segment_idx = seg_map
+        @_segment_idx   = seg_map
 
         _after()
 
     #----------
 
-    short_index: (session) ->
+    short_index: (session,cb) ->
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_short_header
-            return false
+            return cb null, null
 
-        b = [@_short_header]
-        b.push seg,session for seg in @_short_index
-        return Buffer.concat(b).toString()
+        writer = new HLSIndex.Writer @_short_header, @_short_index, @_short_length, session
+        cb null, writer
 
     #----------
 
-    index: (session) ->
+    index: (session,cb) ->
         session = if session then new Buffer(session+"\n") else new Buffer("\n")
 
         if !@_header
-            return false
+            return cb null, null
 
-        b = [@_header]
-        b.push seg,session for seg in @_index
-        return Buffer.concat(b).toString()
+        writer = new HLSIndex.Writer @_header, @_index, @_index_length, session
+        cb null, writer
 
     #----------
 
@@ -175,3 +169,41 @@ module.exports = class HLSIndex
             @stream.pumpFrom rewinder, s.ts_actual, dur, false, cb
         else
             cb "Segment not found in index."
+
+    #----------
+
+    class @Writer extends require("stream").Readable
+        constructor: (@header,@index,@ilength,@session) ->
+            super
+
+            @_sentHeader = false
+            @_idx = 0
+
+            # determine total length
+            @_length = @header.length + @ilength + (@session.length * @index.length)
+
+        length: ->
+            @_length
+
+        _read: (size) ->
+            sent = 0
+
+            if !@_sentHeader
+                @push @header
+                @_sentHeader = true
+                sent += @header.length
+
+            loop
+                @push @index[@_idx]
+                @push @session
+
+                sent += @index[@_idx].length
+                sent += @session.length
+
+                @_idx += 1
+
+                break if (sent > size) || @_idx == @index.length
+
+            if @_idx == @index.length
+                @push null
+

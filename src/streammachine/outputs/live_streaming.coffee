@@ -62,20 +62,21 @@ module.exports = class LiveStreaming extends BaseOutput
                 return
 
             # which index should we give them?
-            index =
-                if @opts.req.hls_limit
-                    @stream.hls.short_index(session_info)
+            outFunc = (err,writer) =>
+                if writer
+                    @opts.res.writeHead 200,
+                        "Content-type":     "application/vnd.apple.mpegurl"
+                        "Content-length":   writer.length()
+
+                    writer.pipe(@opts.res)
+
                 else
-                    @stream.hls.index(session_info)
+                   @opts.res.status(500).end "No data."
 
-            if index
-                @opts.res.writeHead 200,
-                    "Content-type": "application/vnd.apple.mpegurl"
-
-                @opts.res.end index
-
+            if @opts.req.hls_limit
+                @stream.hls.short_index session_info, outFunc
             else
-                @opts.res.status(500).end "No data."
+                @stream.hls.index session_info, outFunc
 
     #----------
 
