@@ -1,9 +1,12 @@
 MasterMode  = $src "modes/master"
 SlaveMode   = $src "modes/slave"
 
+StreamListener = $src "util/stream_listener"
+
 master      = null
 master_port = null
 source_port = null
+slave_port  = null
 
 slave       = null
 
@@ -50,6 +53,7 @@ describe "Slave Mode", ->
             done()
 
     it "can start up", (done) ->
+        this.timeout 10*1000
         slave_config.slave.master = "ws://127.0.0.1:#{master_port}?password=#{master_config.master.password}"
         new SlaveMode slave_config, (err,s) ->
             throw err if err
@@ -78,4 +82,24 @@ describe "Slave Mode", ->
 
             done()
 
+    describe "Server", ->
+        it "can accept a raw listener", (done) ->
+            listener = new StreamListener "127.0.0.1", slave_port, "test1"
 
+            listener.connect (err) =>
+                throw err if err
+                done()
+
+        it "can accept a Shoutcast listener", (done) ->
+            listener = new StreamListener "127.0.0.1", slave_port, "test1", true
+
+            listener.connect (err) =>
+                throw err if err
+                done()
+
+        it "gives a 404 for a bad stream path", (done) ->
+            listener = new StreamListener "127.0.0.1", slave_port, "test2", true
+
+            listener.connect (err) =>
+                expect(err).to.not.be.null
+                done()
