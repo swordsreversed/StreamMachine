@@ -1,33 +1,10 @@
-MasterMode  = $src "modes/master"
 SlaveMode   = $src "modes/slave"
 
-StreamListener = $src "util/stream_listener"
+StreamListener  = $src "util/stream_listener"
+MasterHelper    = require "./helpers/master"
 
-master      = null
-master_port = null
-source_port = null
 slave_port  = null
-
 slave       = null
-
-STREAM1 =
-    key:                "test1"
-    source_password:    "abc123"
-    root_route:         true
-    seconds:            60*60*4
-    format:             "mp3"
-
-mp3 = $file "mp3/mp3-44100-128-s.mp3"
-
-master_config =
-    master:
-        port:       0
-        password:   "zxcasdqwe"
-    source_port:    0
-    log:
-        stdout:     false
-    streams:
-        test1:      STREAM1
 
 slave_config =
     slave:
@@ -37,24 +14,21 @@ slave_config =
     log:
         stdout: false
 
+master_info = null
+
 describe "Slave Mode", ->
     before (done) ->
         # unfortunately, to test slave mode, we need a master. that means
         # we get to do a lot here that hopefully gets tested elsewhere
 
-        new MasterMode master_config, (err,m) ->
+        MasterHelper.startMaster "mp3", (err,info) ->
             throw err if err
-
-            master = m
-
-            master_port = master.handle.address().port
-            source_port = master.master.sourcein.server.address().port
-
+            master_info = info
             done()
 
     it "can start up", (done) ->
         this.timeout 10*1000
-        slave_config.slave.master = "ws://127.0.0.1:#{master_port}?password=#{master_config.master.password}"
+        slave_config.slave.master = master_info.slave_uri
         new SlaveMode slave_config, (err,s) ->
             throw err if err
 
@@ -77,28 +51,30 @@ describe "Slave Mode", ->
             expect(Object.keys(status)).to.have.length 2
 
             for id,w of status
-                expect(w.streams).to.have.key STREAM1.key
-                expect(w.streams[ STREAM1.key ].buffer_length).to.eql 0
+                expect(w.streams).to.have.key master_info.stream_key
+                expect(w.streams[ master_info.stream_key ].buffer_length).to.eql 0
 
             done()
 
     describe "Server", ->
         it "can accept a raw listener", (done) ->
-            listener = new StreamListener "127.0.0.1", slave_port, "test1"
+            listener = new StreamListener "127.0.0.1", slave_port, master_info.stream_key
 
             listener.connect (err) =>
                 throw err if err
+                listener.disconnect()
                 done()
 
         it "can accept a Shoutcast listener", (done) ->
-            listener = new StreamListener "127.0.0.1", slave_port, "test1", true
+            listener = new StreamListener "127.0.0.1", slave_port, master_info.stream_key, true
 
             listener.connect (err) =>
                 throw err if err
+                listener.disconnect()
                 done()
 
         it "gives a 404 for a bad stream path", (done) ->
-            listener = new StreamListener "127.0.0.1", slave_port, "test2", true
+            listener = new StreamListener "127.0.0.1", slave_port, "invalid", true
 
             listener.connect (err) =>
                 expect(err).to.not.be.null
@@ -126,5 +102,9 @@ describe "Slave Mode", ->
                 # export slave.workers to no longer include this worker
                 expect(slave.workers).to.not.include.keys id
 
+                done()
 
+        it "should spawn a replacement worker", (done) ->
+            slave.once "worker_listening", ->
+                expect(Object.keys(slave.workers)).to.have.length slave_config.cluster
                 done()
