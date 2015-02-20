@@ -63,7 +63,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             # Data is being removed from the rewind buffer.  we should
             # clean up our segments as needed
 
-            @finalizer.expire chunk.ts, (err,seg_id) =>
+            @finalizer?.expire chunk.ts, (err,seg_id) =>
                 if err
                     @log.error "Error expiring audio chunk: #{err}"
                     return false
