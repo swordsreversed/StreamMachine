@@ -8,6 +8,9 @@ module.exports = class SlaveWorker
     constructor: ->
         @_config = null
 
+        @_configured    = false
+        @_loaded        = false
+
         # -- Set up RPC -- #
 
         new RPC process, functions:
@@ -16,6 +19,8 @@ module.exports = class SlaveWorker
 
             #---
 
+            # Slave calls this when it is looking for a handle to pass on
+            # during handoff
             send_handle: (msg,handle,cb) =>
                 if @slave.server.hserver
                     cb null, null, @slave.server.hserver
@@ -42,6 +47,8 @@ module.exports = class SlaveWorker
 
             #---
 
+            # Request to start listening via either our config port or the
+            # included handle
             listen: (msg,handle,cb) =>
                 listen_via = if msg.fd? then { fd:msg.fd } else @_config.port
 
@@ -58,9 +65,18 @@ module.exports = class SlaveWorker
 
             #---
 
+            # Request asking that we shut down...
+            shutdown: (msg,handle,cb) =>
+                # we ask the slave instance to shut down. It in turn asks us
+                # to distribute its listeners.
+                @slave._shutdown (err) =>
+                    cb err
+
         , (err,rpc) =>
             @_rpc = rpc
 
+            # We're initially loaded via no config. At this point, we need
+            # to request config from the main slave process.
             @_rpc.request "config", (err,obj) =>
                 if err
                     console.error "Error loading config: #{err}"
@@ -76,18 +92,58 @@ module.exports = class SlaveWorker
                 @log = (new Logger @_config.log).child mode:"slave_worker", pid:process.pid
                 @log.debug("SlaveWorker initialized")
 
-                @slave = new Slave _.extend @_config, logger:@log
+                # -- Create our Slave Instance -- #
+
+                @slave = new Slave _.extend(@_config, logger:@log), @
+
+                # -- Communicate Config Back to Slave -- #
+
+                # we watch the slave instance, and communicate its config event back
+                # to the main slave
 
                 @slave.once_configured =>
+                    @_configured = true
                     @_rpc.request "worker_configured", (err) =>
                         if err
                             @log.error "Error sending worker_configured: #{err}"
                         else
                             @log.debug "Controller ACKed that we're configured."
 
+                # -- Communicate Rewinds Back to Slave -- #
+
+                # when all rewinds are loaded, pass that word on to our main slave
+
                 @slave.once_rewinds_loaded =>
+                    @_loaded = true
                     @_rpc.request "rewinds_loaded", (err) =>
                         if err
                             @log.error "Error sending rewinds_loaded: #{err}"
                         else
                             @log.debug "Controller ACKed that our rewinds are loaded."
+
+    #----------
+
+    # A slave worker instance can request to shut down either
+    # because it got a request to do so from the master, or
+    # because of some sort of a fault condition in the worker.
+
+    # To shut down, we need to transfer the worker instance's
+    # listeners to a different worker.
+
+    shutdown: (cb) ->
+        @log.info "Triggering listener ejection after shutdown request."
+        @slave.ejectListeners (obj,h,lcb) =>
+            @_rpc.request "send_listener", obj, h, (err) =>
+                lcb()
+
+        , (err) =>
+            # now that we're finished transferring listeners, we need to
+            # go ahead and shut down
+            @log.info "Listener ejection completed. Shutting down..."
+
+            cb err
+
+            setTimeout =>
+                @log.info "Shutting down."
+                process.exit(1)
+            , 300

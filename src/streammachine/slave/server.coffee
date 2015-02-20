@@ -7,11 +7,6 @@ uuid    = require 'node-uuid'
 compression = require "compression"
 
 module.exports = class Server extends require('events').EventEmitter
-    DefaultOptions:
-        core:           null
-        slave_mode:     false
-        mount_admin:    true
-
     constructor: (@opts) ->
 
         @core   = @opts.core
@@ -206,7 +201,7 @@ module.exports = class Server extends require('events').EventEmitter
     #----------
 
     close: ->
-        console.log "stopListening"
-        @hserver?.close => console.log "listening stopped."
+        @logger.info "Slave server asked to stop listening."
+        @hserver?.close => @logger.info "Slave server listening stopped."
 
     #----------

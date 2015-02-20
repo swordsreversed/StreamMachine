@@ -103,3 +103,28 @@ describe "Slave Mode", ->
             listener.connect (err) =>
                 expect(err).to.not.be.null
                 done()
+
+    describe "Worker Control", ->
+        it "can shut down a worker on request", (done) ->
+            # get a worker id to shut down
+            id = Object.keys(slave.workers)[0]
+            worker = slave.workers[id]
+
+            slave.shutdownWorker id, (err) ->
+                throw err if err
+
+                # expect worker process to be shut down
+                try
+                    # signal 0 tests whether process exists
+                    process.kill worker.pid, 0
+
+                    # if we get here we've failed
+                    throw new Error "Process should not exist."
+                catch e
+                    expect(e.code).to.eql "ESRCH"
+
+                # export slave.workers to no longer include this worker
+                expect(slave.workers).to.not.include.keys id
+
+
+                done()

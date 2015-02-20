@@ -7,12 +7,17 @@ RPC     = require "ipc-rpc"
 Logger  = require "../logger"
 Slave   = require "../slave"
 
-# Slave Server
-#
-# Slaves are born only knowing how to connect to their master. The master
-# gives them stream configuration, which the slave then uses to connect
-# and provide up streams to clients.  Logging data is always passed back
-# to the master, but can optionally also be stored on the slave host.
+#----------
+
+# basically just an event-emitting struct with our worker attributes
+class Worker extends require("events").EventEmitter
+    constructor: (attributes) ->
+        @[k] = v for k,v of attributes
+
+    destroy: ->
+        @removeAllListeners()
+
+#----------
 
 module.exports = class SlaveMode extends require("./base")
 
@@ -52,7 +57,7 @@ module.exports = class SlaveMode extends require("./base")
                 #---
 
                 stream_listener: (msg,handle,cb) =>
-                    @_landListener msg, handle, cb
+                    @_landListener null, msg, handle, cb
 
         # -- Set up Clustered Workers -- #
 
@@ -62,7 +67,13 @@ module.exports = class SlaveMode extends require("./base")
         cluster.on "online", (worker) =>
             @log.info "SlaveWorker online: #{worker.id}"
 
-            w = id:worker.id, w:worker, rpc:null, _listening:false, pid:worker.process.pid
+            w = new Worker
+                id:         worker.id
+                w:          worker
+                rpc:        null
+                pid:        worker.process.pid
+                _listening: false
+                _loaded:    false
 
             w.rpc = new RPC worker, functions:
 
@@ -88,6 +99,8 @@ module.exports = class SlaveMode extends require("./base")
                 # sent by the worker once its stream rewinds are loaded.
                 # tells us that it's safe to trigger a new worker launch
                 rewinds_loaded: (msg,handle,cb) =>
+                    w._loaded = true
+
                     # ACK
                     cb null
 
@@ -106,7 +119,9 @@ module.exports = class SlaveMode extends require("./base")
                         @_rpc.request "stream_listener", msg, handle, (err) =>
                             cb err
                     else
-                        # FIXME: Implement non-handoff listener redistribution
+                        # we can hand the listener to any slave except the one
+                        # it came from
+                        @_landListener w.id, msg, handle, cb
 
                 #---
 
@@ -120,15 +135,23 @@ module.exports = class SlaveMode extends require("./base")
                     worker.kill()
                     return false
 
+                @log.debug "Worker #{w.id} is set up.", id:w.id, pid:w.pid
+
                 @workers[ worker.id ] = w
 
         cluster.on "disconnect", (worker) =>
             @log.info "SlaveWorker disconnect: #{worker.id}"
+            @workers[ worker.id ]?.emit "disconnect"
             delete @lWorkers[worker.id]
 
         cluster.on "exit", (worker) =>
             @log.info "SlaveWorker exit: #{worker.id}"
+            w = @workers[ worker.id ]
             delete @workers[ worker.id ]
+
+            w.emit "exit"
+            w.destroy()
+
             @_respawnWorkers() if !@_shuttingDown
 
         @_respawnWorkers()
@@ -161,6 +184,32 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
+    shutdownWorker: (id,cb) ->
+        if !@workers[id]
+            cb? "Cannot call shutdown: Worker id unknown"
+            return false
+
+        @log.info "Sending shutdown to worker #{id}"
+        @workers[id].rpc.request "shutdown", {}, (err) =>
+            if err
+                @log.error "Shutdown errored: #{err}"
+                return false
+
+            cb = _.once cb
+
+            # set a shutdown timer
+            timer = setTimeout =>
+                cb "Failed to get worker exit before timeout."
+            , 1000
+
+            # now watch for the worker's exit event
+            @workers[id].once "exit", =>
+                @log.info "Shutdown succeeded for worker #{id}."
+                clearTimeout timer if timer
+                cb null
+
+    #----------
+
     status: (cb) ->
         # send back a status for each of our workers
         status = {}
@@ -170,13 +219,22 @@ module.exports = class SlaveMode extends require("./base")
         for id,w of @workers
             do (id,w) =>
                 w.rpc.request "status", (err,s) =>
-                    status[ id ] = listening:w._listening, streams:s, pid:w.pid
+                    status[ id ] = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid
                     af()
 
     #----------
 
-    _landListener: (obj,handle,cb) ->
-        worker_ids = Object.keys(@workers)
+    # Distribute a listener to one of our ready slave workers. This could be
+    # an external request via handoff, or it could be an internal request from
+    # a worker instance that is shutting down.
+
+    _landListener: (sender,obj,handle,cb) ->
+        # what are our potential workers?
+        worker_ids = Object.keys(@lWorkers)
+
+        # do we have a sender? if so, subtract it from our pool of candidates
+        if sender
+            worker_ids = _.without worker_ids, sender
 
         if worker_ids.length == 0
             cb "No workers ready to receive listeners."

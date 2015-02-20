@@ -83,6 +83,9 @@ module.exports = class SlaveIO extends require("events").EventEmitter
         @io.on "status", (cb) =>
             @slave._streamStatus cb
 
+        @io.on "should_shutdown", (cb) =>
+            @slave._shutdown cb
+
         @io.on "audio", (obj) =>
             # our data gets converted into an ArrayBuffer to go over the
             # socket. convert it back before insertion

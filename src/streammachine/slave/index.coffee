@@ -4,24 +4,20 @@ Stream  = require "./stream"
 Server  = require "./server"
 Alerts  = require "../alerts"
 IO      = require "./slave_io"
+SocketSource = require "./socket_source"
 
 URL     = require "url"
 HTTP    = require "http"
 tz      = require 'timezone'
 
 module.exports = class Slave extends require("events").EventEmitter
-    DefaultOptions:
-        max_zombie_life:    1000 * 60 * 60
-
     Outputs:
         pumper:         require "../outputs/pumper"
         shoutcast:      require "../outputs/shoutcast"
         raw:            require "../outputs/raw_audio"
         live_streaming: require "../outputs/live_streaming"
 
-    constructor: (opts) ->
-        @options = _u.defaults opts||{}, @DefaultOptions
-
+    constructor: (@options,@_worker) ->
         @_configured = false
 
         @master = null
@@ -32,6 +28,8 @@ module.exports = class Slave extends require("events").EventEmitter
 
         @connected      = false
         @_retrying      = null
+
+        @_shuttingDown  = false
 
         # -- Set up logging -- #
 
@@ -78,6 +76,29 @@ module.exports = class Slave extends require("events").EventEmitter
 
             # watch for each configured stream to have its rewind buffer loaded.
             obj._once_source_loaded aFunc for k,obj of @streams
+
+    #----------
+
+    _shutdown: (cb) ->
+        if !@_worker
+            cb "Don't have _worker to trigger shutdown on."
+            return false
+
+        if @_shuttingDown
+            # already shutting down...
+            cb "Shutdown already in progress."
+            return false
+
+        @_shuttingDown = true
+
+        # A shutdown involves a) stopping listening for new connections and
+        # b) transferring our listeners to a different slave
+
+        # tell our server to stop listening
+        @server.close()
+
+        # tell our worker process to transfer out our listeners
+        @_worker.shutdown cb
 
     #----------
 
@@ -145,7 +166,7 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
 
     socketSource: (stream) ->
-        new Slave.SocketSource @, stream
+        new SocketSource @, stream
 
     #----------
 
@@ -233,93 +254,3 @@ module.exports = class Slave extends require("events").EventEmitter
             cb "Listener disconnected in-flight"
 
     #----------
-
-    # emulate a source connection, receiving data via sockets from our master server
-
-    class @SocketSource extends require("events").EventEmitter
-        constructor: (@slave,@stream) ->
-            @log = @stream.log.child subcomponent:"socket_source"
-
-            @log.debug "created SocketSource for #{@stream.key}"
-
-            @slave.io.on "audio:#{@stream.key}", (chunk) =>
-                @emit "data", chunk
-
-            @slave.io.on "hls_snapshot:#{@stream.key}", (snapshot) =>
-                @emit "hls_snapshot", snapshot
-
-            @_streamKey = null
-
-            @slave.io.vitals @stream.key, (err,obj) =>
-                @_streamKey = obj.streamKey
-                @_vitals    = obj
-                @emit "vitals", obj
-
-        #----------
-
-        vitals: (cb) ->
-            _vFunc = (v) =>
-                cb? null, v
-
-            if @_vitals
-                _vFunc @_vitals
-            else
-                @once "vitals", _vFunc
-
-        #----------
-
-        getStreamKey: (cb) ->
-            if @_streamKey
-                cb? @_streamKey
-            else
-                @once "vitals", => cb? @_streamKey
-
-        #----------
-
-        getHLSSnapshot: (cb) ->
-            @slave.io.hls_snapshot @stream.key, cb
-
-        #----------
-
-        getRewind: (cb) ->
-            # connect to the master's StreamTransport and ask for any rewind
-            # buffer that is available
-
-            gRT = setTimeout =>
-                @log.debug "Failed to get rewind buffer response."
-                cb? "Failed to get a rewind buffer response."
-            , 15000
-
-            # connect to: @master.options.host:@master.options.port
-
-            # GET request for rewind buffer
-            @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.io.id
-            req = HTTP.request
-                hostname:   @slave.io.io.io.opts.host
-                port:       @slave.io.io.io.opts.port
-                path:       "/s/#{@stream.key}/rewind"
-                headers:
-                    'stream-slave-id':    @slave.io.id
-            , (res) =>
-                clearTimeout gRT
-
-                @log.debug "Got Rewind response with status code of #{ res.statusCode }"
-                if res.statusCode == 200
-                    # emit a 'rewind' event with a callback to get the response
-                    cb? null, res
-
-                else
-                    cb? "Rewind request got a non-500 response."
-
-            req.on "error", (err) =>
-                clearTimeout gRT
-
-                @log.debug "Rewind request got error: #{err}", error:err
-                cb? err
-
-            req.end()
-
-        #----------
-
-        disconnect: ->
-            console.log "SocketSource disconnect for #{@stream.key} called"
