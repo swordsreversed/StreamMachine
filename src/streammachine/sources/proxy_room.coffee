@@ -7,12 +7,6 @@ url     = require 'url'
 domain  = require "domain"
 
 module.exports = class ProxyRoom extends require("./base")
-    DefaultOptions:
-        url:        ""
-        fallback:   false
-
-    #----------
-
     TYPE: -> "Proxy (#{@url})"
 
     # opts should include:

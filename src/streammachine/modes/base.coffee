@@ -3,13 +3,6 @@ _u = require "underscore"
 #----------
 
 module.exports = class Core extends require("events").EventEmitter
-    DefaultOptions:
-        # after a new deployment, allow a one hour grace period for
-        # connected listeners
-        max_zombie_life:    1000 * 60 * 60
-
-    #----------
-
     constructor: ->
         @log.debug "Attaching listener for SIGUSR2 restarts."
 

@@ -20,12 +20,7 @@ RewindDumpRestore   = require "../rewind/dump_restore"
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
 module.exports = class Master extends require("events").EventEmitter
-    DefaultOptions:
-        max_zombie_life:    1000 * 60 * 60
-
-    constructor: (opts) ->
-        @options = _.defaults opts||{}, @DefaultOptions
-
+    constructor: (@options) ->
         @_configured = false
 
         @streams        = {}
@@ -78,7 +73,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- start the source listener -- #
 
-        @sourcein = new SourceIn core:@, port:opts.source_port, behind_proxy:opts.behind_proxy
+        @sourcein = new SourceIn core:@, port:@options.source_port, behind_proxy:@options.behind_proxy
 
         # -- create an alerts object -- #
 
@@ -93,9 +88,9 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Analytics -- #
 
-        if opts.analytics
+        if @options.analytics
             @analytics = new Analytics
-                config: opts.analytics
+                config: @options.analytics
                 log:    @log.child(module:"analytics")
                 redis:  @redis
 
@@ -104,7 +99,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Rewind Dump and Restore -- #
 
-        @rewind_dr = new RewindDumpRestore @, opts.rewind_dump if opts.rewind_dump
+        @rewind_dr = new RewindDumpRestore @, @options.rewind_dump if @options.rewind_dump
 
         # -- Set up our monitoring module -- #
 

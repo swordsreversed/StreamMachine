@@ -23,7 +23,7 @@ module.exports = class StandaloneMode extends require("./base")
         # -- Set up master and slave -- #
 
         @master = new Master _.extend {}, @opts, logger:@log.child(mode:"master")
-        @slave  = new Slave _.extend {}, @opts, logger:@log.child(mode:"slave"), max_zombie_life:5000
+        @slave  = new Slave _.extend {}, @opts, logger:@log.child(mode:"slave")
 
         # -- Set up combined server -- #
 
