@@ -192,7 +192,6 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
             return if !line?
 
-            console.log "ICy line is !#{line}!"
             if line
                 match = @headerExp.exec line
                 @info.headers[match[1].toLowerCase()] = match[2]
