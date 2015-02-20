@@ -69,7 +69,6 @@ module.exports = class HLSIndex
         #EXT-X-MEDIA-SEQUENCE:#{segs[2].id}
         #EXT-X-DISCONTINUITY-SEQUENCE:#{segs[2].discontinuitySeq}
         #EXT-X-INDEPENDENT-SEGMENTS
-        #EXT-X-START:TIME-OFFSET=-45
 
         """
 
@@ -80,7 +79,6 @@ module.exports = class HLSIndex
         #EXT-X-MEDIA-SEQUENCE:#{segs[_short_start].id}
         #EXT-X-DISCONTINUITY-SEQUENCE:#{segs[_short_start].discontinuitySeq}
         #EXT-X-INDEPENDENT-SEGMENTS
-        #EXT-X-START:TIME-OFFSET=-45
 
         """
 
