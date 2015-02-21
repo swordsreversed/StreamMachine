@@ -34,7 +34,7 @@ module.exports = class Core extends require("events").EventEmitter
 
                 @log.info "Sending process for USR2. Starting handoff via proxy."
 
-                @_rpc.request "HANDOFF_GO", null, null, timeout:10000, (err,reply) =>
+                @_rpc.request "HANDOFF_GO", null, null, timeout:20000, (err,reply) =>
                     if err
                         @log.error "Error handshaking handoff: #{err}"
                         @_restarting = false
