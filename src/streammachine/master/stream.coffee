@@ -177,6 +177,8 @@ module.exports = class Stream extends require('events').EventEmitter
     #----------
 
     status: ->
+        # id is DEPRECATED in favor of key
+        key:        @key
         id:         @key
         vitals:     @_vitals
         sources:    ( s.info() for s in @sources )
@@ -352,7 +354,7 @@ module.exports = class Stream extends require('events').EventEmitter
 
         @emit "config"
 
-        cb? null, @status()
+        cb? null, @config()
 
     #----------
 

@@ -216,7 +216,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- if they want to rename, the key must be unique -- #
 
-        if stream.key != opts.key
+        if opts.key && stream.key != opts.key
             if @streams[ opts.key ]
                 cb? "Stream key must be unique."
                 return false
