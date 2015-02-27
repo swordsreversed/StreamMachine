@@ -14,6 +14,10 @@ The project has two goals: emulating the traditional streaming experience and
 building support for new features that push the radio listening experience
 forward.
 
+StreamMachine is being developed by [Eric Richardson](http://ewr.is) (e@ewr.is)
+and [Southern California Public Radio](http://scpr.org). SCPR has run
+StreamMachine in production since 2012.
+
 ## The Rewind Buffer
 
 StreamMachine's big idea is keeping a big buffer of audio data in memory,
@@ -77,21 +81,18 @@ For more, see the
 
 ## Outputs
 
-#### Traditional
+* __Raw Audio:__ Realtime audio stream output appropriate for HTML5 audio tags
+    and other web players
 
-The `RawAudio` and `Shoutcast` outputs provide traditional output streams. The
-former outputs just the audio data (appropriate for web players), while the
-latter injects Shoutcast-style metadata at intervals.
+* __Shoutcast:__ Realtime audio stream that injects Shoutcast-style metadata
+    at intervals
 
-#### HTTP Live Streaming
+* __HTTP Live Streaming:__ Apple's HTTP Live Streaming protocol uses playlists
+    and audio segments to replace long-lived connections. StreamMachine supports
+    segment chunking and can produce HLS playlists for individual streams and
+    adaptive stream groups.
 
-StreamMachine supports Apple's HTTP Live Streaming protocol, and can produce
-HLS playlists for an individual stream and for an adaptive stream group.
-
-#### New
-
-The `Pumper` output allows a chunk of audio to be downloaded as quick as
-possible.
+* __Pumper:__ Allows chunks of audio to be downloaded as quickly as possible
 
 ## Alerts
 
@@ -101,15 +102,6 @@ Where logging is intended to signal an event, alerts are about signalling
 that a condition exists.
 
 Alerts can be sent via email or [Pagerduty](http://pagerduty.com).
-
-#### Sourceless Stream
-
-Emits 30 seconds after a monitored stream loses its only source connection.
-
-#### Disconnected Slave
-
-Emits when a slave has been unable to connect to the master server for more
-than 30 seconds.
 
 ## Configuration
 
@@ -133,18 +125,22 @@ To run StreamMachine locally with no service dependencies, try the included `con
 * Install Node.js v0.10
 * Download the StreamMachine repository
 * Run `npm install` to install the Node modules that we depend on
-* Run `./streammachine-cmd --config ./config/standalone.json` to start the StreamMachine service
+* Run `./streammachine-cmd --config ./config/standalone.json` to start the
+  StreamMachine service
 
-Connect to the admin by going to http://localhost:8001/admin and using admin/admin. There is an
-MP3 stream configured at /test, with the source password "testing".  The source input listener is
-on port 8002, and that is where the broadcast should be pointed.
+The included configuration has an MP3 stream configured at /test, with the source
+password "testing".  The source input listener is on port 8002, and that is where
+the broadcast should be pointed. To connect using an included source utility, run:
+
+    ./node_modules/.bin/coffee ./util/icecast_source2.coffee --host 127.0.0.1 \
+    --port 8002 --stream /test --format mp3 --password testing \
+    ./test/files/mp3/mp3-44100-128-s.mp3
+
+To listen, point an audio player to `http://127.0.0.1:8001/test`.
+
+The admin API is available at `http://127.0.0.1:8001/api`.
 
 #### Vagrant
 
 You can also [use the Vagrantfile included in streammachine-cookbook](https://github.com/StreamMachine/streammachine-cookbook)
 to install a standalone configuration in a virtual machine.
-
-## Who?
-
-StreamMachine was developed by [Eric Richardson](http://ewr.is) (e@ewr.is)
-while at [Southern California Public Radio](http://scpr.org).
