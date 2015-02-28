@@ -106,6 +106,10 @@ module.exports = class Analytics
 
         time = new Date( obj.time )
 
+        # clean up IPv4 IP addresses stuck in IPv6
+        if obj.client?.ip
+            obj.client.ip = obj.client.ip.replace /^::ffff:/, ""
+
         @_indicesForTimeRange "listens", time, (err,idx) =>
 
             switch obj.type
@@ -491,7 +495,8 @@ module.exports = class Analytics
                     type:   "string"
                     index:  "not_analyzed"
                 ip:
-                    type:   "ip"
+                    type:   "string"
+                    index:  "not_analyzed"
                 ua:
                     type:   "string"
                 path:
@@ -513,7 +518,8 @@ module.exports = class Analytics
                             type:   "long"
                             include_in_all: false
                         ips:
-                            type:   "ip"
+                            type:   "string"
+                            index:  "not_analyzed"
                             index_name: "ip"
         listens:
             settings:
