@@ -108,9 +108,10 @@ module.exports = class Slave extends require("events").EventEmitter
         # are any of our current streams missing from the new options? if so,
         # disconnect them
         for k,obj of @streams
-            console.log "calling disconnect on ", k
-            obj.disconnect() unless options?[k]
-            @streams.delete k
+            if !options?[k]
+                console.log "calling disconnect on ", k
+                obj.disconnect()
+                delete @streams[k]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
