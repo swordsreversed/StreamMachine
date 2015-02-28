@@ -232,7 +232,7 @@ module.exports = class Rewinder extends require("stream").Readable
         # has happened
         @_contentTime = b.ts if !@_contentTime
 
-        @emit "readable" if !@_reading
+        @read 0 if !@_reading
 
     #----------
 
