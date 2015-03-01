@@ -300,17 +300,34 @@ module.exports = class SlaveMode extends require("./base")
         if @_handle
             _send @_handle
         else
-            _askHandle = (id,w) =>
-                @log.debug "Asking worker #{id} for server handle"
-                w.rpc.request "send_handle", (err,msg,handle) =>
-                    # error is going to be "I don't have a handle to send", so
-                    # we'll just check whether we got a handle back
-                    if handle? && !_handleSent
-                        _handleSent = true
-                        _send handle._handle
-                        @log.debug "Worker #{id} replied with server handle"
+            @_getHandleFromWorker (err,handle) =>
+                if err
+                    _send null
+                else
+                    _send handle
 
-            _askHandle(id,w) for id,w of @lWorkers
+    #----------
+
+    _getHandleFromWorker: (cb) ->
+        _sent = false
+
+        aF = _.after Object.keys(@lWorkers).length, =>
+            if !_sent
+                cb "Failed to get handle from any of our workers"
+
+        _askHandle = (id,w) =>
+            @log.debug "Asking worker #{id} for server handle"
+            w.rpc.request "send_handle", (err,msg,handle) =>
+                # error is going to be "I don't have a handle to send", so
+                # we'll just check whether we got a handle back
+                if handle? && !_sent
+                    _sent = true
+                    @log.debug "Worker #{id} replied with server handle"
+                    cb null, handle._handle
+
+                aF()
+
+        _askHandle(id,w) for id,w of @lWorkers
 
     #----------
 
