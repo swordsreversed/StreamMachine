@@ -18,7 +18,7 @@ describe "Rewinder", ->
     rewind      = null
     source_a    = null
 
-    logger = new Logger { stdout:{level:"silly"}}
+    logger = new Logger {}
 
     before (done) ->
         rewind = new RewindBuffer seconds:60, burst:30, log:logger
@@ -64,7 +64,6 @@ describe "Rewinder", ->
                 info = i
 
                 expect(info).to.not.be.null
-                console.log "info is ", info
 
                 done()
 
