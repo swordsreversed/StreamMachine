@@ -16,7 +16,8 @@ module.exports = class FileSource extends require("./base")
 
         @_chunks = []
 
-        @_emit_pos = 0
+        @_emit_pos  = 0
+        @_last_ts   = Number(@opts.ts) || null
 
         @start() if !@opts.do_not_emit
 
@@ -62,6 +63,24 @@ module.exports = class FileSource extends require("./base")
 
     #----------
 
+    # emit a certain length of time. useful for filling a buffer
+    emitSeconds: (secs,cb) ->
+        emits = Math.ceil(secs / @emitDuration)
+        count = 0
+
+        _f = =>
+            @_emitOnce()
+            count += 1
+
+            if count < emits
+                process.nextTick => _f()
+            else
+                cb()
+
+        _f()
+
+    #----------
+
     _emitOnce: (ts=null) ->
         @_emit_pos = 0 if @_emit_pos >= @_chunks.length
 
@@ -71,14 +90,17 @@ module.exports = class FileSource extends require("./base")
 
         console.log "NO DATA!!!! ", chunk if !chunk.data
 
+        ts = if @_last_ts then @_last_ts + chunk.duration else Number(new Date())
+
         @emit "data",
             data:       chunk.data
-            ts:         ts || (new Date)
+            ts:         new Date(ts)
             duration:   chunk.duration
             streamKey:  @streamKey
             uuid:       @uuid
 
-        @_emit_pos = @_emit_pos + 1
+        @_last_ts   = ts
+        @_emit_pos  = @_emit_pos + 1
 
     #----------
 
