@@ -412,11 +412,12 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                         @discontinuitySeqR -= 1
 
                 # segmentPTS will be the PTS of the following segment, minus our duration
-                segment.pts =
+                segment.pts = Math.round(
                     if @segments[0].pts > (segment.duration * 90)
                         @segments[0].pts - (segment.duration * 90)
                     else
                         MAX_PTS - (segment.duration * 90) + @segments[0].pts
+                )
 
                 @segments.unshift segment
 
