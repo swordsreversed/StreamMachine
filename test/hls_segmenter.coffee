@@ -148,11 +148,18 @@ describe "HTTP Live Streaming Segmenter", ->
             injector.unpipe()
             done()
 
-        it "assigns sequenced IDs to new segments", (done) ->
-            finalizer = new HLSSegmenter.Finalizer (new Logger {})
-            injector.pipe(finalizer)
+        describe "assigning sequenced IDs to new segments", ->
+            finalizer = null
+            it "generates segments", (done) ->
+                finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
+                injector.pipe(finalizer)
 
-            finalizer.on "finish", ->
+                finalizer.on "finish", ->
+                    done()
+
+                generator.forward 31, -> generator.end()
+
+            it "assigned the right ID sequence", (done) ->
                 # even though three segments worth of data gets pushed into
                 # the injector, it currently doesn't know how to trigger the
                 # emit of its first segment into the finalizer.
@@ -163,10 +170,19 @@ describe "HTTP Live Streaming Segmenter", ->
                 expect( finalizer.segments[1].id ).to.eql 1
                 done()
 
-            generator.forward 31, -> generator.end()
+
+            it "assigned valid PTS values", (done) ->
+                seg_pts_units = segment_duration * 90
+
+                expect( finalizer.segmentPTS ).to.be.closeTo seg_pts_units*2, 100
+                expect( finalizer.segments[0].pts ).to.be.eql 0
+                expect( finalizer.segments[1].pts ).to.be.closeTo seg_pts_units*1, 100
+
+                done()
+
 
         it "creates a discontinuity when given a gap", (done) ->
-            finalizer = new HLSSegmenter.Finalizer (new Logger {})
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
@@ -189,7 +205,7 @@ describe "HTTP Live Streaming Segmenter", ->
             for i in [0..2]
                 seg_map[ Number(f_seg.ts) + i*segment_duration ] = seq + i
 
-            finalizer = new HLSSegmenter.Finalizer (new Logger {}),
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration,
                 segmentSeq:         8
                 nextSegment:        f_seg.ts
                 discontinuitySeq:   0
@@ -220,7 +236,7 @@ describe "HTTP Live Streaming Segmenter", ->
                 seg_map[ Number(f_seg.ts) - i*segment_duration ] = seq
                 seq += 1
 
-            finalizer = new HLSSegmenter.Finalizer (new Logger {}),
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration,
                 segmentSeq:         8
                 nextSegment:        f_seg.ts
                 discontinuitySeq:   0
@@ -260,7 +276,7 @@ describe "HTTP Live Streaming Segmenter", ->
             for m in [[1,7],[3,6]]
                 seg_map[ Number(f_seg.ts) - m[0]*segment_duration ] = m[1]
 
-            finalizer = new HLSSegmenter.Finalizer (new Logger {}),
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration,
                 segmentSeq:         8
                 nextSegment:        f_seg.ts
                 discontinuitySeq:   0
@@ -287,7 +303,7 @@ describe "HTTP Live Streaming Segmenter", ->
             for m in [[1,7],[2,6],[4,5]]
                 seg_map[ Number(f_seg.ts) - m[0]*segment_duration ] = m[1]
 
-            finalizer = new HLSSegmenter.Finalizer (new Logger {}),
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration,
                 segmentSeq:         8
                 nextSegment:        f_seg.ts
                 discontinuitySeq:   4
@@ -306,7 +322,7 @@ describe "HTTP Live Streaming Segmenter", ->
 
         it "can dump map info", (done) ->
 
-            finalizer = new HLSSegmenter.Finalizer (new Logger {})
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
@@ -320,7 +336,7 @@ describe "HTTP Live Streaming Segmenter", ->
             generator.forward 41, -> generator.end()
 
         it "can dump a snapshot", (done) ->
-            finalizer = new HLSSegmenter.Finalizer (new Logger {})
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
             injector.pipe(finalizer)
 
             finalizer.on "finish", ->
@@ -337,7 +353,7 @@ describe "HTTP Live Streaming Segmenter", ->
             generator.forward 41, -> generator.end()
 
         it "can expire segments using the expire function", (done) ->
-            finalizer = new HLSSegmenter.Finalizer (new Logger {})
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
             injector.pipe(finalizer)
 
             finalizer.once "finish", ->

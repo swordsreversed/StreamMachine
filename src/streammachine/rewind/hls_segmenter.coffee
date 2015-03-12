@@ -10,6 +10,8 @@ Debounce    = require "../util/debounce"
 # buffers:  array of buffer refs
 # header:   computed ID3 header
 
+MAX_PTS = Math.pow(2,33) - 1
+
 module.exports = class HLSSegmenter extends require("events").EventEmitter
     constructor: (@rewind,@segment_length,@log) ->
         @segments = []
@@ -32,7 +34,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         @finalizer = null
 
         @_createFinalizer = _.once (map) =>
-            @finalizer = new HLSSegmenter.Finalizer @log, map
+            @finalizer = new HLSSegmenter.Finalizer @log, @segment_length * 1000, map
             @injector.pipe(@finalizer)
             @segments = @finalizer.segments
 
@@ -247,7 +249,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
     #----------
 
     class @Finalizer extends require("stream").Writable
-        constructor: (@log,seg_data=null) ->
+        constructor: (@log,@segmentLen,seg_data=null) ->
             @segments       = []
             @segment_idx    = {}
 
@@ -255,6 +257,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             @discontinuitySeq   = seg_data?.discontinuitySeq || 0
             @firstSegment       = if seg_data?.nextSegment then Number(seg_data?.nextSegment) else null
             @segment_map        = seg_data?.segmentMap || {}
+
+            @segmentPTS         = seg_data?.segmentPTS || (@segmentSeq * (@segmentLen*90))
 
             # this starts out the same and diverges backward
             @discontinuitySeqR  = @discontinuitySeq
@@ -296,6 +300,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             map =
                 segmentMap:         seg_map
                 segmentSeq:         @segmentSeq
+                segmentLen:         @segmentLen
+                segmentPTS:         @segmentPTS
                 discontinuitySeq:   @discontinuitySeq
                 nextSegment:        @segments[ @segments.length - 1 ]?.end_ts
 
@@ -315,7 +321,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
             # -- Compute Segment ID -- #
 
-            seg_id = null
+            seg_id  = null
+            seg_pts = null
             if @segment_map[ Number(segment.ts) ]?
                 seg_id = @segment_map[ Number(segment.ts) ]
                 @log.silly "Pulling segment ID from loaded segment map", id:seg_id, ts:segment.ts
@@ -383,6 +390,16 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                     else
                         @discontinuitySeq += 1
 
+                # for forward-facing segments, PTS is fetched from the finalizer, and then
+                # updated with our duration
+                segment.pts = @segmentPTS
+
+                @segmentPTS = Math.round(@segmentPTS + (segment.duration * 90))
+
+                # if new PTS is above 33-bit max, roll over
+                if @segmentPTS > MAX_PTS
+                    @segmentPTS = @segmentPTS - MAX_PTS
+
                 @segments.push segment
 
             else if Number(segment.ts) < @segments[0].ts
@@ -393,6 +410,13 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                         @discontinuitySeqR
                     else
                         @discontinuitySeqR -= 1
+
+                # segmentPTS will be the PTS of the following segment, minus our duration
+                segment.pts =
+                    if @segments[0].pts > (segment.duration * 90)
+                        @segments[0].pts - (segment.duration * 90)
+                    else
+                        MAX_PTS - (segment.duration * 90) + @segments[0].pts
 
                 @segments.unshift segment
 

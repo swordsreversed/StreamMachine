@@ -1,3 +1,5 @@
+_ = require "underscore"
+
 # Rewinder is the general-purpose listener stream.
 # Arguments:
 # * offset: Number
@@ -34,6 +36,9 @@ module.exports = class Rewinder extends require("stream").Readable
         @_queuedBytes = 0
 
         @_reading = false
+        @_bounceRead = _.debounce =>
+            @read 0
+        , 100
 
         @_segTimer = null
 
@@ -223,6 +228,8 @@ module.exports = class Rewinder extends require("stream").Readable
 
         _pushQueue()
 
+    #----------
+
     _insert: (b) =>
         @_queue.push b
         @_queuedBytes += b.data.length
@@ -232,7 +239,7 @@ module.exports = class Rewinder extends require("stream").Readable
         # has happened
         @_contentTime = b.ts if !@_contentTime
 
-        @read 0 if !@_reading
+        @_bounceRead() if !@_reading
 
     #----------
 
