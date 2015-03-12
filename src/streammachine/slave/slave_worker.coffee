@@ -32,7 +32,6 @@ module.exports = class SlaveWorker
 
             # Accept an incoming connection attempt
             connection: (msg,sock,cb) =>
-                console.log "connection sock is ", sock
                 sock.allowHalfOpen = true
                 @slave.server.handle sock
                 cb null, "OK"
