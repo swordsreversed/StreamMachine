@@ -4,6 +4,13 @@ uuid = require "node-uuid"
 
 BaseOutput = require "./base"
 
+PTS_TAG = new Buffer(Number("0x#{s}") for s in """
+    49 44 33 04 00 00 00 00 00 3F 50 52 49 56 00 00 00 35 00 00 63 6F 6D
+    2E 61 70 70 6C 65 2E 73 74 72 65 61 6D 69 6E 67 2E 74 72 61 6E 73 70
+    6F 72 74 53 74 72 65 61 6D 54 69 6D 65 73 74 61 6D 70 00 00 00 00 00
+    00 00 00 00
+    """.split(/\s+/))
+
 module.exports = class LiveStreaming extends BaseOutput
     constructor: (@stream,@opts) ->
 
@@ -27,6 +34,19 @@ module.exports = class LiveStreaming extends BaseOutput
 
             # write out our headers
             @opts.res.writeHead 200, headers
+
+            # write our PTS tag
+            if info.pts
+                tag = new Buffer(PTS_TAG)
+                # node 0.10 doesn't know how to write ints over 32-bit, so
+                # we do some gymnastics to get around it
+                if info.pts > Math.pow(2,32)-1
+                    tag[0x44] = 0x01
+                    tag.writeUInt32BE(info.pts-(Math.pow(2,32)-1),0x45)
+                else
+                    tag.writeUInt32BE(info.pts,0x45)
+
+                @opts.res.write tag
 
             # send our pump buffer to the client
             playHead.pipe(@opts.res)
