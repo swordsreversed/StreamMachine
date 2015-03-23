@@ -44,7 +44,8 @@
         "throttle":             "~1.0.0",
         "ipc-rpc":              "~0.1.2",
         "binary-search": 	      "~1.2.0",
-        "compression":          "~1.4.0"
+        "compression":          "~1.4.0",
+        "prometheus-client":    "~0.1.0"
     },
     "devDependencies": {
         "webkit-devtools-agent":  "~0.3.1",

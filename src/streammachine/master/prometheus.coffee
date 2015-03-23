@@ -2,21 +2,27 @@ Prometheus  = require "prometheus-client"
 
 module.exports = class PrometheusMaster
     constructor: (@master) ->
-        @client = new Prometheus namespace:"streammachine", subsystem:"master"
+        @client = new Prometheus()
 
         # -- Register our Metrics -- #
 
         @connected_sources = @client.newGauge
-            name: "stream_sources"
-            help: "Number of sources connected for this stream."
+            namespace:  "streammachine",
+            subsystem:  "master"
+            name:       "stream_sources"
+            help:       "Number of sources connected for this stream."
 
         @source_latency = @client.newGauge
-            name: "stream_source_latency"
-            help: "How many milliseconds is the source chunk ts behind our clock time?"
+            namespace:  "streammachine",
+            subsystem:  "master"
+            name:       "stream_source_latency"
+            help:       "How many milliseconds is the source chunk ts behind our clock time?"
 
         @connected_slaves = @client.newGauge
-            name: "slaves"
-            help: "Number of slaves that are connected."
+            namespace:  "streammachine",
+            subsystem:  "master"
+            name:       "slaves"
+            help:       "Number of slaves that are connected."
 
         # -- Set our source loop -- #
 
@@ -47,4 +53,4 @@ module.exports = class PrometheusMaster
         # -- Attach metrics to the API -- #
 
         # FIXME: This should probably happen in the API class...
-        @master.api.app.get "/metrics", @client.metricsFunc
+        @master.api.app.get "/metrics", @client.metricsFunc()
