@@ -33,6 +33,9 @@ module.exports = class API
             if key? && s = @master.streams[ key ]
                 req.stream = s
                 next()
+            else if key? && sg = @master.stream_groups[ key ]
+                req.stream = sg._stream
+                next()
             else
                 res.status(404).end "Invalid stream.\n"
 
