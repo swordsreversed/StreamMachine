@@ -8,6 +8,9 @@
     "repository":   {"type": "git", "url": "https://github.com/StreamMachine/StreamMachine.git"},
     "main":         "./index.js",
     "license":      "BSD",
+    "scripts": {
+      "test": "./node_modules/.bin/mocha"
+    },
     "engines": {
         "node": ">=0.10.0"
     },
