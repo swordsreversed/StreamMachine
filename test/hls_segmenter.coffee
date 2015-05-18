@@ -506,3 +506,49 @@ describe "HTTP Live Streaming Segmenter", ->
 
             r1.hls_segmenter.once "snapshot", af
             r2.hls_segmenter.once "snapshot", af
+
+    #----------
+
+    describe "Segment PTS values", ->
+        generator   = null
+        injector    = null
+        finalizer   = null
+
+        before (done) ->
+            injector = new HLSSegmenter.Injector segment_duration, (new Logger {})
+            generator = new ChunkGenerator start_ts, chunk_duration
+            generator.pipe(injector)
+
+            finalizer = new HLSSegmenter.Finalizer (new Logger {}), segment_duration
+            injector.pipe(finalizer)
+
+            done()
+
+        after (done) ->
+            generator.unpipe()
+            injector.unpipe()
+            done()
+
+        it "generates correct PTS at 24 hours", (done) ->
+            generator.forward (86400 * 1000 / chunk_duration), ->
+                # PTS will have started at 0 since we didn't send in a map, so a
+                # segment's PTS should be seg.id * segment_duration * 90
+
+                last_seg = finalizer.segments[finalizer.segments.length-1]
+
+                expect(last_seg.pts).to.eql last_seg.id * segment_duration * 90
+
+                done()
+
+        it "generates correct PTS at 48 hours", (done) ->
+            generator.forward (86400 * 1000 / chunk_duration), ->
+                # PTS is a 33-bit integer, so it will roll over after 26.5 hours
+                # when it hits Math.pow(2,33) - 1
+                last_seg = finalizer.segments[finalizer.segments.length-1]
+                # we can't test actaul equality here because javascript doesn't believe in ints
+                expect(last_seg.pts).to.be.closeTo ((last_seg.id * segment_duration * 90) - Math.pow(2,33) - 1), 10
+                done()
+
+
+
+

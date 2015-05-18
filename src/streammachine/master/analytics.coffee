@@ -476,31 +476,42 @@ module.exports = class Analytics
         time:
             type:   "date"
             format: "date_time"
+            doc_values: true
         stream:
             type:   "string"
             index:  "not_analyzed"
+            doc_values: true
         session_id:
             type:   "string"
             index:  "not_analyzed"
+            doc_values: true
         client:
             type:   "object"
             properties:
                 session_id:
                     type:   "string"
                     index:  "not_analyzed"
+                    doc_values: true
                 user_id:
                     type:   "string"
                     index:  "not_analyzed"
+                    doc_values: true
                 output:
                     type:   "string"
                     index:  "not_analyzed"
+                    doc_values: true
                 ip:
                     type:   "string"
                     index:  "not_analyzed"
+                    doc_values: true
                 ua:
                     type:   "string"
+                    index:  "not_analyzed"
+                    doc_values: true
                 path:
                     type:   "string"
+                    index:  "not_analyzed"
+                    doc_values: true
 
     @EStemplates:
         sessions:
@@ -510,17 +521,17 @@ module.exports = class Analytics
                     number_of_replicas: 1
             mappings:
                 session:
+                    "_all": { enabled: false }
                     properties: _.extend {}, @ESobjcore,
                         duration:
                             type:   "float"
-                            include_in_all: false
                         kbytes:
                             type:   "long"
-                            include_in_all: false
                         ips:
                             type:   "string"
                             index:  "not_analyzed"
                             index_name: "ip"
+                            doc_values: true
         listens:
             settings:
                 index:
@@ -528,20 +539,21 @@ module.exports = class Analytics
                     number_of_replicas: 1
             mappings:
                 start:
+                    "_all": { enabled: false }
                     properties: _.extend {}, @ESobjcore
 
                 listen:
+                    "_all": { enabled: false }
                     properties:
                         _.extend {}, @ESobjcore,
                             duration:
                                 type:   "float"
-                                include_in_all: false
                             kbytes:
                                 type:   "long"
-                                include_in_all: false
                             offsetSeconds:
                                 type:   "integer"
-                                include_in_all: false
+                                doc_values: true
                             contentTime:
                                 type:   "date"
                                 format: "date_time"
+                                doc_values: true

@@ -8,6 +8,9 @@
     "repository":   {"type": "git", "url": "https://github.com/StreamMachine/StreamMachine.git"},
     "main":         "./index.js",
     "license":      "BSD",
+    "scripts": {
+      "test": "./node_modules/.bin/mocha"
+    },
     "engines": {
         "node": ">=0.10.0"
     },
@@ -47,9 +50,8 @@
         "compression":          "~1.4.0"
     },
     "devDependencies": {
-        "webkit-devtools-agent":  "~0.3.1",
-        "mocha":                  "~2.1.0",
-        "chai":                   "~2.1.0",
+        "mocha":                  "~2.2.0",
+        "chai":                   "~2.3.0",
         "optimist":               "~0.5.2",
         "request":                "~2.53.0"
     },

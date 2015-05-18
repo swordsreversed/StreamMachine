@@ -20,6 +20,16 @@ module.exports = class IcecastSource extends require("./base")
 
         @log?.debug "New Icecast source."
 
+        @_vtimeout = setTimeout =>
+            @log?.error "Failed to get source vitals before timeout. Forcing disconnect."
+            @disconnect()
+        , 3000
+
+        @once "vitals", =>
+            @log?.debug "Vitals parsed for source."
+            clearTimeout @_vtimeout
+            @_vtimeout = null
+
         # incoming -> Parser
         @opts.sock.pipe @parser
 
@@ -44,20 +54,23 @@ module.exports = class IcecastSource extends require("./base")
     #----------
 
     info: ->
-        source:     @TYPE?() ? @TYPE
-        connected:  @connected
-        url:        [@opts.source_ip,@opts.sock.remotePort].join(":")
-        streamKey:  @streamKey
-        uuid:       @uuid
-        last_ts:    @last_ts
+        source:         @TYPE?() ? @TYPE
+        connected:      @connected
+        url:            [@opts.source_ip,@opts.sock.remotePort].join(":")
+        streamKey:      @streamKey
+        uuid:           @uuid
+        last_ts:        @last_ts
+        connected_at:   @connectedAt
 
     #----------
 
     disconnect: ->
         if @connected
             super
+
+            clearTimeout @_vtimeout if @_vtimeout
+
             @opts.sock.destroy()
             @opts.sock.removeAllListeners()
             @connected = false
             @emit "disconnect"
-
