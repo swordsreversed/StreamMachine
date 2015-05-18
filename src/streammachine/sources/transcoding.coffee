@@ -37,8 +37,12 @@ module.exports = class TranscodingSource extends require("./base")
                 @log?.info "ffmpeg started with #{ cmd }"
 
             @ffmpeg.on "error", (err) =>
-                @log?.error "ffmpeg transcoding error: #{ err }"
-                @disconnect()
+                if err.code == "ENOENT"
+                    @log?.error "ffmpeg failed to start."
+                    @disconnect()
+                else
+                    @log?.error "ffmpeg transcoding error: #{ err }"
+                    @disconnect()
 
             @ffmpeg.writeToStream @parser
 
@@ -112,11 +116,10 @@ module.exports = class TranscodingSource extends require("./base")
     disconnect: ->
         if !@_disconnected
             @_disconnected = true
-            @emit "disconnect"
             @d.run =>
                 @o_stream.removeListener "data", @oDataFunc
                 @ffmpeg.kill()
                 @_pingData?.kill()
                 @connected = false
 
-            @d.dispose()
+            @emit "disconnect"
