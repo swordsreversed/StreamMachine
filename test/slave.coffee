@@ -48,6 +48,7 @@ describe "Slave Mode", ->
         slave.status (err,status) ->
             throw err if err
 
+            # expect two workers
             expect(Object.keys(status)).to.have.length 2
 
             for id,w of status
@@ -84,7 +85,6 @@ describe "Slave Mode", ->
         it "can ask a worker for its handle", (done) ->
             slave._getHandleFromWorker (err,handle) ->
                 throw new Error err if err
-                console.log "Handle is ", handle
                 done()
 
         it "can shut down a worker on request", (done) ->
@@ -111,6 +111,7 @@ describe "Slave Mode", ->
                 done()
 
         it "should spawn a replacement worker", (done) ->
+            this.timeout 5000
             slave.once "worker_listening", ->
                 expect(Object.keys(slave.workers)).to.have.length slave_config.cluster
                 done()
