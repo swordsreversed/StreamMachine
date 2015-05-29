@@ -48,6 +48,7 @@ describe "Slave Mode", ->
         slave.status (err,status) ->
             throw err if err
 
+            # expect two workers
             expect(Object.keys(status)).to.have.length 2
 
             for id,w of status
@@ -105,6 +106,7 @@ describe "Slave Mode", ->
                 done()
 
         it "should spawn a replacement worker", (done) ->
+            this.timeout 5000
             slave.once "worker_loaded", ->
                 expect(Object.keys(slave.workers)).to.have.length slave_config.cluster
                 done()

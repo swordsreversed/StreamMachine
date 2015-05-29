@@ -118,7 +118,7 @@ module.exports = class Slave extends require("events").EventEmitter
         for key,opts of options
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.debug "Passing updated config to source: #{key}", opts:opts
+                @log.debug "Passing updated config to stream: #{key}", opts:opts
                 @streams[key].configure opts
             else
                 @log.debug "Starting up stream: #{key}", opts:opts

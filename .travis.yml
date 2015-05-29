@@ -5,3 +5,4 @@ node_js:
   - "iojs"
 services:
   - elasticsearch
+env: SKIP_TRANSCODING=1
