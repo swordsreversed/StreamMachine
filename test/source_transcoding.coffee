@@ -36,6 +36,8 @@ TRANS_AAC_STREAM =
 in_file = $file "aac-256.aac"
 
 describe "Transcoding Source", ->
+    return true if process.env['SKIP_TRANSCODING']
+
     logger = new Logger {stdout:false}
 
     file_source = null
