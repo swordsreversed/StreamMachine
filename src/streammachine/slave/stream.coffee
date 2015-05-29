@@ -129,7 +129,7 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     #----------
 
-    configure: (opts) ->
+    configure: (@opts) ->
 
         # -- Preroll -- #
 
