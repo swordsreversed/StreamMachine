@@ -27,7 +27,7 @@ describe "Slave Config Updates", ->
             slave:
                 master: master_info.slave_uri
             port: 0
-            logger: new Logger stdout:true
+            logger: new Logger stdout:false
 
         slave = new Slave config
 
