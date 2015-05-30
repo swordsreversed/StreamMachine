@@ -35,7 +35,9 @@ module.exports = class StreamListener extends require("events").EventEmitter
                 @emit "metadata", Icecast.parse(meta)
 
             @res.on "readable", =>
-                @bytesReceived += data.length while data = @res.read()
+                while data = @res.read()
+                    @bytesReceived += data.length
+                    @emit "bytes"
 
             # -- listen for an early exit -- #
 

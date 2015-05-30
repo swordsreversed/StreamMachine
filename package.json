@@ -47,7 +47,8 @@
         "throttle":             "~1.0.0",
         "ipc-rpc":              "~0.1.1",
         "binary-search": 	      "~1.2.0",
-        "compression":          "~1.4.0"
+        "compression":          "~1.4.0",
+        "debug":                "~2.2.0"
     },
     "devDependencies": {
         "mocha":                  "~2.2.0",

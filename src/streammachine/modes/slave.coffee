@@ -219,6 +219,7 @@ module.exports = class SlaveMode extends require("./base")
         for id,w of @workers
             do (id,w) =>
                 w.rpc.request "status", (err,s) =>
+                    @log.error "Worker status error: #{err}" if err
                     status[ id ] = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid
                     af()
 

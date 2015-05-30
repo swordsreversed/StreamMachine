@@ -160,7 +160,7 @@ module.exports = class Slave extends require("events").EventEmitter
         status = {}
 
         for key,s of @streams
-            status[ key ] = s._rStatus()
+            status[ key ] = s.status()
 
         cb null, status
 

@@ -1,4 +1,4 @@
-_u      = require "underscore"
+_       = require "underscore"
 uuid    = require "node-uuid"
 
 
@@ -92,13 +92,10 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     #----------
 
-    info: ->
-        key:            @key
-        status:         @STATUS
-        sources:        []
-        listeners:      @listeners()
-        options:        @opts
-        bufferedSecs:   @bufferedSecs()
+    status: ->
+        _.extend @_rStatus(),
+            key:        @key
+            listeners:  @listeners()
 
     #----------
 
@@ -190,7 +187,7 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
 
     listeners: ->
-        _u(@_lmeta).keys().length
+        _(@_lmeta).keys().length
 
     #----------
 
