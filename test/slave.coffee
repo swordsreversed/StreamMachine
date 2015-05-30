@@ -14,7 +14,7 @@ describe "Slave Mode", ->
         port:       0
         cluster:    2
         log:
-            stdout: true
+            stdout: false
 
     slave_port  = null
     slave       = null
