@@ -60,7 +60,7 @@ describe "Analytics", ->
         # create a null reader for it
         devnull = new (
             class extends (require "stream").Writable
-                write: (chunk,encoding,cb) ->
+                _write: (chunk,encoding,cb) ->
                     cb()
         )
 
