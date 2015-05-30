@@ -1,5 +1,8 @@
 MasterMode = $src "modes/master"
 
+uuid    = require "node-uuid"
+_       = require "underscore"
+
 STREAMS =
     mp3:
         key:                "test"
@@ -28,8 +31,13 @@ module.exports =
                 stdout:     false
             streams: {}
 
-        if s
-            master_config.streams[ s.key ] = s
+        sconfig = null
+
+        if stream
+            # generate a random stream key
+            streamkey = uuid.v4()
+
+            sconfig = master_config.streams[ streamkey ] = _.extend {}, s, key:streamkey
 
         new MasterMode master_config, (err,m) ->
             throw err if err
@@ -38,8 +46,8 @@ module.exports =
                 master:             m
                 master_port:        m.handle.address().port
                 source_port:        m.master.sourcein.server.address().port
-                stream_key:         s?.key
-                source_password:    s?.source_password
+                stream_key:         sconfig?.key
+                source_password:    sconfig?.source_password
                 slave_uri:          ""
                 config:             master_config
 

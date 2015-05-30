@@ -18,10 +18,9 @@ util = require "util"
 
 debug = require("debug")("sm:tests:slave_handoffs")
 
-master_info = null
-source      = null
-
 describe "Slave Handoffs and Worker Respawns", ->
+    master_info = null
+    source      = null
 
     before (done) ->
         # unfortunately, to test slave mode, we need a master. that means
@@ -30,6 +29,9 @@ describe "Slave Handoffs and Worker Respawns", ->
         MasterHelper.startMaster "mp3", (err,info) ->
             throw err if err
             master_info = info
+
+            debug "started master. Connect at: #{master_info.slave_uri}"
+            debug "Stream Key is #{master_info.stream_key}"
 
             source = new IcecastSource
                 format:     "mp3"

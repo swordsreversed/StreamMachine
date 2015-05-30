@@ -5,12 +5,12 @@ Logger      = $src "logger"
 
 MasterHelper    = require "../helpers/master"
 
-master_info = null
-slave       = null
-
 # Test that stream config changes on master propagate correctly to a slave
 
 describe "Slave Config Updates", ->
+    master_info = null
+    slave       = null
+
     before (done) ->
         # unfortunately, to test slave mode, we need a master. that means
         # we get to do a lot here that hopefully gets tested elsewhere
