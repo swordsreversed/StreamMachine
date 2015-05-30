@@ -9,7 +9,7 @@ module.exports =
             port:       0
             cluster:    count
             log:
-                stdout: true
+                stdout: false
 
         new SlaveMode config, (err,s) ->
             throw err if err
