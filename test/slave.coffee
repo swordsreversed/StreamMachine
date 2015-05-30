@@ -3,20 +3,23 @@ SlaveMode   = $src "modes/slave"
 StreamListener  = $src "util/stream_listener"
 MasterHelper    = require "./helpers/master"
 
-slave_port  = null
-slave       = null
+debug = require("debug")("sm:tests:slave")
 
-slave_config =
-    slave:
-        master: "FILLED_IN_BELOW"
-    port:       0
-    cluster:    2
-    log:
-        stdout: false
 
-master_info = null
 
 describe "Slave Mode", ->
+    slave_config =
+        slave:
+            master: "FILLED_IN_BELOW"
+        port:       0
+        cluster:    2
+        log:
+            stdout: true
+
+    slave_port  = null
+    slave       = null
+    master_info = null
+
     before (done) ->
         # unfortunately, to test slave mode, we need a master. that means
         # we get to do a lot here that hopefully gets tested elsewhere
@@ -24,11 +27,16 @@ describe "Slave Mode", ->
         MasterHelper.startMaster "mp3", (err,info) ->
             throw err if err
             master_info = info
+
+            debug "started master. Connect at: #{master_info.slave_uri}"
+            debug "Stream Key is #{master_info.stream_key}"
+
             done()
 
     it "can start up", (done) ->
         this.timeout 10*1000
         slave_config.slave.master = master_info.slave_uri
+
         new SlaveMode slave_config, (err,s) ->
             throw err if err
 
@@ -45,7 +53,9 @@ describe "Slave Mode", ->
         done()
 
     it "has our stream information in all workers", (done) ->
+        this.timeout 4000
         slave.status (err,status) ->
+            debug "status got ", err, status
             throw err if err
 
             # expect two workers
