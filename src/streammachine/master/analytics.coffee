@@ -26,11 +26,15 @@ module.exports = class Analytics
 
             @redis = @opts.redis.client
 
-        @es = new elasticsearch.Client
-            host:       "http://#{@_uri.hostname}:#{@_uri.port||9200}"
-            apiVersion: "1.1"
-
+        es_uri = "http://#{@_uri.hostname}:#{@_uri.port||9200}"
         @idx_prefix = @_uri.pathname.substr(1)
+
+        @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
+
+        @es = new elasticsearch.Client
+            host:       es_uri
+            apiVersion: "1.4"
+            #log: "trace"
 
         # track open sessions
         @sessions = {}
@@ -111,7 +115,6 @@ module.exports = class Analytics
             obj.client.ip = obj.client.ip.replace /^::ffff:/, ""
 
         @_indicesForTimeRange "listens", time, (err,idx) =>
-
             switch obj.type
                 when "session_start"
                     @es.index index:idx[0], type:"start", body:
@@ -177,6 +180,10 @@ module.exports = class Analytics
     #----------
 
     _updateSessionTimerFor: (session,cb) ->
+        if @_timeout_sec <= 0
+            # timeouts are disabled
+            return cb null
+
         if @redis
             # this will set the score, or update it if the session is
             # already in the set
