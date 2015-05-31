@@ -50,14 +50,14 @@ describe "Slave Handoffs and Worker Respawns", ->
         slave_port  = null
 
         before (done) ->
-            this.timeout(4000)
+            this.timeout(10000)
             SlaveHelper.startSlave master_info.slave_uri, 2, (err,slave_info) ->
                 throw err if err
 
                 slave = slave_info.slave
 
                 slave.once "full_strength", ->
-                    slave_port = slave._lastAddress.port
+                    slave_port = slave.slavePort()
                     done()
 
         it "can accept a stream listener", (done) ->

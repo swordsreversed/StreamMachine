@@ -1,22 +1,12 @@
 _       = require "underscore"
 nconf   = require "nconf"
-cluster = require "cluster"
 path    = require "path"
 RPC     = require "ipc-rpc"
 net     = require "net"
+CP      = require "child_process"
 
 Logger  = require "../logger"
 Slave   = require "../slave"
-
-#----------
-
-# basically just an event-emitting struct with our worker attributes
-class Worker extends require("events").EventEmitter
-    constructor: (attributes) ->
-        @[k] = v for k,v of attributes
-
-    destroy: ->
-        @removeAllListeners()
 
 #----------
 
@@ -24,15 +14,13 @@ module.exports = class SlaveMode extends require("./base")
 
     MODE: "Slave"
     constructor: (@opts,cb) ->
-        @log = (new Logger @opts.log).child({component:'slave',pid:process.pid})
+        @log = (new Logger @opts.log).child({mode:'slave',pid:process.pid})
         @log.debug "Slave Instance initialized"
 
         process.title = "StreamM:slave"
 
         super
 
-        @workers        = {}
-        @lWorkers       = {}
         @_handle        = null
         @_haveHandle    = false
         @_shuttingDown  = false
@@ -46,8 +34,8 @@ module.exports = class SlaveMode extends require("./base")
         if process.send?
             @_rpc = new RPC process, timeout:5000, functions:
                 slave_port: (msg,handle,cb) =>
-                    if @_lastAddress
-                        cb null, @_lastAddress.port
+                    if p = @slavePort()
+                        cb null, p
                     else
                         cb new Error "No address returned yet."
 
@@ -60,103 +48,13 @@ module.exports = class SlaveMode extends require("./base")
                 stream_listener: (msg,handle,cb) =>
                     @_landListener null, msg, handle, cb
 
-        # -- Set up Clustered Workers -- #
+        # -- Set up Clustered Worker Pool -- #
 
-        cluster.setupMaster
-            exec: path.resolve(__dirname,"./slave_worker.js")
+        @pool = new SlaveMode.WorkerPool @, @opts.cluster, @opts
+        @pool.on "full_strength", => @emit "full_strength"
 
-        cluster.on "online", (worker) =>
-            @log.info "SlaveWorker online: #{worker.id}"
-
-            w = new Worker
-                id:         worker.id
-                w:          worker
-                rpc:        null
-                pid:        worker.process.pid
-                _loaded:    false
-
-            w.rpc = new RPC worker, functions:
-
-                # triggered by the worker once it has its streams configured
-                # (though they may not yet have data to give out)
-                worker_configured: (msg,handle,cb) =>
-                    #if @_haveHandle && !w._listening
-                    #    w.rpc.request "listen", {fd:@_handle?.fd}, (err,address) =>
-                    #        if err
-                    #            @log.error "Worker listen error: #{err}" if err
-                    #            return false
-
-                    #        w._listening = true
-                    #        @lWorkers[ w.id ] = w
-                    #        @_lastAddress = address
-
-                    #        @emit "worker_listening"
-
-                    cb null
-
-                #---
-
-                # sent by the worker once its stream rewinds are loaded.
-                # tells us that it's safe to trigger a new worker launch
-                rewinds_loaded: (msg,handle,cb) =>
-                    w._loaded = true
-                    @lWorkers[ w.id ] = w
-                    @emit "worker_loaded"
-
-                    # ACK
-                    cb null
-
-                    # now that we're done, see if any more workers need to start
-                    @_respawnWorkers()
-
-                #---
-
-                # a worker is allowed to shed listeners at any point by
-                # sending them here. This could be part of a handoff (where
-                # we've asked for the listeners), or part of the worker
-                # crashing / shutting down
-                send_listener: (msg,handle,cb) =>
-                    if @_inHandoff
-                        # we're in a handoff. ship the listener out there
-                        @_rpc.request "stream_listener", msg, handle, (err) =>
-                            cb err
-                    else
-                        # we can hand the listener to any slave except the one
-                        # it came from
-                        @_landListener w.id, msg, handle, cb
-
-                #---
-
-                # triggered by the worker to request configuration
-                config: (msg,handle,cb) =>
-                    cb null, @opts
-
-            , (err) =>
-                if err
-                    @log.error "Error setting up RPC for new worker: #{err}"
-                    worker.kill()
-                    return false
-
-                @log.debug "Worker #{w.id} is set up.", id:w.id, pid:w.pid
-
-                @workers[ worker.id ] = w
-
-        cluster.on "disconnect", (worker) =>
-            @log.info "SlaveWorker disconnect: #{worker.id}"
-            @workers[ worker.id ]?.emit "disconnect"
-            delete @lWorkers[worker.id]
-
-        cluster.on "exit", (worker) =>
-            @log.info "SlaveWorker exit: #{worker.id}"
-            w = @workers[ worker.id ]
-            delete @workers[ worker.id ]
-
-            w.emit "exit"
-            w.destroy()
-
-            @_respawnWorkers() if !@_shuttingDown
-
-        @_respawnWorkers()
+        process.on "exit", =>
+            @pool.destroy()
 
         # -- set up server -- #
 
@@ -197,75 +95,40 @@ module.exports = class SlaveMode extends require("./base")
     #----------
 
     _distributeConnection: (conn) ->
-        worker_ids = Object.keys(@lWorkers)
+        w = @pool.getWorker()
 
-        if worker_ids.length == 0
-            @once "worker_loaded", =>
+        if !w
+            @pool.once "worker_loaded", =>
                 @_distributeConnection conn
 
-        else
-            id = _.sample worker_ids
-            @workers[id].rpc.request "connection", null, conn, (err) =>
-                if err
-                    @log.error "Failed to land incoming connection: #{err}"
-                    conn.destroy()
-
-    #----------
-
-    # Launch more workers one-at-a-time until we're back to full strength
-    _respawnWorkers: ->
-        if Object.keys(@workers).length < @opts.cluster
-            @log.debug "Asking cluster to spawn a new worker."
-            cluster.fork()
-
-            # once the worker has forked and loaded its rewind, we'll get
-            # called again and can load another worker then
-
-        else
-            @log.debug "Slave is at full strength."
-            @_initFull = true
-            @emit "full_strength"
+        w.rpc.request "connection", null, conn, (err) =>
+            if err
+                @log.error "Failed to land incoming connection: #{err}"
+                conn.destroy()
 
     #----------
 
     shutdownWorker: (id,cb) ->
-        if !@workers[id]
-            cb? "Cannot call shutdown: Worker id unknown"
-            return false
-
-        @log.info "Sending shutdown to worker #{id}"
-        @workers[id].rpc.request "shutdown", {}, (err) =>
-            if err
-                @log.error "Shutdown errored: #{err}"
-                return false
-
-            cb = _.once cb
-
-            # set a shutdown timer
-            timer = setTimeout =>
-                cb "Failed to get worker exit before timeout."
-            , 1000
-
-            # now watch for the worker's exit event
-            @workers[id].once "exit", =>
-                @log.info "Shutdown succeeded for worker #{id}."
-                clearTimeout timer if timer
-                cb null
+        @pool.shutdownWorker id, cb
 
     #----------
 
     status: (cb) ->
         # send back a status for each of our workers
-        status = {}
-        af = _.after Object.keys(@workers).length, =>
-            cb null, status
+        @pool.status cb
 
-        for id,w of @workers
-            do (id,w) =>
-                w.rpc.request "status", (err,s) =>
-                    @log.error "Worker status error: #{err}" if err
-                    status[ id ] = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid
-                    af()
+    #----------
+
+    _listenerFromWorker: (id,msg,handle,cb) ->
+        @log.debug "Landing listener from worker.", inHandoff:@_inHandoff
+        if @_inHandoff
+            # we're in a handoff. ship the listener out there
+            @_rpc.request "stream_listener", msg, handle, (err) =>
+                cb err
+        else
+            # we can hand the listener to any slave except the one
+            # it came from
+            @_landListener id, msg, handle, cb
 
     #----------
 
@@ -274,19 +137,15 @@ module.exports = class SlaveMode extends require("./base")
     # a worker instance that is shutting down.
 
     _landListener: (sender,obj,handle,cb) ->
-        # what are our potential workers?
-        worker_ids = Object.keys(@lWorkers)
+        w = @pool.getWorker sender
 
-        # do we have a sender? if so, subtract it from our pool of candidates
-        if sender
-            worker_ids = _.without worker_ids, sender
-
-        if worker_ids.length == 0
-            cb "No workers ready to receive listeners."
-        else
-            id = _.sample(worker_ids)
-            @workers[id].rpc.request "land_listener", obj, handle, (err) =>
+        if w
+            @log.debug "Asking to land listener on worker #{w.id}"
+            w.rpc.request "land_listener", obj, handle, (err) =>
                 cb err
+        else
+            @log.debug "No worker ready to land listener!"
+            cb "No workers ready to receive listeners."
 
     #----------
 
@@ -374,3 +233,177 @@ module.exports = class SlaveMode extends require("./base")
         process.send "HANDOFF_GO"
 
     #----------
+
+    class @WorkerPool extends require("events").EventEmitter
+        constructor: (@s,@size,@config) ->
+            @workers = {}
+
+            @log = @s.log.child component:"worker_pool"
+
+            @_nextId = 1
+
+            @_spawn()
+
+        #----------
+
+        _spawn: ->
+            if @count() >= @size
+                @log.debug "Pool is at full strength"
+                @emit "full_strength"
+                return false
+
+            p = CP.fork path.resolve(__dirname,"./slave_worker.js")
+
+            id = @_nextId
+            @_nextId += 1
+
+            @log.debug "Spawning new worker.", count:@count(), target:@size
+
+            w = new SlaveMode.Worker
+                id:         id
+                w:          p
+                rpc:        null
+                pid:        p.pid
+                _loaded:    false
+
+            w.rpc = new RPC p, functions:
+
+                # triggered by the worker once it has its streams configured
+                # (though they may not yet have data to give out)
+                worker_configured: (msg,handle,cb) =>
+                    @log.debug "Worker #{w.id} is configured."
+                    cb null
+
+                #---
+
+                # sent by the worker once its stream rewinds are loaded.
+                # tells us that it's safe to trigger a new worker launch
+                rewinds_loaded: (msg,handle,cb) =>
+                    @log.debug "Worker #{w.id} is loaded."
+                    w._loaded = true
+                    @emit "worker_loaded"
+
+                    # ACK
+                    cb null
+
+                    # now that we're done, see if any more workers need to start
+                    @_spawn()
+
+                #---
+
+                # a worker is allowed to shed listeners at any point by
+                # sending them here. This could be part of a handoff (where
+                # we've asked for the listeners), or part of the worker
+                # crashing / shutting down
+                send_listener: (msg,handle,cb) =>
+                    @s._listenerFromWorker w.id, msg, handle, cb
+
+                #---
+
+                # triggered by the worker to request configuration
+                config: (msg,handle,cb) =>
+                    cb null, @config
+
+            , (err) =>
+                if err
+                    @log.error "Error setting up RPC for new worker: #{err}"
+                    worker.kill()
+                    return false
+
+                @log.debug "Worker #{w.id} is set up.", id:w.id, pid:w.pid
+
+                @workers[ w.id ] = w
+
+            # -- Handle disconnects and exits -- #
+
+            p.once "exit", =>
+                @log.info "SlaveWorker exit: #{w.id}"
+                delete @workers[ w.id ]
+
+                w.emit "exit"
+                w.destroy()
+
+                @_spawn() if !@s._shuttingDown
+
+        #----------
+
+        count: ->
+            Object.keys(@workers).length
+
+        #----------
+
+        loaded_count: ->
+            _(@workers).select((w) -> w._loaded).length
+
+        #----------
+
+        destroy: ->
+            # send kill signals to all workers
+            @log.info "Slave WorkerPool is exiting."
+            w.w.kill() for id,w of @workers
+
+        #----------
+
+        shutdownWorker: (id,cb) ->
+            if !@workers[id]
+                cb? "Cannot call shutdown: Worker id unknown"
+                return false
+
+            @log.info "Sending shutdown to worker #{id}"
+            @workers[id].rpc.request "shutdown", {}, (err) =>
+                if err
+                    @log.error "Shutdown errored: #{err}"
+                    return false
+
+                cb = _.once cb
+
+                # set a shutdown timer
+                timer = setTimeout =>
+                    cb "Failed to get worker exit before timeout."
+                , 1000
+
+                # now watch for the worker's exit event
+                @workers[id].once "exit", =>
+                    @log.info "Shutdown succeeded for worker #{id}."
+                    clearTimeout timer if timer
+                    cb null
+
+        #----------
+
+        getWorker: (exclude_id) ->
+            # we want loaded workers, excluding the passed-in id if provided
+            workers = if exclude_id
+                _(@workers).select (w) -> w._loaded && w.id != exclude_id
+            else
+                _(@workers).select (w) -> w._loaded
+
+            if workers.length == 0
+                return null
+            else
+                # FIXME: Right now we just return a random worker, but this selection
+                # should use some sense of worker busyness
+                return _.sample(workers)
+
+        #----------
+
+        status: (cb) ->
+            status = {}
+
+            af = _.after Object.keys(@workers).length, =>
+                cb null, status
+
+            for id,w of @workers
+                do (id,w) =>
+                    w.rpc.request "status", (err,s) =>
+                        @log.error "Worker status error: #{err}" if err
+                        status[ id ] = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid
+                        af()
+
+    #----------
+
+    class @Worker extends require("events").EventEmitter
+        constructor: (attributes) ->
+            @[k] = v for k,v of attributes
+
+        destroy: ->
+            @removeAllListeners()
