@@ -170,24 +170,34 @@ module.exports = class SlaveMode extends require("./base")
 
             _proxyWorker = (cb) =>
                 # are we done yet?
-                if Object.keys(cluster.workers).length == 0
+                if @pool.count() == 0
                     cb?()
                     return false
 
                 # grab a worker id off the stack
-                id = Object.keys(cluster.workers)[0]
+                w = @pool.getWorker()
 
-                console.log "#{process.pid} STARTING #{id}"
+                console.log "#{process.pid} STARTING #{w.id}"
 
-                @workers[id].rpc.request "send_listeners", (err,msg) =>
+                w.rpc.request "shutdown", (err,msg) =>
                     if err
-                        @log.error "Worker hit error sending listeners during handoff: #{err}", error:err, worker:id
+                        @log.error "Worker hit error during shutdown: #{err}", error:err, worker:w.id
 
-                    # tell the worker we're done with its services
-                    @workers[id].w.kill()
+                    next = _.once =>
+                        # do it again...
+                        _proxyWorker cb
 
-                    # do it again...
-                    _proxyWorker cb
+
+                    t = setTimeout =>
+                        @log.error "Failed to get worker shutdown for #{w.id} (#{w.pid})"
+                        next()
+                    , 1000
+
+                    # we also want to see the process exit
+                    w.once "exit", =>
+                        clearTimeout t
+                        @log.info "Worker shutdown complete for #{w.id} (#{w.pid})"
+                        next()
 
             _proxyWorker =>
                 @log.event "Sent slave data to new process. Exiting."
