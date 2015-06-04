@@ -118,7 +118,7 @@ module.exports = class Slave extends require("events").EventEmitter
         for key,opts of options
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.debug "Passing updated config to source: #{key}", opts:opts
+                @log.debug "Passing updated config to stream: #{key}", opts:opts
                 @streams[key].configure opts
             else
                 @log.debug "Starting up stream: #{key}", opts:opts
@@ -160,7 +160,7 @@ module.exports = class Slave extends require("events").EventEmitter
         status = {}
 
         for key,s of @streams
-            status[ key ] = s._rStatus()
+            status[ key ] = s.status()
 
         cb null, status
 
@@ -229,6 +229,9 @@ module.exports = class Slave extends require("events").EventEmitter
                     # don't send in that case...
                     if socket && !socket.destroyed
                         lFunc lopts, socket, (err) =>
+                            if err
+                                @log.error "Failed to send listener #{lopts.id}: #{err}"
+
                             # move on to the next one...
                             sFunc()
 

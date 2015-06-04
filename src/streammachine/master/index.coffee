@@ -330,7 +330,7 @@ module.exports = class Master extends require("events").EventEmitter
                         rpc.request "group_source",
                             group:      sg.key
                             type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip
+                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
                         , source.opts.sock
                         , (err,reply) =>
                             @log.error "Error sending group source #{msg.key}/#{source.uuid}: #{err}" if err
@@ -352,7 +352,7 @@ module.exports = class Master extends require("events").EventEmitter
                         rpc.request "stream_source",
                             stream:     stream.key
                             type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip
+                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
                         , source.opts.sock
                         , (err,reply) =>
                             @log.error "Error sending stream source #{msg.key}/#{source.uuid}: #{err}" if err

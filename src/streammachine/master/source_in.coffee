@@ -31,6 +31,14 @@ module.exports = class SourceIn extends require("events").EventEmitter
         sock.on "error", (err) =>
             @log.debug "Source socket errored with #{err}"
 
+        # set a timeout for successful / unsuccessful parsing
+        timer = setTimeout =>
+            @log.debug "Incoming source connection failed to validate before timeout."
+
+            sock.write "HTTP/1.0 400 Bad Request\r\n"
+            sock.end "Unable to validate source connection.\r\n"
+        , 2000
+
         # -- incoming data -- #
 
         parser = new SourceIn.IcyParser SourceIn.IcyParser.REQUEST
@@ -40,15 +48,15 @@ module.exports = class SourceIn extends require("events").EventEmitter
         sock.on "readable", readerF
 
         parser.on "headersComplete", (headers) =>
+            # cancel our timeout
+            clearTimeout timer
+
             if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
                 @log.debug "ICY SOURCE attempt.", url:parser.info.url
                 @_trySource sock, parser.info
 
                 # get out of the way
                 sock.removeListener "readable", readerF
-
-            # TODO: Need to add support for the shoutcast metadata admin URL
-
 
     _trySource: (sock,info) =>
         _authFunc = (stream) =>

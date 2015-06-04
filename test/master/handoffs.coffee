@@ -5,10 +5,11 @@
 MasterMode      = $src "modes/master"
 IcecastSource   = $src "util/icecast_source"
 
-RPC = require "ipc-rpc"
+RPC             = require "ipc-rpc"
+RPCProxy        = $src "util/rpc_proxy"
 
-cp = require "child_process"
-_ = require "underscore"
+cp  = require "child_process"
+_   = require "underscore"
 
 STREAM1 =
     key:                "test1"
@@ -25,31 +26,6 @@ master_config = [
     "--source_port=0"
     "--no-log:stdout"
 ]
-
-#----------
-
-class RPCProxy extends require("events").EventEmitter
-    constructor: (@a,@b) ->
-        @messages = []
-
-        @_aFunc = (msg,handle) =>
-            @messages.push { sender:"a", msg:msg, handle:handle? }
-            #console.log "a->b: #{msg.key}\t#{handle?}"
-            @b.send msg, handle
-            @emit "error", msg if msg.err
-
-        @_bFunc = (msg,handle) =>
-            @messages.push { sender:"b", msg:msg, handle:handle? }
-            #console.log "b->a: #{msg.id || msg.reply_id}\t#{msg.key}\t#{handle?}"
-            @a.send msg, handle
-            @emit "error", msg if msg.err
-
-        @a.on "message", @_aFunc
-        @b.on "message", @_bFunc
-
-    disconnect: ->
-        @a.removeListener "message", @_aFunc
-        @b.removeListener "message", @_bFunc
 
 #----------
 
@@ -187,11 +163,3 @@ describe "Master Handoffs", ->
         it "source should be connected to new master", (done) ->
             expect(ice_source._connected).to.eql true
             done()
-
-
-
-
-
-
-
-

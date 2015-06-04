@@ -92,6 +92,7 @@ module.exports = class LogController
 
                     @parent[k].apply @, args
 
+            @logger = @parent.logger
             @child = (opts={}) -> new LogController.Child(@parent,_u.extend({},@opts,opts))
 
         proxyToMaster: (sock) ->

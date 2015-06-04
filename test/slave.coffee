@@ -3,20 +3,23 @@ SlaveMode   = $src "modes/slave"
 StreamListener  = $src "util/stream_listener"
 MasterHelper    = require "./helpers/master"
 
-slave_port  = null
-slave       = null
+debug = require("debug")("sm:tests:slave")
 
-slave_config =
-    slave:
-        master: "FILLED_IN_BELOW"
-    port:       0
-    cluster:    2
-    log:
-        stdout: false
 
-master_info = null
 
 describe "Slave Mode", ->
+    slave_config =
+        slave:
+            master: "FILLED_IN_BELOW"
+        port:       0
+        cluster:    2
+        log:
+            stdout: false
+
+    slave_port  = null
+    slave       = null
+    master_info = null
+
     before (done) ->
         # unfortunately, to test slave mode, we need a master. that means
         # we get to do a lot here that hopefully gets tested elsewhere
@@ -24,11 +27,16 @@ describe "Slave Mode", ->
         MasterHelper.startMaster "mp3", (err,info) ->
             throw err if err
             master_info = info
+
+            debug "started master. Connect at: #{master_info.slave_uri}"
+            debug "Stream Key is #{master_info.stream_key}"
+
             done()
 
     it "can start up", (done) ->
         this.timeout 10*1000
         slave_config.slave.master = master_info.slave_uri
+
         new SlaveMode slave_config, (err,s) ->
             throw err if err
 
@@ -41,13 +49,16 @@ describe "Slave Mode", ->
                 done()
 
     it "has the correct number of listening workers", (done) ->
-        expect(Object.keys(slave.lWorkers).length).to.eql slave_config.cluster
+        expect(slave.pool.loaded_count()).to.eql slave_config.cluster
         done()
 
     it "has our stream information in all workers", (done) ->
+        this.timeout 4000
         slave.status (err,status) ->
+            debug "status got ", err, status
             throw err if err
 
+            # expect two workers
             expect(Object.keys(status)).to.have.length 2
 
             for id,w of status
@@ -80,13 +91,12 @@ describe "Slave Mode", ->
                 expect(err).to.not.be.null
                 done()
 
-    describe "Worker Control", ->
+    describe "Worker Pool", ->
         it "can shut down a worker on request", (done) ->
             # get a worker id to shut down
-            id = Object.keys(slave.workers)[0]
-            worker = slave.workers[id]
+            worker = slave.pool.getWorker()
 
-            slave.shutdownWorker id, (err) ->
+            slave.shutdownWorker worker.id, (err) ->
                 throw err if err
 
                 # expect worker process to be shut down
@@ -100,11 +110,12 @@ describe "Slave Mode", ->
                     expect(e.code).to.eql "ESRCH"
 
                 # export slave.workers to no longer include this worker
-                expect(slave.workers).to.not.include.keys id
+                expect(slave.pool.workers).to.not.include.keys worker.id
 
                 done()
 
         it "should spawn a replacement worker", (done) ->
-            slave.once "worker_loaded", ->
-                expect(Object.keys(slave.workers)).to.have.length slave_config.cluster
+            this.timeout 5000
+            slave.pool.once "worker_loaded", ->
+                expect(slave.pool.loaded_count()).to.eql slave_config.cluster
                 done()

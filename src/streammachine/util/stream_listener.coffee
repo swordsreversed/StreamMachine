@@ -1,6 +1,8 @@
 Icecast = require "icecast"
 http = require "http"
 
+debug = require("debug")("sm:util:stream_listener")
+
 module.exports = class StreamListener extends require("events").EventEmitter
     constructor: (@host,@port,@stream,@shoutcast=false) ->
         @bytesReceived = 0
@@ -9,6 +11,8 @@ module.exports = class StreamListener extends require("events").EventEmitter
 
         @req = null
         @res = null
+
+        debug "Created new Stream Listener for #{@url}"
 
         @disconnected = false
 
@@ -21,6 +25,8 @@ module.exports = class StreamListener extends require("events").EventEmitter
 
         @req = connect_func @url, (res) =>
             @res = res
+
+            debug "Connected. Response code is #{ res.statusCode }."
 
             if res.statusCode != 200
                 cb new Error("Non-200 Status code: #{ res.statusCode }")
@@ -35,14 +41,19 @@ module.exports = class StreamListener extends require("events").EventEmitter
                 @emit "metadata", Icecast.parse(meta)
 
             @res.on "readable", =>
-                @bytesReceived += data.length while data = @res.read()
+                while data = @res.read()
+                    @bytesReceived += data.length
+                    @emit "bytes"
 
             # -- listen for an early exit -- #
 
-            @res.once "error", =>
+            @res.once "error", (err) =>
+                debug "Listener connection error: #{err}"
                 @emit "error" if !@disconnected
 
             @res.once "close", =>
+                debug "Listener connection closed."
+
                 @emit "close" if !@disconnected
 
     #----------

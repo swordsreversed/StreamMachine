@@ -15,17 +15,21 @@ module.exports = class ProxyRoom extends require("./base")
     # fallback: Should we set the isFallback flag? (default false)
     # logger:   Logger (optional)
     constructor: (@opts) ->
-        super()
+        super useHeartbeat:false
+
+        @url = @opts.url
+
+        @log?.debug "ProxyRoom source created for #{@url}"
 
         @isFallback     = @opts.fallback || false
 
         @connected      = false
         @framesPerSec   = null
 
-        @_in_disconnect = false
+        @last_ts        = null
+        @connected_at   = null
 
-        @_chunk_queue = []
-        @_chunk_queue_ts = null
+        @_in_disconnect = false
 
         # connection drop handling
         # (FIXME: bouncing not yet implemented)
@@ -55,20 +59,20 @@ module.exports = class ProxyRoom extends require("./base")
     #----------
 
     info: ->
-        source:     @TYPE?() ? @TYPE
-        connected:  @connected
-        url:        @url
-        streamKey: @streamKey
-        uuid:       @uuid
-        isFallback: @isFallback
+        source:         @TYPE?() ? @TYPE
+        connected:      @connected
+        url:            @url
+        streamKey:      @streamKey
+        uuid:           @uuid
+        isFallback:     @isFallback
+        last_ts:        @last_ts
+        connected_at:   @connected_at
+
 
     #----------
 
     connect: ->
         @log?.debug "connecting to #{@url}"
-
-        # attach mp3 parser for rewind buffer
-        @parser = @_new_parser()
 
         url_opts = url.parse @url
         url_opts.headers = "user-agent":"StreamMachine 0.1.0"
@@ -84,10 +88,12 @@ module.exports = class ProxyRoom extends require("./base")
                     @log?.debug "Lost connection to #{@url}. Retrying in 5 seconds"
                     @connected = false
 
+                    # unpipe everything
+                    @icecast.removeAllListeners()
+
             @icecast.on "metadata", (data) =>
                 unless @_in_disconnect
                     meta = Icecast.parse(data)
-                    console.log "metadata is ", meta
 
                     if meta.StreamTitle
                         @StreamTitle = meta.StreamTitle
@@ -102,11 +108,12 @@ module.exports = class ProxyRoom extends require("./base")
 
             # return with success
             @connected = true
-
+            @connected_at = new Date()
             @emit "connect"
 
         # outgoing -> Stream
-        @on "_chunk", (frame) =>
+        @on "_chunk", (chunk) =>
+            @last_ts = chunk.ts
             @emit "data", chunk
 
     #----------
@@ -114,13 +121,14 @@ module.exports = class ProxyRoom extends require("./base")
     disconnect: ->
         @_in_disconnect = true
 
-        @icecast.removeAllListeners()
-        @parser.removeAllListeners()
-        @removeAllListeners()
+        if @connected
+            @icecast.removeAllListeners()
+            @parser.removeAllListeners()
+            @removeAllListeners()
 
-        @icecast.end()
+            @icecast.end()
 
-        @parser = null
-        @icecast = null
+            @parser = null
+            @icecast = null
 
-        console.log "Shut down proxy source using #{@url}"
+            @log?.debug "ProxyRoom source disconnected."

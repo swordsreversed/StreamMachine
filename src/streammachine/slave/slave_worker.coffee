@@ -19,17 +19,6 @@ module.exports = class SlaveWorker
 
             #---
 
-            # Slave calls this when it is looking for a handle to pass on
-            # during handoff
-            send_handle: (msg,handle,cb) =>
-                if @slave.server.hserver?
-                    #console.log "Worker sending handle: ", @slave.server.hserver
-                    cb null, null, @slave.server.hserver
-                else
-                    cb new Error "Worker doesn't have a handle to send."
-
-            #---
-
             # Accept an incoming connection attempt
             connection: (msg,sock,cb) =>
                 sock.allowHalfOpen = true
@@ -58,8 +47,16 @@ module.exports = class SlaveWorker
             shutdown: (msg,handle,cb) =>
                 # we ask the slave instance to shut down. It in turn asks us
                 # to distribute its listeners.
-                @slave._shutdown (err) =>
-                    cb err
+
+                if @slave
+                    @slave._shutdown (err) =>
+                        cb err
+                else
+                    # we haven't gotten far enough... just exit
+                    cb null
+                    setTimeout =>
+                        process.exit()
+                    , 100
 
         , (err,rpc) =>
             @_rpc = rpc

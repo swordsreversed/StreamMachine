@@ -1,6 +1,8 @@
 FileSource = require "../sources/file"
 net = require "net"
 
+debug = require("debug")("sm:IcecastSource")
+
 module.exports = class IcecastSource extends require("events").EventEmitter
     constructor: (@opts) ->
         @_connected = false
@@ -38,7 +40,7 @@ module.exports = class IcecastSource extends require("events").EventEmitter
         # -- Open our connection to the server -- #
 
         @sock = net.connect @opts.port, @opts.host, =>
-            console.log "Connected!"
+            debug "Connected!"
 
             authTimeout = null
 
@@ -47,13 +49,13 @@ module.exports = class IcecastSource extends require("events").EventEmitter
                 resp = @sock.read()
 
                 if /^HTTP\/1\.0 200 OK/.test(resp.toString())
-                    console.log "Got HTTP OK. Starting streaming."
+                    debug "Got HTTP OK. Starting streaming."
                     clearTimeout authTimeout
                     cb null
 
                 else
                     err = "Unknown response: #{ resp.toString() }"
-                    console.error err
+                    debug err
                     cb err
                     @disconnect()
 
@@ -65,20 +67,20 @@ module.exports = class IcecastSource extends require("events").EventEmitter
                 # username doesn't matter.
                 auth = new Buffer("source:#{@opts.password}",'ascii').toString("base64")
                 @sock.write "Authorization: Basic #{auth}\r\n\r\n"
-                console.log "Writing auth with #{ auth }."
+                debug "Writing auth with #{ auth }."
 
             else
                 @sock.write "\r\n"
 
             authTimeout = setTimeout =>
                 err = "Timed out waiting for authentication."
-                console.error err
+                debug err
                 cb err
                 @disconnect()
             , 5000
 
         @sock.once "error", (err) =>
-            console.error "Socket error: #{err}"
+            debug "Socket error: #{err}"
             @disconnect()
 
     #----------

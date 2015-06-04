@@ -95,8 +95,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
     syncToGroup: (g=null) ->
         if @group
-            @group = null
             @group.removeListener "hls_update_min_segment", @_gSyncFunc
+            @group = null
 
         if g
             @group = g

@@ -36,6 +36,8 @@ TRANS_AAC_STREAM =
 in_file = $file "aac-256.aac"
 
 describe "Transcoding Source", ->
+    return true if process.env['SKIP_TRANSCODING']
+
     logger = new Logger {stdout:false}
 
     file_source = null
@@ -58,18 +60,26 @@ describe "Transcoding Source", ->
 
     afterEach (done) ->
         file_source.stop()
+        trans_source.removeAllListeners("disconnect")
         trans_source.disconnect()
         done()
 
     it "emits a chunk of data", (done) ->
-        this.timeout(10000)
+        this.timeout(4000)
+
+        trans_source.once "disconnect", ->
+            done new Error("Source disconnected. FFMPEG missing?")
+
         trans_source.once "data", (chunk) ->
             done()
 
         file_source.start()
 
     it "detects a discontinuity", (done) ->
-        this.timeout(10000)
+        this.timeout(4000)
+
+        trans_source.once "disconnect", ->
+            done new Error("Source disconnected. FFMPEG missing?")
 
         # Once we get first data, stop and start the stream. We should
         # get events for each occasion, and we should get the stop within
@@ -89,11 +99,3 @@ describe "Transcoding Source", ->
             file_source.stop()
 
         file_source.start()
-
-
-
-
-
-
-
-

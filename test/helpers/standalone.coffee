@@ -1,4 +1,4 @@
-MasterMode = $src "modes/master"
+StandaloneMode = $src "modes/standalone"
 
 uuid    = require "node-uuid"
 _       = require "underscore"
@@ -15,17 +15,15 @@ STREAMS =
 module.exports =
     STREAMS:    STREAMS
 
-    startMaster: (stream,cb) ->
+    startStandalone: (stream,cb) ->
         s = STREAMS[stream]
 
         if stream && !s
             cb new Error "Invalid stream spec"
             return false
 
-        master_config =
-            master:
-                port:       0
-                password:   "zxcasdqwe"
+        config =
+            port:           0
             source_port:    0
             log:
                 stdout:     false
@@ -37,21 +35,20 @@ module.exports =
             # generate a random stream key
             streamkey = uuid.v4()
 
-            sconfig = master_config.streams[ streamkey ] = _.extend {}, s, key:streamkey
+            sconfig = config.streams[ streamkey ] = _.extend {}, s, key:streamkey
 
-        new MasterMode master_config, (err,m) ->
+        new StandaloneMode config, (err,sa) ->
             throw err if err
 
             info =
-                master:             m
-                master_port:        m.handle.address().port
-                source_port:        m.master.sourcein.server.address().port
+                standalone:         sa
+                port:               sa.handle?.address().port
+                source_port:        sa.master.sourcein.server.address().port
                 stream_key:         sconfig?.key
                 source_password:    sconfig?.source_password
                 slave_uri:          ""
-                config:             master_config
+                config:             config
 
-            info.slave_uri  = "ws://127.0.0.1:#{info.master_port}?password=#{info.config.master.password}"
-            info.api_uri    = "http://127.0.0.1:#{info.master_port}/api"
+            info.api_uri    = "http://127.0.0.1:#{info.port}/api"
 
             cb null, info
