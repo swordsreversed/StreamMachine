@@ -19,15 +19,11 @@ module.exports = class SlaveWorker
 
             #---
 
-            # Slave calls this when it is looking for a handle to pass on
-            # during handoff
-            send_handle: (msg,handle,cb) =>
-                if @slave.server.hserver
-                    cb null, null, @slave.server.hserver
-                else
-                    cb new Error "Worker doesn't have a handle to send."
-
-            #---
+            # Accept an incoming connection attempt
+            connection: (msg,sock,cb) =>
+                sock.allowHalfOpen = true
+                @slave.server.handle sock
+                cb null, "OK"
 
             # Accept a listener that we should now start serving
             land_listener: (msg,handle,cb) =>
@@ -47,30 +43,20 @@ module.exports = class SlaveWorker
 
             #---
 
-            # Request to start listening via either our config port or the
-            # included handle
-            listen: (msg,handle,cb) =>
-                listen_via = if msg.fd? then { fd:msg.fd } else @_config.port
-
-                @log.debug "Listen request via #{ listen_via }"
-
-                cb = _.once cb
-                @slave.server.once "error", (err) =>
-                    @log.error "SlaveWorker listen failed: #{err}"
-                    cb err
-
-                @slave.server.listen listen_via, =>
-                    @log.debug "SlaveWorker listening via #{ listen_via }."
-                    cb null, @slave.server.hserver.address()
-
-            #---
-
             # Request asking that we shut down...
             shutdown: (msg,handle,cb) =>
                 # we ask the slave instance to shut down. It in turn asks us
                 # to distribute its listeners.
-                @slave._shutdown (err) =>
-                    cb err
+
+                if @slave
+                    @slave._shutdown (err) =>
+                        cb err
+                else
+                    # we haven't gotten far enough... just exit
+                    cb null
+                    setTimeout =>
+                        process.exit()
+                    , 100
 
         , (err,rpc) =>
             @_rpc = rpc

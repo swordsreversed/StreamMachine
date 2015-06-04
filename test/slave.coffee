@@ -43,13 +43,13 @@ describe "Slave Mode", ->
             slave = s
 
             slave.once "full_strength", ->
-                slave_port = slave._lastAddress.port
+                slave_port = slave.slavePort()
                 expect(slave_port).to.not.be.undefined
                 expect(slave_port).to.be.number
                 done()
 
     it "has the correct number of listening workers", (done) ->
-        expect(Object.keys(slave.lWorkers).length).to.eql slave_config.cluster
+        expect(slave.pool.loaded_count()).to.eql slave_config.cluster
         done()
 
     it "has our stream information in all workers", (done) ->
@@ -91,18 +91,12 @@ describe "Slave Mode", ->
                 expect(err).to.not.be.null
                 done()
 
-    describe "Worker Control", ->
-        it "can ask a worker for its handle", (done) ->
-            slave._getHandleFromWorker (err,handle) ->
-                throw new Error err if err
-                done()
-
+    describe "Worker Pool", ->
         it "can shut down a worker on request", (done) ->
             # get a worker id to shut down
-            id = Object.keys(slave.workers)[0]
-            worker = slave.workers[id]
+            worker = slave.pool.getWorker()
 
-            slave.shutdownWorker id, (err) ->
+            slave.shutdownWorker worker.id, (err) ->
                 throw err if err
 
                 # expect worker process to be shut down
@@ -116,12 +110,12 @@ describe "Slave Mode", ->
                     expect(e.code).to.eql "ESRCH"
 
                 # export slave.workers to no longer include this worker
-                expect(slave.workers).to.not.include.keys id
+                expect(slave.pool.workers).to.not.include.keys worker.id
 
                 done()
 
         it "should spawn a replacement worker", (done) ->
             this.timeout 5000
-            slave.once "worker_listening", ->
-                expect(Object.keys(slave.workers)).to.have.length slave_config.cluster
+            slave.pool.once "worker_loaded", ->
+                expect(slave.pool.loaded_count()).to.eql slave_config.cluster
                 done()
