@@ -23,7 +23,7 @@ util = require "util"
 
 debug = require("debug")("sm:tests:slave_handoffs")
 
-describe "Slave Handoffs and Worker Respawns", ->
+describe "Slave Handoffs/Respawns", ->
     master_info = null
     source      = null
 
@@ -127,7 +127,7 @@ describe "Slave Handoffs and Worker Respawns", ->
 
         describe "Initial Slave", ->
             before (done) ->
-                this.timeout 5000
+                this.timeout 10000
 
                 s1 = cp.fork "./index.js", slave_config
                 process.on "exit", -> s1.kill()
@@ -135,7 +135,9 @@ describe "Slave Handoffs and Worker Respawns", ->
                 # wait a few ticks for startup...
                 # FIXME: What's a better way to do this?
                 setTimeout ->
+                    debug "Setting up s1 RPC"
                     new RPC s1, (err,r) ->
+                        throw err if err
                         s1rpc = r
                         s1rpc.request "OK", (err,msg) ->
                             throw err if err
