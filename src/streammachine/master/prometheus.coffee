@@ -1,4 +1,5 @@
 Prometheus  = require "prometheus-client"
+express     = require "express"
 
 module.exports = class PrometheusMaster
     constructor: (@master) ->
@@ -52,5 +53,5 @@ module.exports = class PrometheusMaster
 
         # -- Attach metrics to the API -- #
 
-        # FIXME: This should probably happen in the API class...
-        @master.api.app.get "/metrics", @client.metricsFunc()
+        @app = express()
+        @app.get "/", @client.metricsFunc()

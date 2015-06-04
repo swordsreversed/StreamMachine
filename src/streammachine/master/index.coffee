@@ -108,7 +108,8 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Prometheus metrics -- #
 
-        @prometheus = new Prometheus @
+        if @options.prometheus
+            @prometheus = new Prometheus @
 
     #----------
 
