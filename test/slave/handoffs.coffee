@@ -136,7 +136,7 @@ describe "Slave Handoffs/Respawns", ->
                 # FIXME: What's a better way to do this?
                 setTimeout ->
                     debug "Setting up s1 RPC"
-                    new RPC s1, (err,r) ->
+                    new RPC s1, timeout:4000, (err,r) ->
                         throw err if err
                         s1rpc = r
                         s1rpc.request "OK", (err,msg) ->
