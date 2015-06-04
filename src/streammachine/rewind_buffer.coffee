@@ -170,6 +170,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    recordListen: (opts) ->
+        # stub function. must be defined for real in the implementing class
+
+    #----------
+
     bufferedSecs: ->
         # convert buffer length to seconds
         Math.round @_rbuffer.length() * @_rsecsPerChunk
