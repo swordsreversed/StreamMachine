@@ -33,11 +33,11 @@ module.exports = class SlaveMode extends require("./base")
 
         if process.send?
             @_rpc = new RPC process, timeout:5000, functions:
+                OK: (msg,handle,cb) ->
+                    cb null, "OK"
+
                 slave_port: (msg,handle,cb) =>
-                    if p = @slavePort()
-                        cb null, p
-                    else
-                        cb new Error "No address returned yet."
+                    cb null, @slavePort()
 
                 #---
 
@@ -48,13 +48,26 @@ module.exports = class SlaveMode extends require("./base")
                 stream_listener: (msg,handle,cb) =>
                     @_landListener null, msg, handle, cb
 
+                #---
+
+                ready: (msg,handle,cb) =>
+                    # We're "ready" once we have one loaded worker
+                    @pool.once_loaded cb
+
+                #---
+
+                status: (msg,handle,cb) =>
+                    @status cb
+
         # -- Set up Clustered Worker Pool -- #
 
         @pool = new SlaveMode.WorkerPool @, @opts.cluster, @opts
         @pool.on "full_strength", => @emit "full_strength"
 
-        process.on "exit", =>
-            @pool.destroy()
+        process.on "SIGTERM", =>
+            @pool.destroy (err) =>
+                @log.info "Pool destroyed."
+                process.exit()
 
         # -- set up server -- #
 
@@ -86,6 +99,7 @@ module.exports = class SlaveMode extends require("./base")
                 throw err
 
             @_server.on "connection", (conn) =>
+                conn.pause()
                 @_distributeConnection conn
 
             @log.info "Slave server is up and listening."
@@ -98,9 +112,14 @@ module.exports = class SlaveMode extends require("./base")
         w = @pool.getWorker()
 
         if !w
+            @log.debug "Listener arrived before any ready workers. Waiting."
             @pool.once "worker_loaded", =>
+                @log.debug "Distributing listener now that worker is ready."
                 @_distributeConnection conn
 
+            return
+
+        @log.debug "Distributing listener to worker #{w.id} (#{w.pid})"
         w.rpc.request "connection", null, conn, (err) =>
             if err
                 @log.error "Failed to land incoming connection: #{err}"
@@ -177,7 +196,7 @@ module.exports = class SlaveMode extends require("./base")
                 # grab a worker id off the stack
                 w = @pool.getWorker()
 
-                console.log "#{process.pid} STARTING #{w.id}"
+                @log.info "Starting transfer for worker #{w.id}"
 
                 w.rpc.request "shutdown", (err,msg) =>
                     if err
@@ -216,9 +235,14 @@ module.exports = class SlaveMode extends require("./base")
 
         @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
             @_rpc.once "server_socket", (msg,handle,cb) =>
-                @_handle        = handle
-                @_haveHandle    = true
-                @emit "server_socket"
+                @log.info "Incoming server handle."
+                @_openServer handle, (err) =>
+                    if err
+                        # FIXME: How should we recover from this?
+                        @log.error "Failed to start server using transferred handle."
+                        return false
+
+                    @log.info "Server started with handle received during handoff."
 
                 _go = =>
                     # let our sender know we're ready... we're already listening for
@@ -239,20 +263,24 @@ module.exports = class SlaveMode extends require("./base")
             @log.error "Handoff called, but process has no send function. Aborting."
             return false
 
-        console.log "Sending GO"
         process.send "HANDOFF_GO"
 
     #----------
 
     class @WorkerPool extends require("events").EventEmitter
         constructor: (@s,@size,@config) ->
-            @workers = {}
+            @workers    = {}
+            @_shutdown  = false
 
             @log = @s.log.child component:"worker_pool"
 
             @_nextId = 1
 
             @_spawn()
+
+            process.on "exit", =>
+                # try one last effort to make sure workers are closed
+                w.w.kill() for id,w of @workers
 
         #----------
 
@@ -275,6 +303,7 @@ module.exports = class SlaveMode extends require("./base")
                 rpc:        null
                 pid:        p.pid
                 _loaded:    false
+                _config:    false
 
             w.rpc = new RPC p, functions:
 
@@ -282,6 +311,7 @@ module.exports = class SlaveMode extends require("./base")
                 # (though they may not yet have data to give out)
                 worker_configured: (msg,handle,cb) =>
                     @log.debug "Worker #{w.id} is configured."
+                    w._config = true
                     cb null
 
                 #---
@@ -333,7 +363,7 @@ module.exports = class SlaveMode extends require("./base")
                 w.emit "exit"
                 w.destroy()
 
-                @_spawn() if !@s._shuttingDown
+                @_spawn() if !@_shutdown
 
         #----------
 
@@ -347,10 +377,26 @@ module.exports = class SlaveMode extends require("./base")
 
         #----------
 
-        destroy: ->
+        once_loaded: (cb) ->
+            if @loaded_count() == 0
+                @once "worker_loaded", => cb null
+            else
+                cb null
+
+        #----------
+
+        destroy: (cb) ->
+            @_shutdown = true
+
             # send kill signals to all workers
             @log.info "Slave WorkerPool is exiting."
-            w.w.kill() for id,w of @workers
+
+            af = _.after @count(), =>
+                cb null
+
+            for id,w of @workers
+                @shutdownWorker id, (err) =>
+                    af()
 
         #----------
 
@@ -369,7 +415,13 @@ module.exports = class SlaveMode extends require("./base")
 
                 # set a shutdown timer
                 timer = setTimeout =>
-                    cb "Failed to get worker exit before timeout."
+                    @log.error "Failed to get worker exit before timeout. Trying kill."
+                    w.w.kill()
+
+                    timer = setTimeout =>
+                        cb "Failed to shut down worker."
+                    , 500
+
                 , 1000
 
                 # now watch for the worker's exit event

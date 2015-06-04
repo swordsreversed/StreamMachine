@@ -47,8 +47,16 @@ module.exports = class SlaveWorker
             shutdown: (msg,handle,cb) =>
                 # we ask the slave instance to shut down. It in turn asks us
                 # to distribute its listeners.
-                @slave._shutdown (err) =>
-                    cb err
+
+                if @slave
+                    @slave._shutdown (err) =>
+                        cb err
+                else
+                    # we haven't gotten far enough... just exit
+                    cb null
+                    setTimeout =>
+                        process.exit()
+                    , 100
 
         , (err,rpc) =>
             @_rpc = rpc

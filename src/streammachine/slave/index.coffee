@@ -231,7 +231,7 @@ module.exports = class Slave extends require("events").EventEmitter
                         lFunc lopts, socket, (err) =>
                             if err
                                 @log.error "Failed to send listener #{lopts.id}: #{err}"
-                                
+
                             # move on to the next one...
                             sFunc()
 
