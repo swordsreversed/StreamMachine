@@ -8,7 +8,7 @@ Slave   = require "../slave"
 
 module.exports = class StandaloneMode extends require("./base")
     MODE: "StandAlone"
-    constructor: (@opts) ->
+    constructor: (@opts,cb) ->
         # -- Set up logging -- #
 
         @log = (new Logger @opts.log).child pid:process.pid
@@ -45,21 +45,23 @@ module.exports = class StandaloneMode extends require("./base")
         @master.on "streams", (streams) =>
             @slave.once "streams", =>
                 for k,v of streams
-                    console.log "looking to attach #{k}", @streams[k]?, @slave.streams[k]?
+                    @log.debug "looking to attach stream #{k}", streams:@streams[k]?, slave_streams:@slave.streams[k]?
                     if @streams[k]
                         # got it already
 
                     else
                         if @slave.streams[k]?
-                            console.log "mapping master -> slave on #{k}"
+                            @log.debug "mapping master -> slave on #{k}"
                             @slave.streams[k].useSource v
                             @streams[k] = true
                         else
-                            console.log "Unable to map master -> slave for #{k}"
+                            @log.error "Unable to map master -> slave for #{k}"
 
             @slave.configureStreams @master.config().streams
 
         @log.debug "Standalone is listening on port #{@opts.port}"
+
+        cb null, @
 
     #----------
 
