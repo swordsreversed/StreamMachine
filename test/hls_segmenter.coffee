@@ -374,7 +374,7 @@ describe "HTTP Live Streaming Segmenter", ->
 
     # now put it all together. This time, create an HLSSegmenter and a
     # RewindBuffer and feed audio through its normal course.
-    describe.only "RewindBuffer -> Segmenter", ->
+    describe "RewindBuffer -> Segmenter", ->
         rewind      = null
         generator   = null
         r2          = null
