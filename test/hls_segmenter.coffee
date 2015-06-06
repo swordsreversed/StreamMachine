@@ -359,15 +359,20 @@ describe "HTTP Live Streaming Segmenter", ->
             injector.pipe(finalizer)
 
             finalizer.once "finish", ->
-                expect(finalizer.segments.length).to.eql 6
+                expect(finalizer.segments.length).to.eql 5
                 done()
 
             generator.forward 120, ->
+
                 exp_ts = new Date( Number(start_ts) + 65*1000 )
 
                 process.nextTick ->
+                    expect(Number(finalizer.segments[0].ts)).to.be.lt Number(exp_ts)
+
                     finalizer.expire exp_ts, (err,min_id) ->
-                        expect(min_id).to.eql 5
+                        # we expect our new minimum segment to have a start_ts
+                        # greater than the time we expired
+                        expect(Number(finalizer.segments[0].ts)).to.be.gt Number(exp_ts)
                         generator.end()
 
     #----------
@@ -515,6 +520,7 @@ describe "HTTP Live Streaming Segmenter", ->
             done()
 
         it "should trigger updates to stream group min segment TS", (done) ->
+            this.timeout 4000
             # stream all f_chunks into r1, but skip some for r2
             g1.forward 120
             g2.skip_forward 30, -> g2.forward 90
