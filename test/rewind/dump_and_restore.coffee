@@ -140,3 +140,24 @@ describe "Rewind Buffer Dump and Restore", ->
                     expect(err.code).to.eql "ENOENT"
                     done()
 
+    describe "When RewindBuffer is loading", ->
+        before (done) ->
+            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            master = new FakeMaster logger, stream
+            dump_restore = new DumpRestore master, rewind_opts
+
+            done()
+
+        it "will not dump", (done) ->
+            # create an empty stream
+            pt = new require("stream").PassThrough()
+
+            stream.rewind.loadBuffer pt, (err,obj) ->
+                done()
+
+            # trigger a dump. should return an error
+            dump_restore._streams["test__#{run_id}"]._dump (err) ->
+                expect(err).to.be.error
+                expect(err.message).to.contain "is loading"
+
+                pt.end()
