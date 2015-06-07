@@ -142,7 +142,7 @@ module.exports = class SlaveMode extends require("./base")
         @log.debug "Landing listener from worker.", inHandoff:@_inHandoff
         if @_inHandoff
             # we're in a handoff. ship the listener out there
-            @_rpc.request "stream_listener", msg, handle, (err) =>
+            @_inHandoff.request "stream_listener", msg, handle, (err) =>
                 cb err
         else
             # we can hand the listener to any slave except the one
@@ -168,16 +168,16 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
-    _sendHandoff: () ->
+    _sendHandoff: (rpc) ->
         @log.info "Starting slave handoff."
 
         # don't try to spawn new workers
         @_shuttingDown  = true
-        @_inHandoff     = true
+        @_inHandoff     = rpc
 
         # Coordinate handing off our server handle
 
-        @_rpc.request "server_socket", {}, @_server?._handle, (err) =>
+        rpc.request "server_socket", {}, @_server?._handle, (err) =>
             if err
                 @log.error "Error sending socket across handoff: #{err}"
                 # FIXME: Proceed? Cancel?

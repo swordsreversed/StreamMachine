@@ -41,12 +41,7 @@ module.exports = class Core extends require("events").EventEmitter
                         return false
 
                     @log.info "Sender got handoff handshake. Starting send."
-                    @_sendHandoff()
-
-            _tTimeout = setTimeout =>
-               @log.error "Timeout waiting for proxied handoff."
-               # FIXME: not sure what else we should do
-            , 10*1000
+                    @_sendHandoff @_rpc
 
     #----------
 
@@ -83,21 +78,20 @@ module.exports = class Core extends require("events").EventEmitter
     #----------
 
     _handshakeHandoff: (newp,cb) ->
-        newp.once "message", (m) =>
-            # if all goes well, this first message will be a string that
-            # says 'HANDOFF_GO'
+        # set up an RPC
+        new RPC newp, (err,rpc) =>
+            if err
+                cb new Error "Failed to set up handoff RPC: #{err}"
+                return false
 
-            if m == "HANDOFF_GO"
-                # Good. now we set up a HandoffTranslator object
-                translator = new Core.HandoffTranslator newp
+            rpc.request "HANDOFF_GO", null, null, timeout:5000, (err,reply) =>
+                if err
+                    @log.error "Error handshaking handoff: #{err}"
+                    @_restarting = false
+                    return false
 
-                console.log "sR Registering for streams"
-                translator.once "streams", =>
-                    console.log "spawnReplacement got STREAMS"
-                    cb? null, translator
-            else
-                @log.error "Invalid first message from handoff.", message:m
-                cb? "Invalid first message from handoff."
+                @log.info "Sender got handoff handshake. Starting send."
+                @_sendHandoff rpc
 
     #----------
 
