@@ -24,18 +24,8 @@ module.exports = class LiveStreaming extends BaseOutput
                 @opts.res.status(404).end "Segment not found."
                 return false
 
-            headers =
-                "Content-Type":
-                    if @stream.opts.format == "mp3"         then "audio/mpeg"
-                    else if @stream.opts.format == "aac"    then "audio/aacp"
-                    else "unknown"
-                "Connection":           "close"
-                "Content-Length":       info.length
-
-            # write out our headers
-            @opts.res.writeHead 200, headers
-
             # write our PTS tag
+            tag = null
             if info.pts
                 tag = new Buffer(PTS_TAG)
                 # node 0.10 doesn't know how to write ints over 32-bit, so
@@ -46,7 +36,18 @@ module.exports = class LiveStreaming extends BaseOutput
                 else
                     tag.writeUInt32BE(info.pts,0x45)
 
-                @opts.res.write tag
+            headers =
+                "Content-Type":
+                    if @stream.opts.format == "mp3"         then "audio/mpeg"
+                    else if @stream.opts.format == "aac"    then "audio/aac"
+                    else "unknown"
+                "Connection":           "close"
+                "Content-Length":       info.length + tag?.length||0
+
+            # write out our headers
+            @opts.res.writeHead 200, headers
+
+            @opts.res.write tag if tag
 
             # send our pump buffer to the client
             playHead.pipe(@opts.res)
