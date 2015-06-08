@@ -52,9 +52,9 @@ module.exports = class MasterMode extends require("./base")
                     cb null, "OK"
 
         if nconf.get("handoff")
-            @_handoffStart()
+            @_handoffStart cb
         else
-            @_normalStart()
+            @_normalStart cb
 
     #----------
 
