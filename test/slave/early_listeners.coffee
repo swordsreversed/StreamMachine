@@ -72,6 +72,8 @@ describe "Slave Early Listeners", ->
                 , 100
 
     it "should get a response once a worker is ready", (done) ->
+        this.timeout 4000
+        
         listener.once "connected", (err) ->
             throw err if err
             done()

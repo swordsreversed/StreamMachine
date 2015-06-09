@@ -115,7 +115,7 @@ describe "Master Handoffs", ->
 
             m2rpc = new RPC m2, functions:
                 config: (msg,handle,cb) ->
-                    console.log "got m2config of ", msg
+                    debug "got m2config of ", msg
                     m2config = msg
                     cb null, "OK"
 
