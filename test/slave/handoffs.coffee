@@ -154,8 +154,10 @@ describe "Slave Handoffs/Respawns", ->
                                 # connections that arrive before we have a loaded
                                 # worker. For the moment, simply make sure we have
                                 # one here
-                                s1rpc.request "ready", (err) ->
+                                s1rpc.request "ready", null, null, timeout:5000, (err) ->
                                     throw err if err
+
+                                    debug "s1 is ready with worker"
 
                                     done()
 
