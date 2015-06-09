@@ -119,7 +119,7 @@ module.exports = class SlaveMode extends require("./base")
 
             return
 
-        @log.debug "Distributing listener to worker #{w.id} (#{w.pid})"
+        @log.silly "Distributing listener to worker #{w.id} (#{w.pid})"
         w.rpc.request "connection", null, conn, (err) =>
             if err
                 @log.error "Failed to land incoming connection: #{err}"
