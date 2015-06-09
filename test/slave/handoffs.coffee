@@ -185,7 +185,7 @@ describe "Slave Handoffs/Respawns", ->
 
         describe "New Slave", ->
             before (done) ->
-                this.timeout 5000
+                this.timeout 20000
 
                 s2 = cp.fork "./index.js", ["--handoff",slave_config...]
                 process.on "exit", -> s2.kill()
