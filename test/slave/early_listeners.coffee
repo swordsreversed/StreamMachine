@@ -73,7 +73,7 @@ describe "Slave Early Listeners", ->
 
     it "should get a response once a worker is ready", (done) ->
         this.timeout 4000
-        
+
         listener.once "connected", (err) ->
             throw err if err
             done()
@@ -83,5 +83,7 @@ describe "Slave Early Listeners", ->
         slave.pool._spawn()
 
     it "should start feeding data to the listener", (done) ->
+        this.timeout 4000
+        
         listener.once "bytes", ->
             done()
