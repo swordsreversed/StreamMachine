@@ -99,6 +99,11 @@ module.exports = class SlaveMode extends require("./base")
                 throw err
 
             @_server.on "connection", (conn) =>
+                # FIXME: This is nasty...
+                # https://github.com/joyent/node/issues/7905
+                if /^v0.10/.test(process.version)
+                    conn._handle.readStop()
+
                 conn.pause()
                 @_distributeConnection conn
 
