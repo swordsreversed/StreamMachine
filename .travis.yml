@@ -6,3 +6,4 @@ node_js:
 services:
   - elasticsearch
 env: SKIP_TRANSCODING=1
+sudo: false
