@@ -2,6 +2,8 @@
 # master to another, as we would during a graceful restart. Test that
 # the new master is listening on the correct ports.
 
+debug = require("debug")("sm:tests:master_handoffs")
+
 MasterMode      = $src "modes/master"
 IcecastSource   = $src "util/icecast_source"
 
@@ -47,17 +49,27 @@ describe "Master Handoffs", ->
 
     describe "Initial Master", ->
         before (done) ->
-            this.timeout 5000
+            this.timeout 10000
             m1 = cp.fork "./index.js", master_config
 
-            # wait a few ticks for startup...
-            setTimeout ->
-                new RPC m1, (err,r) ->
-                    m1rpc = r
-                    m1rpc.request "OK", (err,msg) ->
-                        throw err if err
-                        done()
-            , 3000
+            new RPC m1, (err,r) ->
+                m1rpc = r
+
+                debug "Starting loop for m1 OK"
+
+                tries = 0
+
+                okF = ->
+                    tries += 1
+                    m1rpc.request "OK", null, null, timeout:500, (err,msg) ->
+                        if err
+                            debug "m1 OK error. Tries: #{tries}"
+                            okF() if tries < 20
+                        else
+                            debug "m1 OK success after #{tries} tries"
+                            done()
+
+                okF()
 
         it "is listening on a master port", (done) ->
             m1rpc.request "master_port", (err,port) ->
@@ -98,7 +110,7 @@ describe "Master Handoffs", ->
         m2config = null
 
         before (done) ->
-            this.timeout 5000
+            this.timeout 10000
             m2 = cp.fork "./index.js", ["--handoff",master_config...]
 
             m2rpc = new RPC m2, functions:
@@ -107,10 +119,20 @@ describe "Master Handoffs", ->
                     m2config = msg
                     cb null, "OK"
 
+            debug "Starting loop for m2 OK"
+
+            tries = 0
+
             okF = ->
-                m2rpc.request "OK", (err,msg) ->
-                    return okF() if err
-                    done()
+                tries += 1
+                m2rpc.request "OK", null, null, timeout:500, (err,msg) ->
+                    if err
+                        debug "m2 OK error. Tries: #{tries}"
+                        okF() if tries < 20
+                    else
+                        debug "m2 OK success after #{tries} tries"
+                        done()
+
             okF()
 
         # this is getting masked by listening for our OK above
