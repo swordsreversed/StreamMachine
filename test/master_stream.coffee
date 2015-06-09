@@ -165,9 +165,11 @@ describe "Master Stream", ->
             stream.addSource source
 
             source.once "_loaded", ->
-                # emit 49 seconds of data
-                start_ts = Number(new Date())
-                for i in [0..98]
+                # emit 45 seconds of data
+                # to make life easy to reason about, we'll put start_ts on a segment start.
+                start_ts = new Date( Math.round(start_ts / 10) * 10 )
+
+                for i in [0..90]
                     source._emitOnce new Date( start_ts + i*500 )
 
                 done()
@@ -185,6 +187,7 @@ describe "Master Stream", ->
             stream.rewind.hls_segmenter.once "snapshot", (snapshot) =>
                 # depending on how our segment boundary falls, this could be
                 # three or four
+
                 expect(snapshot.segments).to.have.length.within 3,4
                 expect(snapshot.segment_duration).to.eq 10
                 done()
