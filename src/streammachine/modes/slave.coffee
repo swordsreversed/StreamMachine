@@ -65,7 +65,7 @@ module.exports = class SlaveMode extends require("./base")
         @pool.on "full_strength", => @emit "full_strength"
 
         process.on "SIGTERM", =>
-            @pool.destroy (err) =>
+            @pool.shutdown (err) =>
                 @log.info "Pool destroyed."
                 process.exit()
 
@@ -189,41 +189,8 @@ module.exports = class SlaveMode extends require("./base")
 
             @log.info "Server socket transferred. Sending listener connections."
 
-            # now we ask each worker to send its listeners. We proxy them through
-            # to the new process, which in turn hands them off to its workers
-
-            _proxyWorker = (cb) =>
-                # are we done yet?
-                if @pool.count() == 0
-                    cb?()
-                    return false
-
-                # grab a worker id off the stack
-                w = @pool.getWorker()
-
-                @log.info "Starting transfer for worker #{w.id}"
-
-                w.rpc.request "shutdown", (err,msg) =>
-                    if err
-                        @log.error "Worker hit error during shutdown: #{err}", error:err, worker:w.id
-
-                    next = _.once =>
-                        # do it again...
-                        _proxyWorker cb
-
-
-                    t = setTimeout =>
-                        @log.error "Failed to get worker shutdown for #{w.id} (#{w.pid})"
-                        next()
-                    , 1000
-
-                    # we also want to see the process exit
-                    w.once "exit", =>
-                        clearTimeout t
-                        @log.info "Worker shutdown complete for #{w.id} (#{w.pid})"
-                        next()
-
-            _proxyWorker =>
+            # Ask the pool to shut down its workers.
+            @pool.shutdown (err) =>
                 @log.event "Sent slave data to new process. Exiting."
 
                 # Exit
@@ -390,11 +357,14 @@ module.exports = class SlaveMode extends require("./base")
 
         #----------
 
-        destroy: (cb) ->
+        shutdown: (cb) ->
             @_shutdown = true
 
             # send kill signals to all workers
             @log.info "Slave WorkerPool is exiting."
+
+            if @count() == 0
+                cb null
 
             af = _.after @count(), =>
                 cb null
