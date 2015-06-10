@@ -2,6 +2,7 @@ Icecast = require "icecast"
 http = require "http"
 
 debug = require("debug")("sm:util:stream_listener")
+_ = require "underscore"
 
 module.exports = class StreamListener extends require("events").EventEmitter
     constructor: (@host,@port,@stream,@shoutcast=false) ->
@@ -55,6 +56,8 @@ module.exports = class StreamListener extends require("events").EventEmitter
                 debug "Listener connection closed."
 
                 @emit "close" if !@disconnected
+
+        @req.once "socket", (sock) => @emit "socket", sock
 
     #----------
 

@@ -1,5 +1,7 @@
 _ = require "underscore"
 
+debug = require("debug")("sm:util:chunk_generator")
+
 # Generate fake audio chunks for testing
 
 module.exports = class ChunkGenerator extends require("stream").Readable
@@ -17,10 +19,15 @@ module.exports = class ChunkGenerator extends require("stream").Readable
         @_count_b += count
         cb?()
 
+    ts: ->
+        forward:    new Date( Number(@start_ts) + (@_count_f) * @chunk_duration )
+        backward:   new Date( Number(@start_ts) + (@_count_b) * @chunk_duration )
+
     forward: (count,cb) ->
         af = _.after count, =>
             @_count_f += count
             @emit "readable"
+            debug "Forward emit #{count} chunks. Finished at #{ new Date( Number(@start_ts) + (@_count_f) * @chunk_duration ) }"
             cb?()
 
         _(count).times (c) =>
@@ -36,6 +43,7 @@ module.exports = class ChunkGenerator extends require("stream").Readable
         af = _.after count, =>
             @_count_b += count
             @emit "readable"
+            debug "Backward emit #{count} chunks. Finished at #{ new Date( Number(@start_ts) + (@_count_b) * @chunk_duration ) }"
             cb?()
 
         _(count).times (c) =>

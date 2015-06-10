@@ -4,6 +4,8 @@ Logger          = $src "logger"
 
 ChunkGenerator  = $src "util/chunk_generator"
 
+debug = require("debug")("sm:tests:hls_segmenter")
+
 _ = require "underscore"
 
 #----------
@@ -357,15 +359,20 @@ describe "HTTP Live Streaming Segmenter", ->
             injector.pipe(finalizer)
 
             finalizer.once "finish", ->
-                expect(finalizer.segments.length).to.eql 6
+                expect(finalizer.segments.length).to.eql 5
                 done()
 
             generator.forward 120, ->
+
                 exp_ts = new Date( Number(start_ts) + 65*1000 )
 
                 process.nextTick ->
+                    expect(Number(finalizer.segments[0].ts)).to.be.lt Number(exp_ts)
+
                     finalizer.expire exp_ts, (err,min_id) ->
-                        expect(min_id).to.eql 5
+                        # we expect our new minimum segment to have a start_ts
+                        # greater than the time we expired
+                        expect(Number(finalizer.segments[0].ts)).to.be.gt Number(exp_ts)
                         generator.end()
 
     #----------
@@ -375,12 +382,13 @@ describe "HTTP Live Streaming Segmenter", ->
     describe "RewindBuffer -> Segmenter", ->
         rewind      = null
         generator   = null
+        r2          = null
 
         before (done) ->
-            rewind = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
+            rewind = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger stdout:false)
             rewind._rChunkLength emitDuration:1, streamKey:"testing"
 
-            generator = new ChunkGenerator new Date(), 1000
+            generator = new ChunkGenerator start_ts, 1000
 
             generator.on "readable", ->
                 while c = generator.read()
@@ -410,19 +418,27 @@ describe "HTTP Live Streaming Segmenter", ->
         it "expires segments when the RewindBuffer fills", (done) ->
             rewind.hls_segmenter.once "snapshot", (snap) ->
                 expect(rewind.bufferedSecs()).to.eql 120
-                expect(snap.segments).to.have.length 12
+
+                # we're sending in 121 seconds, so there will be one second in
+                # a not-yet-created segment, and our first segment will have lost
+                # its first segment and been expired. That leaves 11 active.
+                expect(snap.segments).to.have.length 11
                 done()
 
-            generator.forward 120
+            generator.forward 121
 
         it "loads segment data from a RewindBuffer dump", (done) ->
             pt = new require("stream").PassThrough()
 
-            r2 = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {})
+            r2 = new RewindBuffer hls:10, seconds:120, burst:30, log:(new Logger {stdout:false})
             r2._rChunkLength emitDuration:1, streamKey:"testing"
 
             rewind.hls_segmenter.snapshot (err,snap1) ->
                 throw err if err
+
+                debug "snap1 has #{snap1.segments.length} segments."
+                debug "snap1 first segment is #{snap1.segments[0].id}.", snap1.segments[0]
+                debug "snap1 last segment is #{snap1.segments[snap1.segments.length-1].id}.", snap1.segments[snap1.segments.length-1]
 
                 r2.loadBuffer pt, (err,stats) ->
                     throw err if err
@@ -432,17 +448,43 @@ describe "HTTP Live Streaming Segmenter", ->
                     r2.hls_segmenter.snapshot (err,snap2) ->
                         throw err if err
 
-                        # FIXME: Currently, this loads in one less than the
-                        # snapshot we exported, since the Injector doesn't see
-                        # that the last segment should be finalized (no data
-                        # pushed beyond the end_ts)
-                        expect(snap2.segments).to.have.length snap1.segments.length - 1
+                        debug "snap2 has #{snap2.segments.length} segments."
+                        debug "snap2 first segment is #{snap2.segments[0].id}.", snap2.segments[0]
+                        debug "snap2 last segment is #{snap2.segments[snap2.segments.length-1].id}.", snap2.segments[snap2.segments.length-1]
+
+                        expect(snap2.segments).to.have.length snap1.segments.length
 
                         done()
 
                 rewind.dumpBuffer (err,writer) ->
                     throw err if err
                     writer.pipe(pt)
+
+        it "receives new data cleanly after loading from a RewindBuffer dump", (done) ->
+            throw new Error "Requires r2 to be populated." if !r2
+
+            g2 = new ChunkGenerator generator.ts().forward, 1000
+
+            g2.on "readable", ->
+                while c = g2.read()
+                    r2._insertBuffer c
+
+            r2.hls_segmenter.once "snapshot", (snap)->
+                debug "g2 snap is ", snap
+
+                # we're checking to make sure that our snapshot numbering is intact,
+                # as is our timestamp sequence
+                last = null
+                for s in snap.segments
+                    if last
+                        expect(s.id).to.eql last.id + 1
+                        expect(s.ts).to.eql last.end_ts
+
+                    last = s
+
+                done()
+
+            g2.forward 10
 
     #----------
 
@@ -478,6 +520,7 @@ describe "HTTP Live Streaming Segmenter", ->
             done()
 
         it "should trigger updates to stream group min segment TS", (done) ->
+            this.timeout 4000
             # stream all f_chunks into r1, but skip some for r2
             g1.forward 120
             g2.skip_forward 30, -> g2.forward 90
@@ -548,7 +591,3 @@ describe "HTTP Live Streaming Segmenter", ->
                 # we can't test actaul equality here because javascript doesn't believe in ints
                 expect(last_seg.pts).to.be.closeTo ((last_seg.id * segment_duration * 90) - Math.pow(2,33) - 1), 10
                 done()
-
-
-
-

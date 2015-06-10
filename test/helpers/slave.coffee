@@ -16,5 +16,6 @@ module.exports =
 
             slave_info =
                 slave: s
+                port:  s.slavePort()
 
             cb null, slave_info

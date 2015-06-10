@@ -155,7 +155,11 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
         _dump: (cb) ->
             if @_active
-                cb "RewindDumper failed: Already active for #{ @rewind._rkey }"
+                cb new Error "RewindDumper failed: Already active for #{ @rewind._rkey }"
+                return false
+
+            if @rewind.isLoading()
+                cb new Error "RewindDumper: Cannot dump while rewind buffer is loading."
                 return false
 
             @_active = true

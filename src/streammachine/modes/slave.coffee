@@ -65,7 +65,7 @@ module.exports = class SlaveMode extends require("./base")
         @pool.on "full_strength", => @emit "full_strength"
 
         process.on "SIGTERM", =>
-            @pool.destroy (err) =>
+            @pool.shutdown (err) =>
                 @log.info "Pool destroyed."
                 process.exit()
 
@@ -99,6 +99,11 @@ module.exports = class SlaveMode extends require("./base")
                 throw err
 
             @_server.on "connection", (conn) =>
+                # FIXME: This is nasty...
+                # https://github.com/joyent/node/issues/7905
+                if /^v0.10/.test(process.version)
+                    conn._handle.readStop()
+
                 conn.pause()
                 @_distributeConnection conn
 
@@ -119,7 +124,7 @@ module.exports = class SlaveMode extends require("./base")
 
             return
 
-        @log.debug "Distributing listener to worker #{w.id} (#{w.pid})"
+        @log.silly "Distributing listener to worker #{w.id} (#{w.pid})"
         w.rpc.request "connection", null, conn, (err) =>
             if err
                 @log.error "Failed to land incoming connection: #{err}"
@@ -142,7 +147,7 @@ module.exports = class SlaveMode extends require("./base")
         @log.debug "Landing listener from worker.", inHandoff:@_inHandoff
         if @_inHandoff
             # we're in a handoff. ship the listener out there
-            @_rpc.request "stream_listener", msg, handle, (err) =>
+            @_inHandoff.request "stream_listener", msg, handle, (err) =>
                 cb err
         else
             # we can hand the listener to any slave except the one
@@ -168,57 +173,24 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
-    _sendHandoff: () ->
+    _sendHandoff: (rpc) ->
         @log.info "Starting slave handoff."
 
         # don't try to spawn new workers
         @_shuttingDown  = true
-        @_inHandoff     = true
+        @_inHandoff     = rpc
 
         # Coordinate handing off our server handle
 
-        @_rpc.request "server_socket", {}, @_server?._handle, (err) =>
+        rpc.request "server_socket", {}, @_server?._handle, (err) =>
             if err
                 @log.error "Error sending socket across handoff: #{err}"
                 # FIXME: Proceed? Cancel?
 
             @log.info "Server socket transferred. Sending listener connections."
 
-            # now we ask each worker to send its listeners. We proxy them through
-            # to the new process, which in turn hands them off to its workers
-
-            _proxyWorker = (cb) =>
-                # are we done yet?
-                if @pool.count() == 0
-                    cb?()
-                    return false
-
-                # grab a worker id off the stack
-                w = @pool.getWorker()
-
-                @log.info "Starting transfer for worker #{w.id}"
-
-                w.rpc.request "shutdown", (err,msg) =>
-                    if err
-                        @log.error "Worker hit error during shutdown: #{err}", error:err, worker:w.id
-
-                    next = _.once =>
-                        # do it again...
-                        _proxyWorker cb
-
-
-                    t = setTimeout =>
-                        @log.error "Failed to get worker shutdown for #{w.id} (#{w.pid})"
-                        next()
-                    , 1000
-
-                    # we also want to see the process exit
-                    w.once "exit", =>
-                        clearTimeout t
-                        @log.info "Worker shutdown complete for #{w.id} (#{w.pid})"
-                        next()
-
-            _proxyWorker =>
+            # Ask the pool to shut down its workers.
+            @pool.shutdown (err) =>
                 @log.event "Sent slave data to new process. Exiting."
 
                 # Exit
@@ -385,11 +357,14 @@ module.exports = class SlaveMode extends require("./base")
 
         #----------
 
-        destroy: (cb) ->
+        shutdown: (cb) ->
             @_shutdown = true
 
             # send kill signals to all workers
             @log.info "Slave WorkerPool is exiting."
+
+            if @count() == 0
+                cb null
 
             af = _.after @count(), =>
                 cb null

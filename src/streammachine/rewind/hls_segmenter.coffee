@@ -41,7 +41,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             @finalizer.on "add", => @_snapDebounce.ping()
             @finalizer.on "remove", =>
                 @_snapDebounce.ping()
-                @group?.hlsUpdateMinSegment Number(@segments[0].ts) if !@_rewindLoading
+                @group?.hlsUpdateMinSegment Number(@segments[0].ts) if !@_rewindLoading && @segments[0]
 
             @emit "_finalizer"
 
@@ -80,12 +80,16 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         # Once we're done processing the data it received, we should update our
         # group with our first segment ID.
         @rewind.once "rewind_loaded", =>
-            @once "snapshot", ->
-                @log.debug "HLS rewind loaded and settled. Length: #{@segments.length}"
-                @_rewindLoading = false
+            # ask the injector to push any initial segment that it is holding
+            @injector._flush =>
+                @log.debug "HLS Injector flushed"
 
-                if @segments[0]
-                    @group?.hlsUpdateMinSegment Number(@segments[0].ts)
+                @once "snapshot", =>
+                    @log.debug "HLS rewind loaded and settled. Length: #{@segments.length}"
+                    @_rewindLoading = false
+
+                    if @segments[0]
+                        @group?.hlsUpdateMinSegment Number(@segments[0].ts)
 
         @_gSyncFunc = (ts) =>
             @finalizer?.setMinTS ts, (err,seg_id) =>
@@ -221,6 +225,7 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
                 if seg
                     duration = 0
                     duration += b.duration for b in seg.buffers
+                    @log.debug "HLS Injector flush checking segment: #{seg.ts}, #{duration}"
 
                     if duration >= @segment_length
                         @emit "push", seg
@@ -270,9 +275,9 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
         #----------
 
         expire: (ts,cb) ->
-            # expire any segments whose end_ts values are below this given ts
+            # expire any segments whose start ts values are at or below this given ts
             loop
-                if (f_s = @segments[0])? && f_s.end_ts <= ts
+                if (f_s = @segments[0])? && Number(f_s.ts) <= Number(ts)
                     @segments.shift()
                     delete @segment_idx[ f_s.id ]
                     @emit "remove", f_s
@@ -287,7 +292,9 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
             ts = Number(ts) if ts instanceof Date
 
             @_min_ts = ts
-            @expire ts, cb
+
+            # Don't expire a segment with this min TS. Send expire a number one lower.
+            @expire ts - 1, cb
 
         #----------
 

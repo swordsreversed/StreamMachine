@@ -61,7 +61,7 @@ module.exports = class StandaloneMode extends require("./base")
 
         @log.debug "Standalone is listening on port #{@opts.port}"
 
-        cb null, @
+        cb? null, @
 
     #----------
 

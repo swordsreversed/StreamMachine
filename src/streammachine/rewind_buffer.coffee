@@ -34,6 +34,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rburst        = null
         @_rkey          = rewind_opts.key
 
+        @_risLoading    = false
+
         # This could already be set if we've subclassed RewindBuffer, so
         # only set it if it doesn't exist
         @log            = rewind_opts.log if rewind_opts.log && !@log
@@ -74,6 +76,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         @on "source", (newsource) =>
             @_rConnectSource newsource
+
+    #----------
+
+    isLoading: ->
+        @_risLoading
 
     #----------
 
@@ -170,6 +177,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    recordListen: (opts) ->
+        # stub function. must be defined for real in the implementing class
+
+    #----------
+
     bufferedSecs: ->
         # convert buffer length to seconds
         Math.round @_rbuffer.length() * @_rsecsPerChunk
@@ -188,11 +200,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     # any incoming data.
 
     loadBuffer: (stream,cb) ->
+        @_risLoading = true
         @emit "rewind_loading"
 
         if !stream
             # Calling loadBuffer with no stream is really just for testing
-            process.nextTick => @emit "rewind_loaded"
+            process.nextTick =>
+                @emit "rewind_loaded"
+                @_risLoading = false
 
             @hls_segmenter._loadMap null if @hls_segmenter
 
@@ -243,6 +258,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             obj = seconds:@bufferedSecs(), length:@_rbuffer.length()
             @log.info "RewindBuffer is now at ", obj
             @emit "rewind_loaded"
+            @_risLoading = false
             cb? null, obj
 
     #----------

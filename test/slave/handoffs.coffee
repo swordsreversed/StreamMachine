@@ -127,31 +127,41 @@ describe "Slave Handoffs/Respawns", ->
 
         describe "Initial Slave", ->
             before (done) ->
-                this.timeout 10000
+                this.timeout 20000
 
                 s1 = cp.fork "./index.js", slave_config
                 process.on "exit", -> s1.kill()
 
-                # wait a few ticks for startup...
-                # FIXME: What's a better way to do this?
-                setTimeout ->
-                    debug "Setting up s1 RPC"
-                    new RPC s1, (err,r) ->
-                        throw err if err
-                        s1rpc = r
-                        s1rpc.request "OK", (err,msg) ->
-                            throw err if err
+                debug "Setting up s1 RPC"
+                new RPC s1, (err,r) ->
+                    throw err if err
+                    s1rpc = r
 
-                            # FIXME: On Node 0.10, we run into an issue handling
-                            # connections that arrive before we have a loaded
-                            # worker. For the moment, simply make sure we have
-                            # one here
+                    debug "Starting loop for s1 OK"
 
-                            s1rpc.request "ready", (err) ->
-                                throw err if err
+                    tries = 0
 
-                                done()
-                , 3000
+                    okF = ->
+                        tries += 1
+                        s1rpc.request "OK", null, null, timeout:500, (err,msg) ->
+                            if err
+                                debug "s1 OK error. Tries: #{tries}"
+                                okF() if tries < 20
+                            else
+                                debug "s1 OK success after #{tries} tries"
+
+                                # FIXME: On Node 0.10, we run into an issue handling
+                                # connections that arrive before we have a loaded
+                                # worker. For the moment, simply make sure we have
+                                # one here
+                                s1rpc.request "ready", null, null, timeout:5000, (err) ->
+                                    throw err if err
+
+                                    debug "s1 is ready with worker"
+
+                                    done()
+
+                    okF()
 
             it "is listening on a port", (done) ->
                 s1rpc.request "slave_port", (err,port) ->
@@ -175,20 +185,29 @@ describe "Slave Handoffs/Respawns", ->
 
         describe "New Slave", ->
             before (done) ->
-                this.timeout 5000
+                this.timeout 20000
 
                 s2 = cp.fork "./index.js", ["--handoff",slave_config...]
                 process.on "exit", -> s2.kill()
 
-                # wait a few ticks for startup...
-                # FIXME: What's a better way to do this?
-                setTimeout ->
-                    new RPC s2, (err,r) ->
-                        s2rpc = r
-                        s2rpc.request "OK", (err,msg) ->
-                            throw err if err
-                            done()
-                , 3000
+                new RPC s2, (err,r) ->
+                    s2rpc = r
+
+                    debug "Starting loop for s2 OK"
+
+                    tries = 0
+
+                    okF = ->
+                        tries += 1
+                        s2rpc.request "OK", null, null, timeout:500, (err,msg) ->
+                            if err
+                                debug "s2 OK error. Tries: #{tries}"
+                                okF() if tries < 20
+                            else
+                                debug "s2 OK success after #{tries} tries"
+                                done()
+
+                    okF()
 
             it "should not immediately be listening on a port", (done) ->
                 s2rpc.request "slave_port", (err,port) ->

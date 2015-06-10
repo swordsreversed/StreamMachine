@@ -54,38 +54,52 @@ module.exports = class MasterMode extends require("./base")
                     cb null, "OK"
 
         if nconf.get("handoff")
-            @_acceptHandoff cb
-
+            @_handoffStart cb
         else
-            # load any rewind buffers from disk
-            @master.loadRewinds()
-
-            @handle = @server.listen @opts.master.port
-            @master.slaves.listen(@handle)
-            @master.sourcein.listen()
-
-            @log.info "Listening."
-
-            cb? null, @
+            @_normalStart cb
 
     #----------
 
-    _sendHandoff: ->
+    _handoffStart: (cb) ->
+        @_acceptHandoff (err) =>
+            if err
+                @log.error "_handoffStart Failed! Falling back to normal start: #{err}"
+                @_normalStart cb
+
+    #----------
+
+    _normalStart: (cb) ->
+        # load any rewind buffers from disk
+        @master.loadRewinds()
+
+        @handle = @server.listen @opts.master.port
+        @master.slaves.listen(@handle)
+        @master.sourcein.listen()
+
+        @log.info "Listening."
+
+        cb? null, @
+
+    #----------
+
+    _sendHandoff: (rpc) ->
         @log.event "Got handoff signal from new process."
 
-        @_rpc.once "config", (msg,handle,cb) =>
+        rpc.once "config", (msg,handle,cb) =>
             # send our streams info so we make sure our configs are matched
-            @_rpc.request "streams", @master.config().streams, (err,streams) =>
+            rpc.request "streams", @master.config().streams, (err,streams) =>
                 if err
-                    @log.error "Error setting streams on new process."
+                    @log.error "Error setting streams on new process: #{err}"
+                    cb "Error sending streams: #{err}"
                     return false
 
                 @log.info "New Master confirmed stream configuration."
 
+                # basically we leave the config request open while we send streams
                 cb()
 
                 # Send master data (includes source port handoff)
-                @master.sendHandoffData @_rpc, (err) =>
+                @master.sendHandoffData rpc, (err) =>
                     @log.event "Sent master data to new process."
 
                     _afterSockets = _.after 2, =>
@@ -94,12 +108,12 @@ module.exports = class MasterMode extends require("./base")
 
                     # Hand over the source port
                     @log.info "Hand off source socket."
-                    @_rpc.request "source_socket", null, @master.sourcein.server, (err) =>
+                    rpc.request "source_socket", null, @master.sourcein.server, (err) =>
                         @log.error "Error sending source socket: #{err}" if err
                         _afterSockets()
 
                     @log.info "Hand off master socket."
-                    @_rpc.request "master_handle", null, @handle, (err) =>
+                    rpc.request "master_handle", null, @handle, (err) =>
                         @log.error "Error sending master handle: #{err}" if err
                         _afterSockets()
 
@@ -109,10 +123,19 @@ module.exports = class MasterMode extends require("./base")
         @log.info "Initializing handoff receptor."
 
         if !@_rpc
-            @log.error "Handoff called, but no RPC interface set up. Aborting."
+            cb new Error "Handoff called, but no RPC interface set up."
             return false
 
+        # If we don't get HANDOFF_GO quickly, something is probably wrong.
+        # Perhaps we've been asked to start via handoff when there's no process
+        # out there to send us data.
+        handoff_timer = setTimeout =>
+            cb new Error "Handoff failed to handshake within five seconds."
+        , 5000
+
         @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
+            clearTimeout handoff_timer
+
             cb null, "GO"
 
             # watch for streams
