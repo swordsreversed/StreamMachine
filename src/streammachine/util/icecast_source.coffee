@@ -56,7 +56,7 @@ module.exports = class IcecastSource extends require("events").EventEmitter
                 else
                     err = "Unknown response: #{ resp.toString() }"
                     debug err
-                    cb err
+                    cb new Error err
                     @disconnect()
 
             @sock.write "SOURCE /#{@opts.stream} HTTP/1.0\r\n"
@@ -75,7 +75,7 @@ module.exports = class IcecastSource extends require("events").EventEmitter
             authTimeout = setTimeout =>
                 err = "Timed out waiting for authentication."
                 debug err
-                cb err
+                cb new Error err
                 @disconnect()
             , 5000
 
