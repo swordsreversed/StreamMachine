@@ -47,6 +47,7 @@ describe "Source In", ->
                 sock.write "JUNK!!!!\r\n\r\n"
 
                 sock.once "close", ->
+                    debug "Junk source disconnected."
                     clearTimeout t
                     done()
 

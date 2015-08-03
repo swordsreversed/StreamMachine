@@ -47,7 +47,14 @@ module.exports = class SourceIn extends require("events").EventEmitter
             parser.execute d while d = sock.read()
         sock.on "readable", readerF
 
-        parser.on "headersComplete", (headers) =>
+        parser.once "invalid", =>
+            # disconnect our reader
+            sock.removeListener "readable", readerF
+
+            # close the connection
+            sock.end "HTTP/1.0 400 Bad Request\n\n"
+
+        parser.once "headersComplete", (headers) =>
             # cancel our timeout
             clearTimeout timer
 
@@ -186,7 +193,12 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
             match = @requestExp.exec line
 
-            [@info.method,@info.url,@info.protocol,@info.versionMajor,@info.versionMinor] = match[1..5]
+            if match
+                [@info.method,@info.url,@info.protocol,@info.versionMajor,@info.versionMinor] = match[1..5]
+            else
+                # this isn't a request line that we understand... we should
+                # close the connection
+                @emit "invalid"
 
             @info.request_offset = @offset
             @info.request_line = line
