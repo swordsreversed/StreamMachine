@@ -27,6 +27,8 @@ module.exports = class StreamMachine
 
         behind_proxy:   false
 
+        cluster: 2
+
         admin:
             require_auth: false
 
