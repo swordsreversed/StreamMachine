@@ -1,10 +1,4 @@
-===
-     ,---.  ,--.                             ,--.   ,--.           ,--.    ,--.
-    '   .-,-'  '-,--.--.,---. ,--,--,--,--,--|   `.'   |,--,--.,---|  ,---.`--,--,--, ,---.
-    `.  `-'-.  .-|  .--| .-. ' ,-.  |        |  |'.'|  ' ,-.  | .--|  .-.  ,--|      | .-. :
-    .-'    ||  | |  |  \   --\ '-'  |  |  |  |  |   |  \ '-'  \ `--|  | |  |  |  ||  \   --.
-    `-----' `--' `--'   `----'`--`--`--`--`--`--'   `--'`--`--'`---`--' `--`--`--''--'`----'
-===
+# StreamMachine
 
 StreamMachine is an open-source streaming audio server aimed at pushing
 innovation for radio stations that have spent too many years running old
@@ -38,7 +32,7 @@ You can read more about the implementation of the
 
 StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on
 one server, or in a master-slave configuration for load-balancing.
-StreamMachine is designed for Node 0.10.
+StreamMachine is designed for Node 0.10 and higher.
 
 #### Configuration
 
@@ -102,6 +96,12 @@ Where logging is intended to signal an event, alerts are about signalling
 that a condition exists.
 
 Alerts can be sent via email or [Pagerduty](http://pagerduty.com).
+
+## Analytics
+
+StreamMachine includes support for writing analytics into Elasticsearch. Output
+includes listening events&mdash;chunks of listening that reflect a segment of
+duration delivered&mdash;and rolled-up sessions.
 
 ## Configuration
 

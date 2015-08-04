@@ -1,6 +1,6 @@
 {
     "name":         "streammachine",
-    "version":      "0.4.0",
+    "version":      "0.5.0",
     "description":  "Flexible live streaming for broadcast audio.",
     "keywords":     ["audio","broadcast","shoutcast","icecast"],
     "homepage":     "https://github.com/StreamMachine/StreamMachine/",
