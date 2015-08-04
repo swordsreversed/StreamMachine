@@ -12,6 +12,8 @@ StreamMachine is being developed by [Eric Richardson](http://ewr.is) (e@ewr.is)
 and [Southern California Public Radio](http://scpr.org). SCPR has run
 StreamMachine in production since 2012.
 
+[![Build Status](https://travis-ci.org/StreamMachine/StreamMachine.svg)](https://travis-ci.org/StreamMachine/StreamMachine)
+
 ## The Rewind Buffer
 
 StreamMachine's big idea is keeping a big buffer of audio data in memory,
