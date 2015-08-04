@@ -2,6 +2,7 @@ _u      = require 'underscore'
 Redis   = require 'redis'
 Url     = require "url"
 nconf   = require "nconf"
+debug   = require("debug")("sm:redis")
 
 module.exports = class RedisManager extends require('events').EventEmitter
     DefaultOptions:
@@ -24,15 +25,22 @@ module.exports = class RedisManager extends require('events').EventEmitter
                 # see if there's a config to load
                 #@_config()
 
-            if (@_db = Number(info.pathname.substr(1))) != NaN
-                console.log "Redis connecting to DB #{@_db}"
-                @client.select @_db, (err) =>
-                    return @log.error "Redis DB select error: #{err}" if err
+            if info.pathname && info.pathname != "/"
+                # see if there's a database number in the path
+                db = Number(info.pathname.substr(1))
+
+                if isNaN(db)
+                    throw new Error "Invalid path in Redis URI spec. Expected db number, got '#{info.pathname.substr(1)}'"
+
+                debug "Redis connecting to DB #{db}"
+                @client.select db, (err) =>
+                    throw new Error "Redis DB select error: #{err}" if err
+                    @_db = db
 
                     rFunc()
             else
                 @_db = 0
-                console.log "Redis using DB 0: #{info.pathname.substr(1)}"
+                debug "Redis using DB 0."
                 rFunc()
 
 
