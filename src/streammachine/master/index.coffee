@@ -88,7 +88,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Analytics -- #
 
-        if @options.analytics
+        if @options.analytics?.es_uri
             @analytics = new Analytics
                 config: @options.analytics
                 log:    @log.child(module:"analytics")

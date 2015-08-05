@@ -23,6 +23,9 @@ module.exports = class StreamMachine
             segment_duration:   10
             limit_full_index:   false
 
+        analytics:
+            finalize_secs: 300
+
         chunk_duration: 2
 
         behind_proxy:   false
