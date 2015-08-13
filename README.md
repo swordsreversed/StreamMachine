@@ -114,6 +114,18 @@ the command line.
 For more, see the
 [full documentation of configuration options](https://github.com/StreamMachine/StreamMachine/wiki/Configuration-settings).
 
+## Handoff Restarts
+
+Traditional streaming is done using long-lived connections that can make life
+painful when you need to deploy a new code release. StreamMachine is able to
+accomplish live restarts by doing a "handoff" where the old process passes all
+clients to the new process before shutting down.
+
+To manage this process, StreamMachine ships with the "streammachine-runner"
+command. The runner is a lightweight process that will manage the StreamMachine
+process, initiating a handoff based on either a `SIGHUP` or a change to a
+watched trigger file.
+
 ## Getting Started
 
 StreamMachine isn't the most user-friendly piece of software to install at the
@@ -134,9 +146,8 @@ The included configuration has an MP3 stream configured at /test, with the sourc
 password "testing".  The source input listener is on port 8002, and that is where
 the broadcast should be pointed. To connect using an included source utility, run:
 
-    ./node_modules/.bin/coffee ./util/icecast_source2.coffee --host 127.0.0.1 \
-    --port 8002 --stream /test --format mp3 --password testing \
-    ./test/files/mp3/mp3-44100-128-s.mp3
+    ./streammachine-util-cmd source --port 8002 --stream test \
+    --password testing ./test/files/mp3/mp3-44100-128-s.mp3
 
 To listen, point an audio player to `http://127.0.0.1:8001/test`.
 

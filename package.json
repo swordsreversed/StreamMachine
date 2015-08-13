@@ -65,6 +65,7 @@
     },
     "bin": {
       "streammachine":        "./streammachine-cmd",
-      "streammachine-runner": "./streammachine-runner-cmd"
+      "streammachine-runner": "./streammachine-runner-cmd",
+      "streammachine-util":   "./streammachine-util-cmd"
     }
 }

@@ -1,7 +1,9 @@
 StreamListener = require "../src/streammachine/util/stream_listener"
 
-argv = require("optimist")
+argv = require("yargs")
     .usage("Usage: $0 --host localhost --port 8001 --stream foo --shoutcast")
+    .help('h')
+    .alias('h','help')
     .describe
         host:       "Server"
         port:       "Port"
@@ -9,8 +11,13 @@ argv = require("optimist")
         shoutcast:  "Include 'icy-metaint' header?"
     .default
         shoutcast:  false
-    .demand("host","port","stream")
+    .boolean(['shoutcast'])
+    .demand(["host","port","stream"])
     .argv
+
+if @args._?[0] == "listener"
+    @args._.shift()
+
 
 listener = new StreamListener argv.host, argv.port, argv.stream, argv.shoutcast
 

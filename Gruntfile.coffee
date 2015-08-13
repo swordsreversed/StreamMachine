@@ -8,7 +8,7 @@ module.exports = (grunt) ->
                     sourceMap: true
                 expand: true
                 flatten: false
-                src: ["src/**/*.coffee","streamer.coffee","runner.coffee"]
+                src: ["src/**/*.coffee","streamer.coffee","runner.coffee","util.coffee","util/*.coffee"]
                 dest: 'js/'
                 ext: ".js"
 
