@@ -6,7 +6,7 @@ technology like Shoutcast and Icecast.
 
 The project has two goals: emulating the traditional streaming experience and
 building support for new features that push the radio listening experience
-forward.
+forward. Currently StreamMachine supports traditional Shoutcast-style streaming and HTTP Live Streaming.
 
 StreamMachine is being developed by [Eric Richardson](http://ewr.is) (e@ewr.is)
 and [Southern California Public Radio](http://scpr.org). SCPR has run
@@ -29,6 +29,16 @@ to the station's live stream.
 
 You can read more about the implementation of the
 [RewindBuffer in the wiki](https://github.com/StreamMachine/StreamMachine/wiki/RewindBuffer).
+
+## Analytics
+
+StreamMachine includes support for writing analytics into Elasticsearch. Output
+includes listening events&mdash;chunks of listening that reflect a segment of
+duration delivered&mdash;and rolled-up sessions.
+
+Unlike traditional streaming log outputs, StreamMachine's listening events
+allow deep realtime analysis of user beahvior, including playhead position and
+in-flight session durations.
 
 ## Architecture
 
@@ -99,12 +109,6 @@ that a condition exists.
 
 Alerts can be sent via email or [Pagerduty](http://pagerduty.com).
 
-## Analytics
-
-StreamMachine includes support for writing analytics into Elasticsearch. Output
-includes listening events&mdash;chunks of listening that reflect a segment of
-duration delivered&mdash;and rolled-up sessions.
-
 ## Configuration
 
 StreamMachine uses [nconf](https://github.com/flatiron/nconf) to load
@@ -132,7 +136,7 @@ StreamMachine isn't the most user-friendly piece of software to install at the
 moment, but there are two options for quickly getting something running that
 you can play with:
 
-#### Running Locally
+#### Running Locally (Repo)
 
 To run StreamMachine locally with no service dependencies, try the included `config/standalone.json`. To do so:
 
@@ -142,9 +146,10 @@ To run StreamMachine locally with no service dependencies, try the included `con
 * Run `./streammachine-cmd --config ./config/standalone.json` to start the
   StreamMachine service
 
-The included configuration has an MP3 stream configured at /test, with the source
-password "testing".  The source input listener is on port 8002, and that is where
-the broadcast should be pointed. To connect using an included source utility, run:
+The included configuration has an MP3 stream configured at /test, with the
+source password "testing".  The source input listener is on port 8002, and
+that is where the broadcast should be pointed. To connect using an included
+source utility, run:
 
     ./streammachine-util-cmd source --port 8002 --stream test \
     --password testing ./test/files/mp3/mp3-44100-128-s.mp3

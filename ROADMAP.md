@@ -1,18 +1,5 @@
 ## StreamMachine Roadmap
 
-### 0.5.0 - HLS / Analytics Release
-
-* Clean up documentation
-* Get the test suite all passing and running on Travis / etc
-* Add tests around stream add/drop APIs -> slaves
-
-### 0.6.0 - Node.js 0.12 / iojs Compatibility
-
-* Finish implementing and testing StreamMachine#29 or something similar
-* Remove rate limit for master -> slave transfers on non 0.10 platforms
-
-### Future Enhancements
-
 * __Replace Stream Groups with Multi-Variant Streams:__ The stream group
     concept was a hack to get HLS variants up and running quickly. It
     should be replaced with a stream that can produce multiple variants.
