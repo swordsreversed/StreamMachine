@@ -33,6 +33,8 @@ module.exports = Stream = (function(_super) {
     this._lmeta = {};
     this.preroll = null;
     this.mlog_timer = null;
+    this._totalConnections = 0;
+    this._totalKBytesSent = 0;
     this.metaFunc = (function(_this) {
       return function(chunk) {
         if (chunk.StreamTitle) {
@@ -107,7 +109,9 @@ module.exports = Stream = (function(_super) {
   Stream.prototype.status = function() {
     return _.extend(this._rStatus(), {
       key: this.key,
-      listeners: this.listeners()
+      listeners: this.listeners(),
+      connections: this._totalConnections,
+      kbytes_sent: this._totalKBytesSent
     });
   };
 
@@ -212,6 +216,7 @@ module.exports = Stream = (function(_super) {
       obj: obj,
       startTime: opts.startTime || (new Date)
     };
+    this._totalConnections += 1;
     return this._once_source_loaded((function(_this) {
       return function() {
         return _this.getRewinder(lmeta.id, opts, function() {
@@ -245,6 +250,9 @@ module.exports = Stream = (function(_super) {
     var lmeta;
     if (opts.bytes) {
       opts.kbytes = Math.floor(opts.bytes / 1024);
+    }
+    if (_.isNumber(opts.kbytes)) {
+      this._totalKBytesSent += opts.kbytes;
     }
     if (lmeta = this._lmeta[opts.id]) {
       return this.log.interaction("", {

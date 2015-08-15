@@ -1,8 +1,8 @@
-var Alerts, HTTP, IO, Server, Slave, SocketSource, Stream, URL, tz, _u,
+var Alerts, HTTP, IO, Server, Slave, SocketSource, Stream, URL, tz, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require("underscore");
+_ = require("underscore");
 
 Stream = require("./stream");
 
@@ -42,6 +42,8 @@ module.exports = Slave = (function(_super) {
     this.connected = false;
     this._retrying = null;
     this._shuttingDown = false;
+    this._totalConnections = 0;
+    this._totalKBytesSent = 0;
     this.log = this.options.logger;
     this.alerts = new Alerts({
       logger: this.log.child({
@@ -96,7 +98,7 @@ module.exports = Slave = (function(_super) {
       return function() {
         var aFunc, k, obj, _ref, _results;
         _this.log.debug("Looking for sources to load in " + (Object.keys(_this.streams).length) + " streams.");
-        aFunc = _u.after(Object.keys(_this.streams).length, function() {
+        aFunc = _.after(Object.keys(_this.streams).length, function() {
           _this.log.debug("All sources are loaded.");
           return cb();
         });
@@ -176,14 +178,23 @@ module.exports = Slave = (function(_super) {
   };
 
   Slave.prototype._streamStatus = function(cb) {
-    var key, s, status, _ref;
+    var key, s, status, totalConnections, totalKBytes, _ref;
     status = {};
+    totalKBytes = 0;
+    totalConnections = 0;
     _ref = this.streams;
     for (key in _ref) {
       s = _ref[key];
       status[key] = s.status();
+      totalKBytes += status[key].kbytes_sent;
+      totalConnections += status[key].connections;
     }
-    return cb(null, status);
+    return cb(null, _.extend(status, {
+      _stats: {
+        kbytes_sent: totalKBytes,
+        connections: totalConnections
+      }
+    }));
   };
 
   Slave.prototype.socketSource = function(stream) {

@@ -31,6 +31,11 @@ module.exports = class Stream extends require('../rewind_buffer')
         @preroll = null
         @mlog_timer = null
 
+        # -- Stats Counters -- #
+
+        @_totalConnections  = 0
+        @_totalKBytesSent   = 0
+
         @metaFunc = (chunk) =>
             @StreamTitle    = chunk.StreamTitle if chunk.StreamTitle
             @StreamUrl      = chunk.StreamUrl if chunk.StreamUrl
@@ -94,8 +99,10 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     status: ->
         _.extend @_rStatus(),
-            key:        @key
-            listeners:  @listeners()
+            key:            @key
+            listeners:      @listeners()
+            connections:    @_totalConnections
+            kbytes_sent:    @_totalKBytesSent
 
     #----------
 
@@ -198,6 +205,9 @@ module.exports = class Stream extends require('../rewind_buffer')
             obj:        obj
             startTime:  opts.startTime  || (new Date)
 
+        # each listen is a connection
+        @_totalConnections += 1
+
         # don't ask for a rewinder while our source is going through init,
         # since we don't want to fail an offset request that should be
         # valid.
@@ -233,6 +243,8 @@ module.exports = class Stream extends require('../rewind_buffer')
     recordListen: (opts) ->
         # temporary conversion support...
         opts.kbytes = Math.floor( opts.bytes / 1024 ) if opts.bytes
+
+        @_totalKBytesSent += opts.kbytes if _.isNumber(opts.kbytes)
 
         if lmeta = @_lmeta[opts.id]
             @log.interaction "",

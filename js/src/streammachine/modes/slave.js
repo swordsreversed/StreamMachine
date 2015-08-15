@@ -256,6 +256,35 @@ module.exports = SlaveMode = (function(_super) {
       });
       this._nextId = 1;
       this._spawn();
+      this._statusPoll = setInterval((function(_this) {
+        return function() {
+          var w, _i, _len, _ref, _results;
+          _ref = _this.workers;
+          _results = [];
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            w = _ref[_i];
+            _results.push((function(w) {
+              if (!w.rpc) {
+                return;
+              }
+              return w.rpc.request("status", function(err, s) {
+                if (err) {
+                  _this.log.error("Worker status error: " + err);
+                }
+                return w.status = {
+                  id: id,
+                  listening: w._listening,
+                  loaded: w._loaded,
+                  streams: s,
+                  pid: w.pid,
+                  ts: Number(new Date)
+                };
+              });
+            })(w));
+          }
+          return _results;
+        };
+      })(this), 1000);
       process.on("exit", (function(_this) {
         return function() {
           var id, w, _ref, _results;
@@ -289,6 +318,7 @@ module.exports = SlaveMode = (function(_super) {
         w: p,
         rpc: null,
         pid: p.pid,
+        status: null,
         _loaded: false,
         _config: false
       });
@@ -335,7 +365,7 @@ module.exports = SlaveMode = (function(_super) {
           return _this.workers[w.id] = w;
         };
       })(this));
-      return p.once("exit", (function(_this) {
+      p.once("exit", (function(_this) {
         return function() {
           _this.log.info("SlaveWorker exit: " + w.id);
           delete _this.workers[w.id];
@@ -344,6 +374,11 @@ module.exports = SlaveMode = (function(_super) {
           if (!_this._shutdown) {
             return _this._spawn();
           }
+        };
+      })(this));
+      return p.on("error", (function(_this) {
+        return function(err) {
+          return _this.log.error("Error from SlaveWorker process: " + err);
         };
       })(this));
     };
@@ -375,10 +410,12 @@ module.exports = SlaveMode = (function(_super) {
       this._shutdown = true;
       this.log.info("Slave WorkerPool is exiting.");
       if (this.count() === 0) {
+        clearInterval(this._statusPoll);
         cb(null);
       }
       af = _.after(this.count(), (function(_this) {
         return function() {
+          clearInterval(_this._statusPoll);
           return cb(null);
         };
       })(this));
@@ -444,36 +481,14 @@ module.exports = SlaveMode = (function(_super) {
     };
 
     WorkerPool.prototype.status = function(cb) {
-      var af, id, status, w, _ref, _results;
+      var id, status, w, _ref;
       status = {};
-      af = _.after(Object.keys(this.workers).length, (function(_this) {
-        return function() {
-          return cb(null, status);
-        };
-      })(this));
       _ref = this.workers;
-      _results = [];
       for (id in _ref) {
         w = _ref[id];
-        _results.push((function(_this) {
-          return function(id, w) {
-            return w.rpc.request("status", function(err, s) {
-              if (err) {
-                _this.log.error("Worker status error: " + err);
-              }
-              status[id] = {
-                id: id,
-                listening: w._listening,
-                loaded: w._loaded,
-                streams: s,
-                pid: w.pid
-              };
-              return af();
-            });
-          };
-        })(this)(id, w));
+        status[id] = w.status;
       }
-      return _results;
+      return status;
     };
 
     return WorkerPool;

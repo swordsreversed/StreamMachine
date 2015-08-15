@@ -1,4 +1,4 @@
-_u = require "underscore"
+_ = require "underscore"
 
 Stream  = require "./stream"
 Server  = require "./server"
@@ -30,6 +30,12 @@ module.exports = class Slave extends require("events").EventEmitter
         @_retrying      = null
 
         @_shuttingDown  = false
+
+        # -- Global Stats -- #
+
+        # we'll track these at the stream level and then bubble them up
+        @_totalConnections  = 0
+        @_totalKBytesSent   = 0
 
         # -- Set up logging -- #
 
@@ -70,7 +76,7 @@ module.exports = class Slave extends require("events").EventEmitter
     once_rewinds_loaded: (cb) ->
         @once_configured =>
             @log.debug "Looking for sources to load in #{ Object.keys(@streams).length } streams."
-            aFunc = _u.after Object.keys(@streams).length, =>
+            aFunc = _.after Object.keys(@streams).length, =>
                 @log.debug "All sources are loaded."
                 cb()
 
@@ -159,10 +165,16 @@ module.exports = class Slave extends require("events").EventEmitter
     _streamStatus: (cb) ->
         status = {}
 
+        totalKBytes         = 0
+        totalConnections    = 0
+
         for key,s of @streams
             status[ key ] = s.status()
 
-        cb null, status
+            totalKBytes += status[key].kbytes_sent
+            totalConnections += status[key].connections
+
+        cb null, _.extend status, _stats:{ kbytes_sent:totalKBytes, connections:totalConnections }
 
     #----------
 

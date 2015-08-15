@@ -250,6 +250,16 @@ module.exports = class SlaveMode extends require("./base")
 
             @_spawn()
 
+            # poll each worker for its status every second
+            @_statusPoll = setInterval =>
+                for w in @workers
+                    do (w) =>
+                        return if !w.rpc
+                        w.rpc.request "status", (err,s) =>
+                            @log.error "Worker status error: #{err}" if err
+                            w.status = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid, ts:Number(new Date)
+            , 1000
+
             process.on "exit", =>
                 # try one last effort to make sure workers are closed
                 w.w.kill() for id,w of @workers
@@ -274,6 +284,7 @@ module.exports = class SlaveMode extends require("./base")
                 w:          p
                 rpc:        null
                 pid:        p.pid
+                status:     null
                 _loaded:    false
                 _config:    false
 
@@ -337,6 +348,11 @@ module.exports = class SlaveMode extends require("./base")
 
                 @_spawn() if !@_shutdown
 
+            # error seems to be thrown for issues sending IPC
+            p.on "error", (err) =>
+                @log.error "Error from SlaveWorker process: #{err}"
+                # FIXME: What else should we do?
+
         #----------
 
         count: ->
@@ -364,9 +380,11 @@ module.exports = class SlaveMode extends require("./base")
             @log.info "Slave WorkerPool is exiting."
 
             if @count() == 0
+                clearInterval @_statusPoll
                 cb null
 
             af = _.after @count(), =>
+                clearInterval @_statusPoll
                 cb null
 
             for id,w of @workers
@@ -417,24 +435,20 @@ module.exports = class SlaveMode extends require("./base")
             if workers.length == 0
                 return null
             else
-                # FIXME: Right now we just return a random worker, but this selection
-                # should use some sense of worker busyness
+                # From this pool of eligible workers, choose the one that seems
+                # most appropriate to get new traffic.
+
+                # FIXME: How about the one that has sent the least bytes?
+                #return _.min workers, (w) -> w.status.bytes_sent
+
                 return _.sample(workers)
 
         #----------
 
         status: (cb) ->
             status = {}
-
-            af = _.after Object.keys(@workers).length, =>
-                cb null, status
-
-            for id,w of @workers
-                do (id,w) =>
-                    w.rpc.request "status", (err,s) =>
-                        @log.error "Worker status error: #{err}" if err
-                        status[ id ] = id:id, listening:w._listening, loaded:w._loaded, streams:s, pid:w.pid
-                        af()
+            status[ id ] = w.status for id,w of @workers
+            status
 
     #----------
 
