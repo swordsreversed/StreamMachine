@@ -481,14 +481,36 @@ module.exports = SlaveMode = (function(_super) {
     };
 
     WorkerPool.prototype.status = function(cb) {
-      var id, status, w, _ref;
+      var af, id, status, w, _ref, _results;
       status = {};
+      af = _.after(Object.keys(this.workers).length, (function(_this) {
+        return function() {
+          return cb(null, status);
+        };
+      })(this));
       _ref = this.workers;
+      _results = [];
       for (id in _ref) {
         w = _ref[id];
-        status[id] = w.status;
+        _results.push((function(_this) {
+          return function(id, w) {
+            return w.rpc.request("status", function(err, s) {
+              if (err) {
+                _this.log.error("Worker status error: " + err);
+              }
+              status[id] = {
+                id: id,
+                listening: w._listening,
+                loaded: w._loaded,
+                streams: s,
+                pid: w.pid
+              };
+              return af();
+            });
+          };
+        })(this)(id, w));
       }
-      return status;
+      return _results;
     };
 
     return WorkerPool;

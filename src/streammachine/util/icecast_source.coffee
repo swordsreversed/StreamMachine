@@ -47,10 +47,10 @@ module.exports = class IcecastSource extends require("events").EventEmitter
             # we really only care about the first thing we see
             @sock.once "readable", =>
                 resp = @sock.read()
+                clearTimeout authTimeout
 
                 if /^HTTP\/1\.0 200 OK/.test(resp.toString())
                     debug "Got HTTP OK. Starting streaming."
-                    clearTimeout authTimeout
                     cb null
 
                 else
@@ -87,6 +87,6 @@ module.exports = class IcecastSource extends require("events").EventEmitter
 
     disconnect: ->
         @_connected = false
-        @sock.end()
+        @sock?.end()
         @sock = null
         @emit "disconnect"

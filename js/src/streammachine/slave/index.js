@@ -136,7 +136,7 @@ module.exports = Slave = (function(_super) {
     for (k in _ref) {
       obj = _ref[k];
       if (!(options != null ? options[k] : void 0)) {
-        console.log("calling disconnect on ", k);
+        this.log.info("configureStreams: Calling disconnect on " + k);
         obj.disconnect();
         delete this.streams[k];
       }

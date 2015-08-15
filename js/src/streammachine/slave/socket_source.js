@@ -106,7 +106,7 @@ module.exports = SocketSource = (function(_super) {
   };
 
   SocketSource.prototype.disconnect = function() {
-    return console.log("SocketSource disconnect for " + this.stream.key + " called");
+    return this.log.debug("Unimplemented SocketSource disconnect for " + this.stream.key + " called");
   };
 
   return SocketSource;

@@ -88,4 +88,4 @@ module.exports = class SocketSource extends require("events").EventEmitter
     #----------
 
     disconnect: ->
-        console.log "SocketSource disconnect for #{@stream.key} called"
+        @log.debug "Unimplemented SocketSource disconnect for #{@stream.key} called"

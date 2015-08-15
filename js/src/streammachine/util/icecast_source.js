@@ -64,9 +64,9 @@ module.exports = IcecastSource = (function(_super) {
         _this.sock.once("readable", function() {
           var err, resp;
           resp = _this.sock.read();
+          clearTimeout(authTimeout);
           if (/^HTTP\/1\.0 200 OK/.test(resp.toString())) {
             debug("Got HTTP OK. Starting streaming.");
-            clearTimeout(authTimeout);
             return cb(null);
           } else {
             err = "Unknown response: " + (resp.toString());
@@ -101,8 +101,11 @@ module.exports = IcecastSource = (function(_super) {
   };
 
   IcecastSource.prototype.disconnect = function() {
+    var _ref;
     this._connected = false;
-    this.sock.end();
+    if ((_ref = this.sock) != null) {
+      _ref.end();
+    }
     this.sock = null;
     return this.emit("disconnect");
   };

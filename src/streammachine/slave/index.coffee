@@ -115,7 +115,7 @@ module.exports = class Slave extends require("events").EventEmitter
         # disconnect them
         for k,obj of @streams
             if !options?[k]
-                console.log "calling disconnect on ", k
+                @log.info "configureStreams: Calling disconnect on #{k}"
                 obj.disconnect()
                 delete @streams[k]
 

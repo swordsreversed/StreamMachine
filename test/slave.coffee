@@ -62,7 +62,7 @@ describe "Slave Mode", ->
             expect(Object.keys(status)).to.have.length 2
 
             for id,w of status
-                expect(w.streams).to.have.key master_info.stream_key
+                expect(w.streams).to.have.keys [master_info.stream_key,'_stats']
                 expect(w.streams[ master_info.stream_key ].buffer_length).to.eql 0
 
             done()
