@@ -78,6 +78,8 @@ module.exports = API = (function() {
               return api.ok(req, res, listeners);
             }
           });
+        } else {
+          return api.invalid(req, res, "Analytics function is required by listeners endpoint.");
         }
       };
     })(this));

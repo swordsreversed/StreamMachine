@@ -62,6 +62,8 @@ module.exports = class API
                         api.invalid req, res, err
                     else
                         api.ok req, res, listeners
+            else
+                api.invalid req, res, "Analytics function is required by listeners endpoint."
 
         # list streams
         @app.get "/streams", (req,res) =>
