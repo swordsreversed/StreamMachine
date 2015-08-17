@@ -106,7 +106,11 @@ module.exports = Users = (function() {
           return function(cb) {
             var users;
             users = nconf.get("users");
-            return typeof cb === "function" ? cb(null, Object.keys(users)) : void 0;
+            if (users) {
+              return typeof cb === "function" ? cb(null, Object.keys(users)) : void 0;
+            } else {
+              return typeof cb === "function" ? cb(null, []) : void 0;
+            }
           };
         })(this);
         this._user_lookup = (function(_this) {

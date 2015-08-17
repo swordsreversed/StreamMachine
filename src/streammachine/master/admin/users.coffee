@@ -79,7 +79,11 @@ module.exports = class Users
 
                 @_user_list = (cb) =>
                     users = nconf.get("users")
-                    cb? null, Object.keys(users)
+
+                    if users
+                        cb? null, Object.keys(users)
+                    else
+                        cb? null, []
 
                 @_user_lookup = (user,password,cb) =>
                     if hash = nconf.get("users:#{user}")
