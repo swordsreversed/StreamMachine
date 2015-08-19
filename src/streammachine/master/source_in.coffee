@@ -96,11 +96,17 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
         # -- source request... is the endpoint one that we recognize? -- #
 
+        # source mounts
+        if Object.keys(@core.source_mounts).length > 0 && m = ///^/(#{Object.keys(@core.source_mounts).join("|")})///.exec info.url
+            mount = @core.source_mounts[ m[1] ]
+            _authFunc mount
+
         # stream groups
-        if Object.keys(@core.stream_groups).length > 0 && m = ///^/(#{Object.keys(@core.stream_groups).join("|")})///.exec info.url
+        else if Object.keys(@core.stream_groups).length > 0 && m = ///^/(#{Object.keys(@core.stream_groups).join("|")})///.exec info.url
             sg = @core.stream_groups[ m[1] ]
             _authFunc sg._stream
 
+        # stream
         else if m = ///^/(#{Object.keys(@core.streams).join("|")})///.exec info.url
             stream = @core.streams[ m[1] ]
             _authFunc stream

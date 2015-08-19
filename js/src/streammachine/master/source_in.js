@@ -85,7 +85,7 @@ module.exports = SourceIn = (function(_super) {
   };
 
   SourceIn.prototype._trySource = function(sock, info) {
-    var m, sg, stream, _authFunc;
+    var m, mount, sg, stream, _authFunc;
     _authFunc = (function(_this) {
       return function(stream) {
         var source, source_ip;
@@ -112,7 +112,10 @@ module.exports = SourceIn = (function(_super) {
         }
       };
     })(this);
-    if (Object.keys(this.core.stream_groups).length > 0 && (m = RegExp("^/(" + (Object.keys(this.core.stream_groups).join("|")) + ")").exec(info.url))) {
+    if (Object.keys(this.core.source_mounts).length > 0 && (m = RegExp("^/(" + (Object.keys(this.core.source_mounts).join("|")) + ")").exec(info.url))) {
+      mount = this.core.source_mounts[m[1]];
+      return _authFunc(mount);
+    } else if (Object.keys(this.core.stream_groups).length > 0 && (m = RegExp("^/(" + (Object.keys(this.core.stream_groups).join("|")) + ")").exec(info.url))) {
       sg = this.core.stream_groups[m[1]];
       return _authFunc(sg._stream);
     } else if (m = RegExp("^/(" + (Object.keys(this.core.streams).join("|")) + ")").exec(info.url)) {

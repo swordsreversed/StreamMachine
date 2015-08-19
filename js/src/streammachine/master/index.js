@@ -41,6 +41,7 @@ module.exports = Master = (function(_super) {
     var _ref, _ref1;
     this.options = options;
     this._configured = false;
+    this.source_mounts = {};
     this.streams = {};
     this.stream_groups = {};
     this.proxies = {};

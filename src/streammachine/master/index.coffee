@@ -23,6 +23,7 @@ module.exports = class Master extends require("events").EventEmitter
     constructor: (@options) ->
         @_configured = false
 
+        @source_mounts  = {}
         @streams        = {}
         @stream_groups  = {}
         @proxies        = {}
