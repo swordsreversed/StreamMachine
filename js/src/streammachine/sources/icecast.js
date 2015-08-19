@@ -69,7 +69,7 @@ module.exports = IcecastSource = (function(_super) {
     this.connected = true;
   }
 
-  IcecastSource.prototype.info = function() {
+  IcecastSource.prototype.status = function() {
     var _ref;
     return {
       source: (_ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? _ref : this.TYPE,

@@ -1,4 +1,4 @@
-var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, Stream, Throttle, express, fs, net, temp, _,
+var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, express, fs, net, temp, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -32,6 +32,8 @@ Monitoring = require("./monitoring");
 
 SlaveIO = require("./master_io");
 
+SourceMount = require("./source_mount");
+
 RewindDumpRestore = require("../rewind/dump_restore");
 
 module.exports = Master = (function(_super) {
@@ -53,7 +55,7 @@ module.exports = Master = (function(_super) {
       this.redis_config.on("config", (function(_this) {
         return function(config) {
           _this.options = _.defaults(config || {}, _this.options);
-          return _this.configureStreams(_this.options.streams);
+          return _this.configure(_this.options);
         };
       })(this));
       this.log.debug("Registering config_update listener");
@@ -62,16 +64,10 @@ module.exports = Master = (function(_super) {
           return _this.redis_config._update(_this.config());
         };
       })(this));
-    } else if (this.options.streams) {
-      process.nextTick((function(_this) {
-        return function() {
-          return _this.configureStreams(_this.options.streams);
-        };
-      })(this));
     } else {
       process.nextTick((function(_this) {
         return function() {
-          return _this.configureStreams({});
+          return _this.configure(_this.options);
         };
       })(this));
     }
@@ -154,20 +150,37 @@ module.exports = Master = (function(_super) {
     return config;
   };
 
-  Master.prototype.configureStreams = function(options, cb) {
-    var g, k, key, obj, opts, sg, _base, _ref;
-    this.log.debug("In configure with ", options);
-    _ref = this.streams;
+  Master.prototype.configure = function(options, cb) {
+    var g, k, key, new_sources, new_streams, obj, opts, sg, _base, _ref, _ref1;
+    new_sources = (options != null ? options.sources : void 0) || {};
+    _ref = this.source_mounts;
     for (k in _ref) {
       obj = _ref[k];
-      this.log.debug("calling destroy on ", k);
-      if (!(options != null ? options[k] : void 0)) {
+      if (!(new_sources != null ? new_sources[k] : void 0)) {
+        this.log.debug("Destroying source mount " + k);
+      }
+    }
+    for (k in new_sources) {
+      opts = new_sources[k];
+      this.log.debug("Configuring Source Mapping " + k);
+      if (this.source_mounts[k]) {
+        this.source_mounts[k].configure(opts);
+      } else {
+        this._startSourceMount(k, opts);
+      }
+    }
+    new_streams = (options != null ? options.streams : void 0) || {};
+    _ref1 = this.streams;
+    for (k in _ref1) {
+      obj = _ref1[k];
+      if (!(new_streams != null ? new_streams[k] : void 0)) {
+        this.log.debug("calling destroy on ", k);
         obj.destroy();
         delete this.streams[k];
       }
     }
-    for (key in options) {
-      opts = options[key];
+    for (key in new_streams) {
+      opts = new_streams[key];
       this.log.debug("Parsing stream for " + key);
       if (this.streams[key]) {
         this.log.debug("Passing updated config to master stream: " + key, {
@@ -189,6 +202,20 @@ module.exports = Master = (function(_super) {
     }
     this.emit("streams", this.streams);
     return typeof cb === "function" ? cb(null, this.streams) : void 0;
+  };
+
+  Master.prototype._startSourceMount = function(key, opts) {
+    var mount;
+    mount = new SourceMount(key, this.log.child({
+      source_mount: key
+    }), opts);
+    if (mount) {
+      this.source_mounts[key] = mount;
+      this.emit("new_source_mount", mount);
+      return mount;
+    } else {
+      return false;
+    }
   };
 
   Master.prototype._startStream = function(key, opts) {

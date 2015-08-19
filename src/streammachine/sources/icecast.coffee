@@ -53,7 +53,7 @@ module.exports = class IcecastSource extends require("./base")
 
     #----------
 
-    info: ->
+    status: ->
         source:         @TYPE?() ? @TYPE
         connected:      @connected
         url:            [@opts.source_ip,@opts.sock.remotePort].join(":")

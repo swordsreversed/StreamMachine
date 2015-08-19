@@ -1,7 +1,7 @@
 _ = require "underscore"
 
 module.exports = class SourceMount extends require("events").EventEmitter
-    constructor: (@key,@log,opts) ->
+    constructor: (@key,@log,@opts) ->
         @sources = []
         @source = null
 
@@ -19,7 +19,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
     #----------
 
     status: ->
-        s.info() for s in @sources
+        s.status() for s in @sources
 
     #----------
 

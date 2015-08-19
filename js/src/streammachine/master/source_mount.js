@@ -10,6 +10,7 @@ module.exports = SourceMount = (function(_super) {
   function SourceMount(key, log, opts) {
     this.key = key;
     this.log = log;
+    this.opts = opts;
     this.sources = [];
     this.source = null;
     this._vitals = null;
@@ -33,7 +34,7 @@ module.exports = SourceMount = (function(_super) {
     _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       s = _ref[_i];
-      _results.push(s.info());
+      _results.push(s.status());
     }
     return _results;
   };

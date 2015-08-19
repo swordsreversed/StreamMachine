@@ -104,7 +104,7 @@ module.exports = class FileSource extends require("./base")
 
     #----------
 
-    info: ->
+    status: ->
         source:     @TYPE?() ? @TYPE
         uuid:       @uuid
         filePath:   @filePath

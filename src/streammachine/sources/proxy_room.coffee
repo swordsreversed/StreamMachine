@@ -58,7 +58,7 @@ module.exports = class ProxyRoom extends require("./base")
 
     #----------
 
-    info: ->
+    status: ->
         source:         @TYPE?() ? @TYPE
         connected:      @connected
         url:            @url

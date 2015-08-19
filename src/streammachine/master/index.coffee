@@ -14,6 +14,7 @@ Alerts      = require "../alerts"
 Analytics   = require "./analytics"
 Monitoring  = require "./monitoring"
 SlaveIO     = require "./master_io"
+SourceMount = require "./source_mount"
 
 RewindDumpRestore   = require "../rewind/dump_restore"
 
@@ -32,7 +33,6 @@ module.exports = class Master extends require("events").EventEmitter
 
         @log = @options.logger
 
-
         if @options.redis?
             # -- load our streams configuration from redis -- #
 
@@ -44,22 +44,18 @@ module.exports = class Master extends require("events").EventEmitter
                 @options = _.defaults config||{}, @options
 
                 # (re-)configure our master stream objects
-                @configureStreams @options.streams
+                @configure @options
 
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
             @on "config_update", =>
                 @redis_config._update @config()
 
-        else if @options.streams
+        else
             # -- look for hard-coded configuration -- #
 
             process.nextTick =>
-                @configureStreams @options.streams
-        else
-            # nothing there...
-            process.nextTick =>
-                @configureStreams {}
+                @configure @options
 
         @once "streams", =>
             @_configured = true
@@ -133,22 +129,37 @@ module.exports = class Master extends require("events").EventEmitter
 
     # configureStreams can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
-    configureStreams: (options,cb) ->
-        @log.debug "In configure with ", options
-
+    configure: (options,cb) ->
         # -- Sources -- #
+
+        new_sources = options?.sources || {}
+        for k,obj of @source_mounts
+            if !new_sources?[k]
+                @log.debug "Destroying source mount #{k}"
+                # FIXME: Implement?
+
+        for k,opts of new_sources
+            @log.debug "Configuring Source Mapping #{k}"
+            if @source_mounts[k]
+                # existing...
+                @source_mounts[k].configure opts
+            else
+                @_startSourceMount k, opts
+
+        # -- Streams -- #
 
         # are any of our current streams missing from the new options? if so,
         # disconnect them
+        new_streams = options?.streams || {}
         for k,obj of @streams
-            @log.debug "calling destroy on ", k
-            if !options?[k]
+            if !new_streams?[k]
+                @log.debug "calling destroy on ", k
                 obj.destroy()
                 delete @streams[ k ]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
-        for key,opts of options
+        for key,opts of new_streams
             @log.debug "Parsing stream for #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
@@ -167,6 +178,18 @@ module.exports = class Master extends require("events").EventEmitter
         @emit "streams", @streams
 
         cb? null, @streams
+
+    #----------
+
+    _startSourceMount: (key,opts) ->
+        mount = new SourceMount key, @log.child(source_mount:key), opts
+
+        if mount
+            @source_mounts[ key ] = mount
+            @emit "new_source_mount", mount
+            return mount
+        else
+            return false
 
     #----------
 

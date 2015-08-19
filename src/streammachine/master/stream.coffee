@@ -44,10 +44,44 @@ module.exports = class Stream extends require('events').EventEmitter
     constructor: (@core,@key,@log,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
 
+        # We have three options for what source we're going to use:
+        # a) Internal: Create our own source mount and manage our own sources.
+        #    Basically the original stream behavior.
+        # b) Source Mount: Connect to a source mount and use its source
+        #    directly. You'll get whatever incoming format the source gets.
+        # c) Source Mount w/ Transcoding: Connect to a source mount, but run a
+        #    transcoding source between it and us, so that we always get a
+        #    certain format as our input.
+
         @source = null
 
         if opts.source
-            # FIXME: They want to connect to a Source Mount
+            if mount = @core.source_mounts[opts.source]
+                if opts.ffmpeg_args
+                    # Source Mount w/ transcoding
+                    @log.debug "Setting up transcoding source for #{ @key }"
+
+                    # -- create a transcoding source -- #
+
+                    tsource = new TranscodingSource
+                        stream:         mount
+                        ffmpeg_args:    opts.ffmpeg_args
+                        format:         opts.format
+                        logger:         @log
+
+                    #@addSource tsource
+                    @source = tsource
+
+                    # if our transcoder goes down, restart it
+                    tsource.once "disconnect", =>
+                        @log.error "Transcoder disconnected for #{ @key}."
+
+                else
+                    # Source Mount directly
+                    @source = mount
+
+            else
+                @log.error "Invalid source mount key (#{opts.source}) for stream."
 
         else
             @source = new SourceMount @key, @log.child({subcomponent:"source_mount"}), password:opts.source_password
@@ -130,7 +164,7 @@ module.exports = class Stream extends require('events').EventEmitter
 
             if newsource
                 newsource.on "connect", =>
-                    @source.addSource newsource, (err) =>
+                    @addSource newsource, (err) =>
                         if err
                             @log.error "Connection to fallback source failed."
                         else

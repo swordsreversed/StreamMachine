@@ -48,14 +48,34 @@ module.exports = Stream = (function(_super) {
   };
 
   function Stream(core, key, log, opts) {
-    var newsource, uri, _ref;
+    var mount, newsource, tsource, uri, _ref;
     this.core = core;
     this.key = key;
     this.log = log;
     this.opts = _u.defaults(opts || {}, this.DefaultOptions);
     this.source = null;
     if (opts.source) {
-
+      if (mount = this.core.source_mounts[opts.source]) {
+        if (opts.ffmpeg_args) {
+          this.log.debug("Setting up transcoding source for " + this.key);
+          tsource = new TranscodingSource({
+            stream: mount,
+            ffmpeg_args: opts.ffmpeg_args,
+            format: opts.format,
+            logger: this.log
+          });
+          this.source = tsource;
+          tsource.once("disconnect", (function(_this) {
+            return function() {
+              return _this.log.error("Transcoder disconnected for " + _this.key + ".");
+            };
+          })(this));
+        } else {
+          this.source = mount;
+        }
+      } else {
+        this.log.error("Invalid source mount key (" + opts.source + ") for stream.");
+      }
     } else {
       this.source = new SourceMount(this.key, this.log.child({
         subcomponent: "source_mount"
@@ -138,7 +158,7 @@ module.exports = Stream = (function(_super) {
       if (newsource) {
         newsource.on("connect", (function(_this) {
           return function() {
-            return _this.source.addSource(newsource, function(err) {
+            return _this.addSource(newsource, function(err) {
               if (err) {
                 return _this.log.error("Connection to fallback source failed.");
               } else {

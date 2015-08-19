@@ -115,7 +115,7 @@ module.exports = FileSource = (function(_super) {
     return this._emit_pos = this._emit_pos + 1;
   };
 
-  FileSource.prototype.info = function() {
+  FileSource.prototype.status = function() {
     var _ref;
     return {
       source: (_ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? _ref : this.TYPE,
