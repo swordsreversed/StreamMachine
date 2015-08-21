@@ -83,13 +83,14 @@ describe "StreamMachine Master Mode", ->
             done()
 
         it "should accept a new stream", (done) ->
-            c = {}
-            c[ STREAM1.key ] = STREAM1
+            c = streams:{}, sources:{}
+            c.streams[ STREAM1.key ] = STREAM1
 
-            mm.master.configureStreams c, (err,streams) ->
+            mm.master.configure c, (err,config) ->
                 expect(err).to.be.null
-                expect(streams).to.have.property STREAM1.key
-                expect(streams?[STREAM1.key]).to.be.an.instanceof MasterStream
+                expect(config).to.have.property 'streams'
+                expect(config.streams).to.have.property STREAM1.key
+                expect(config.streams?[STREAM1.key]).to.be.an.instanceof MasterStream
                 done()
 
         it "should have emitted 'streams' when configured", (done) ->

@@ -9,14 +9,6 @@ TranscodingSource   = require "../sources/transcoding"
 HLSSegmenter        = require "../rewind/hls_segmenter"
 SourceMount         = require "./source_mount"
 
-# Master streams are about source management.
-
-# Events:
-# * source: emits when a source is promoted to active
-# * add_source: emits when a source is added to the source list, but not made active
-# * disconnect: emits when a source disconnects. `active` boolean indicates whether
-#   this was the live source. `count` integer indicates remaining sources
-
 module.exports = class Stream extends require('events').EventEmitter
     DefaultOptions:
         meta_interval:      32768
@@ -41,7 +33,7 @@ module.exports = class Stream extends require('events').EventEmitter
         codec:              null
         ffmpeg_args:        null
 
-    constructor: (@core,@key,@log,opts)->
+    constructor: (@key,@log,mount,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
 
         # We have three options for what source we're going to use:
@@ -55,36 +47,27 @@ module.exports = class Stream extends require('events').EventEmitter
 
         @source = null
 
-        if opts.source
-            if mount = @core.source_mounts[opts.source]
-                if opts.ffmpeg_args
-                    # Source Mount w/ transcoding
-                    @log.debug "Setting up transcoding source for #{ @key }"
+        if opts.ffmpeg_args
+            # Source Mount w/ transcoding
+            @log.debug "Setting up transcoding source for #{ @key }"
 
-                    # -- create a transcoding source -- #
+            # -- create a transcoding source -- #
 
-                    tsource = new TranscodingSource
-                        stream:         mount
-                        ffmpeg_args:    opts.ffmpeg_args
-                        format:         opts.format
-                        logger:         @log
+            tsource = new TranscodingSource
+                stream:         mount
+                ffmpeg_args:    opts.ffmpeg_args
+                format:         opts.format
+                logger:         @log
 
-                    #@addSource tsource
-                    @source = tsource
+            @source = tsource
 
-                    # if our transcoder goes down, restart it
-                    tsource.once "disconnect", =>
-                        @log.error "Transcoder disconnected for #{ @key}."
-
-                else
-                    # Source Mount directly
-                    @source = mount
-
-            else
-                @log.error "Invalid source mount key (#{opts.source}) for stream."
+            # if our transcoder goes down, restart it
+            tsource.once "disconnect", =>
+                @log.error "Transcoder disconnected for #{ @key}."
 
         else
-            @source = new SourceMount @key, @log.child({subcomponent:"source_mount"}), password:opts.source_password
+            # Source Mount directly
+            @source = mount
 
         # Cache the last stream vitals we've seen
         @_vitals = null
@@ -178,8 +161,8 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
 
-    addSource: (source) ->
-        @source.addSource source
+    addSource: (source,cb) ->
+        @source.addSource source, cb
 
     #----------
 
@@ -222,7 +205,7 @@ module.exports = class Stream extends require('events').EventEmitter
         key:        @key
         id:         @key
         vitals:     @_vitals
-        sources:    @source.status()
+        source:     @source.status()
         rewind:     @rewind._rStatus()
 
     #----------
@@ -357,6 +340,6 @@ module.exports = class Stream extends require('events').EventEmitter
         #----------
 
         _cloneStream: (stream) ->
-            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts, seconds:30
+            @_stream = new Stream @key, @log.child(stream:"_#{@key}"), stream.source, _u.extend {}, stream.opts, seconds:30
 
         #----------

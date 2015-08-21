@@ -7,6 +7,8 @@ Master  = require "../master"
 
 RPC     = require "ipc-rpc"
 
+debug = require("debug")("sm:modes:master")
+
 # Master Server
 #
 # Masters don't take client connections directly. They take incoming
@@ -18,7 +20,8 @@ module.exports = class MasterMode extends require("./base")
     MODE: "Master"
     constructor: (@opts,cb) ->
         @log = new Logger opts.log
-        @log.debug("Master Instance initialized")
+
+        debug "Master instance initialized."
 
         process.title = "StreamM:master"
 
@@ -43,9 +46,9 @@ module.exports = class MasterMode extends require("./base")
                 source_port: (msg,handle,cb) =>
                     cb null, @master.sourcein?.server.address()?.port||"NONE"
 
-                streams: (streams,handle,cb) =>
-                    @master.configureStreams streams, (err) =>
-                        cb err, @master.config().streams
+                config: (config,handle,cb) =>
+                    @master.configure config, (err) =>
+                        cb err, @master.config()
 
                 start_handoff: (msg,handle,cb) =>
                     @_sendHandoff()
@@ -83,24 +86,33 @@ module.exports = class MasterMode extends require("./base")
     _sendHandoff: (rpc) ->
         @log.event "Got handoff signal from new process."
 
-        rpc.once "config", (msg,handle,cb) =>
-            # send our streams info so we make sure our configs are matched
-            rpc.request "streams", @master.config().streams, (err,streams) =>
+        debug "In _sendHandoff. Waiting for config."
+
+        rpc.once "configured", (msg,handle,cb) =>
+            debug "Handoff recipient is configured. Syncing running config."
+
+            # send stream/source info so we make sure our configs are matched
+            rpc.request "config", @master.config(), (err,streams) =>
                 if err
-                    @log.error "Error setting streams on new process: #{err}"
-                    cb "Error sending streams: #{err}"
+                    @log.error "Error setting config on new process: #{err}"
+                    cb "Error sending config: #{err}"
                     return false
 
-                @log.info "New Master confirmed stream configuration."
+                @log.info "New Master confirmed configuration."
+                debug "New master confirmed configuration."
 
                 # basically we leave the config request open while we send streams
                 cb()
 
                 # Send master data (includes source port handoff)
+                debug "Calling sendHandoffData"
                 @master.sendHandoffData rpc, (err) =>
+                    debug "Back in _sendHandoff. Sending listening sockets."
+
                     @log.event "Sent master data to new process."
 
                     _afterSockets = _.after 2, =>
+                        debug "Socket transfer is done."
                         @log.info "Sockets transferred.  Exiting."
                         process.exit()
 
@@ -120,6 +132,8 @@ module.exports = class MasterMode extends require("./base")
     _acceptHandoff: (cb) ->
         @log.info "Initializing handoff receptor."
 
+        debug "In _acceptHandoff"
+
         if !@_rpc
             cb new Error "Handoff called, but no RPC interface set up."
             return false
@@ -128,21 +142,29 @@ module.exports = class MasterMode extends require("./base")
         # Perhaps we've been asked to start via handoff when there's no process
         # out there to send us data.
         handoff_timer = setTimeout =>
+            debug "Handoff failed to handshake. Done waiting."
             cb new Error "Handoff failed to handshake within five seconds."
         , 5000
 
+        debug "Waiting for HANDOFF_GO"
         @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
             clearTimeout handoff_timer
+
+            debug "HANDOFF_GO received."
 
             cb null, "GO"
 
             # watch for streams
+            debug "Waiting for internal configuration signal."
             @master.once_configured =>
                 # signal that we're ready
-                @_rpc.request "config", @master.config(), (err,reply) =>
+                debug "Telling handoff sender that we're configured."
+                @_rpc.request "configured", @master.config(), (err,reply) =>
                     if err
                         @log.error "Failed to send config broadcast when starting handoff: #{err}"
                         return false
+
+                    debug "Handoff sender ACKed config."
 
                     @log.info "Handoff initiator ACKed our config broadcast."
 

@@ -47,41 +47,28 @@ module.exports = Stream = (function(_super) {
     ffmpeg_args: null
   };
 
-  function Stream(core, key, log, opts) {
-    var mount, newsource, tsource, uri, _ref;
-    this.core = core;
+  function Stream(key, log, mount, opts) {
+    var newsource, tsource, uri, _ref;
     this.key = key;
     this.log = log;
     this.opts = _u.defaults(opts || {}, this.DefaultOptions);
     this.source = null;
-    if (opts.source) {
-      if (mount = this.core.source_mounts[opts.source]) {
-        if (opts.ffmpeg_args) {
-          this.log.debug("Setting up transcoding source for " + this.key);
-          tsource = new TranscodingSource({
-            stream: mount,
-            ffmpeg_args: opts.ffmpeg_args,
-            format: opts.format,
-            logger: this.log
-          });
-          this.source = tsource;
-          tsource.once("disconnect", (function(_this) {
-            return function() {
-              return _this.log.error("Transcoder disconnected for " + _this.key + ".");
-            };
-          })(this));
-        } else {
-          this.source = mount;
-        }
-      } else {
-        this.log.error("Invalid source mount key (" + opts.source + ") for stream.");
-      }
-    } else {
-      this.source = new SourceMount(this.key, this.log.child({
-        subcomponent: "source_mount"
-      }), {
-        password: opts.source_password
+    if (opts.ffmpeg_args) {
+      this.log.debug("Setting up transcoding source for " + this.key);
+      tsource = new TranscodingSource({
+        stream: mount,
+        ffmpeg_args: opts.ffmpeg_args,
+        format: opts.format,
+        logger: this.log
       });
+      this.source = tsource;
+      tsource.once("disconnect", (function(_this) {
+        return function() {
+          return _this.log.error("Transcoder disconnected for " + _this.key + ".");
+        };
+      })(this));
+    } else {
+      this.source = mount;
     }
     this._vitals = null;
     this.emitDuration = 0;
@@ -180,8 +167,8 @@ module.exports = Stream = (function(_super) {
     }
   }
 
-  Stream.prototype.addSource = function(source) {
-    return this.source.addSource(source);
+  Stream.prototype.addSource = function(source, cb) {
+    return this.source.addSource(source, cb);
   };
 
   Stream.prototype.config = function() {
@@ -227,7 +214,7 @@ module.exports = Stream = (function(_super) {
       key: this.key,
       id: this.key,
       vitals: this._vitals,
-      sources: this.source.status(),
+      source: this.source.status(),
       rewind: this.rewind._rStatus()
     };
   };
@@ -376,9 +363,9 @@ module.exports = Stream = (function(_super) {
     };
 
     StreamGroup.prototype._cloneStream = function(stream) {
-      return this._stream = new Stream(null, this.key, this.log.child({
+      return this._stream = new Stream(this.key, this.log.child({
         stream: "_" + this.key
-      }), _u.extend({}, stream.opts, {
+      }), stream.source, _u.extend({}, stream.opts, {
         seconds: 30
       }));
     };

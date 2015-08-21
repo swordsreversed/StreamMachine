@@ -13,6 +13,7 @@ module.exports = SourceMount = (function(_super) {
     this.opts = opts;
     this.sources = [];
     this.source = null;
+    this.password = this.opts.password || this.opts.source_password;
     this._vitals = null;
     this.log.event("Source Mount is initializing.");
     this.dataFunc = (function(_this) {
@@ -29,14 +30,24 @@ module.exports = SourceMount = (function(_super) {
   }
 
   SourceMount.prototype.status = function() {
-    var s, _i, _len, _ref, _results;
-    _ref = this.sources;
-    _results = [];
-    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      s = _ref[_i];
-      _results.push(s.status());
-    }
-    return _results;
+    var s;
+    return {
+      key: this.key,
+      sources: (function() {
+        var _i, _len, _ref, _results;
+        _ref = this.sources;
+        _results = [];
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          s = _ref[_i];
+          _results.push(s.status());
+        }
+        return _results;
+      }).call(this)
+    };
+  };
+
+  SourceMount.prototype.config = function() {
+    return this.opts;
   };
 
   SourceMount.prototype.vitals = function(cb) {

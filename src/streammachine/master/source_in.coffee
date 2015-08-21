@@ -2,6 +2,8 @@ _u      = require "underscore"
 net     = require "net"
 express = require "express"
 
+debug = require("debug")("sm:master:source_in")
+
 IcecastSource = require "../sources/icecast"
 
 module.exports = class SourceIn extends require("events").EventEmitter
@@ -66,12 +68,12 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 sock.removeListener "readable", readerF
 
     _trySource: (sock,info) =>
-        _authFunc = (stream) =>
+        _authFunc = (mount) =>
             # first, make sure the authorization header contains the right password
-            @log.debug "Trying to authenticate ICY source for #{stream.key}"
-            if info.headers.authorization && @_authorize(stream.opts.source_password,info.headers.authorization)
+            @log.debug "Trying to authenticate ICY source for #{mount.key}"
+            if info.headers.authorization && @_authorize(mount.password,info.headers.authorization)
                 sock.write "HTTP/1.0 200 OK\n\n"
-                @log.debug "ICY source authenticated for #{stream.key}."
+                @log.debug "ICY source authenticated for #{mount.key}."
 
                 # if we're behind a proxy, look for the true IP address
                 source_ip = sock.remoteAddress
@@ -80,38 +82,29 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
                 # now create a new source
                 source = new IcecastSource
-                    format:     stream.opts.format
+                    format:     mount.opts.format
                     sock:       sock
                     headers:    info.headers
-                    logger:     stream.log
+                    logger:     mount.log
                     source_ip:  source_ip
 
-                stream.addSource source
+                mount.addSource source
 
             else
-                @log.debug "ICY source failed to authenticate for #{stream.key}."
+                @log.debug "ICY source failed to authenticate for #{mount.key}."
                 sock.write "HTTP/1.0 401 Unauthorized\r\n"
                 sock.end "Invalid source or password.\r\n"
 
 
         # -- source request... is the endpoint one that we recognize? -- #
 
-        # source mounts
         if Object.keys(@core.source_mounts).length > 0 && m = ///^/(#{Object.keys(@core.source_mounts).join("|")})///.exec info.url
+            debug "Incoming source matched mount: #{m[1]}"
             mount = @core.source_mounts[ m[1] ]
             _authFunc mount
 
-        # stream groups
-        else if Object.keys(@core.stream_groups).length > 0 && m = ///^/(#{Object.keys(@core.stream_groups).join("|")})///.exec info.url
-            sg = @core.stream_groups[ m[1] ]
-            _authFunc sg._stream
-
-        # stream
-        else if m = ///^/(#{Object.keys(@core.streams).join("|")})///.exec info.url
-            stream = @core.streams[ m[1] ]
-            _authFunc stream
-
         else
+            debug "Incoming source matched nothing. Disconnecting."
             @log.debug "ICY source attempted to connect to bad URL.", url:info.url
 
             sock.write "HTTP/1.0 401 Unauthorized\r\n"

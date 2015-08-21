@@ -75,6 +75,10 @@ module.exports = class API
             # return JSON version of the status for all streams
             api.ok req, res, @master.groupsInfo()
 
+        # list source mounts
+        @app.get "/sources", (req,res) =>
+            api.ok req, res, @master.sourcesInfo()
+
         # list streams
         @app.get "/config", (req,res) =>
             # return JSON version of the status for all streams

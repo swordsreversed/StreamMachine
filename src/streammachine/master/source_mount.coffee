@@ -5,6 +5,9 @@ module.exports = class SourceMount extends require("events").EventEmitter
         @sources = []
         @source = null
 
+        # Support the old streams-style password key
+        @password = @opts.password || @opts.source_password
+
         @_vitals = null
 
         @log.event "Source Mount is initializing."
@@ -19,7 +22,13 @@ module.exports = class SourceMount extends require("events").EventEmitter
     #----------
 
     status: ->
-        s.status() for s in @sources
+        key:        @key
+        sources:    s.status() for s in @sources
+
+    #----------
+
+    config: ->
+        @opts
 
     #----------
 

@@ -1,4 +1,4 @@
-var Logger, Master, MasterMode, RPC, express, nconf, _,
+var Logger, Master, MasterMode, RPC, debug, express, nconf, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -14,6 +14,8 @@ Master = require("../master");
 
 RPC = require("ipc-rpc");
 
+debug = require("debug")("sm:modes:master");
+
 module.exports = MasterMode = (function(_super) {
   __extends(MasterMode, _super);
 
@@ -22,7 +24,7 @@ module.exports = MasterMode = (function(_super) {
   function MasterMode(opts, cb) {
     this.opts = opts;
     this.log = new Logger(opts.log);
-    this.log.debug("Master Instance initialized");
+    debug("Master instance initialized.");
     process.title = "StreamM:master";
     MasterMode.__super__.constructor.apply(this, arguments);
     this.master = new Master(_.extend({}, this.opts, {
@@ -49,10 +51,10 @@ module.exports = MasterMode = (function(_super) {
               return cb(null, ((_ref = _this.master.sourcein) != null ? (_ref1 = _ref.server.address()) != null ? _ref1.port : void 0 : void 0) || "NONE");
             };
           })(this),
-          streams: (function(_this) {
-            return function(streams, handle, cb) {
-              return _this.master.configureStreams(streams, function(err) {
-                return cb(err, _this.master.config().streams);
+          config: (function(_this) {
+            return function(config, handle, cb) {
+              return _this.master.configure(config, function(err) {
+                return cb(err, _this.master.config());
               });
             };
           })(this),
@@ -94,20 +96,26 @@ module.exports = MasterMode = (function(_super) {
 
   MasterMode.prototype._sendHandoff = function(rpc) {
     this.log.event("Got handoff signal from new process.");
-    return rpc.once("config", (function(_this) {
+    debug("In _sendHandoff. Waiting for config.");
+    return rpc.once("configured", (function(_this) {
       return function(msg, handle, cb) {
-        return rpc.request("streams", _this.master.config().streams, function(err, streams) {
+        debug("Handoff recipient is configured. Syncing running config.");
+        return rpc.request("config", _this.master.config(), function(err, streams) {
           if (err) {
-            _this.log.error("Error setting streams on new process: " + err);
-            cb("Error sending streams: " + err);
+            _this.log.error("Error setting config on new process: " + err);
+            cb("Error sending config: " + err);
             return false;
           }
-          _this.log.info("New Master confirmed stream configuration.");
+          _this.log.info("New Master confirmed configuration.");
+          debug("New master confirmed configuration.");
           cb();
+          debug("Calling sendHandoffData");
           return _this.master.sendHandoffData(rpc, function(err) {
             var _afterSockets;
+            debug("Back in _sendHandoff. Sending listening sockets.");
             _this.log.event("Sent master data to new process.");
             _afterSockets = _.after(2, function() {
+              debug("Socket transfer is done.");
               _this.log.info("Sockets transferred.  Exiting.");
               return process.exit();
             });
@@ -134,26 +142,33 @@ module.exports = MasterMode = (function(_super) {
   MasterMode.prototype._acceptHandoff = function(cb) {
     var handoff_timer;
     this.log.info("Initializing handoff receptor.");
+    debug("In _acceptHandoff");
     if (!this._rpc) {
       cb(new Error("Handoff called, but no RPC interface set up."));
       return false;
     }
     handoff_timer = setTimeout((function(_this) {
       return function() {
+        debug("Handoff failed to handshake. Done waiting.");
         return cb(new Error("Handoff failed to handshake within five seconds."));
       };
     })(this), 5000);
+    debug("Waiting for HANDOFF_GO");
     return this._rpc.once("HANDOFF_GO", (function(_this) {
       return function(msg, handle, cb) {
         clearTimeout(handoff_timer);
+        debug("HANDOFF_GO received.");
         cb(null, "GO");
+        debug("Waiting for internal configuration signal.");
         return _this.master.once_configured(function() {
-          return _this._rpc.request("config", _this.master.config(), function(err, reply) {
+          debug("Telling handoff sender that we're configured.");
+          return _this._rpc.request("configured", _this.master.config(), function(err, reply) {
             var aFunc;
             if (err) {
               _this.log.error("Failed to send config broadcast when starting handoff: " + err);
               return false;
             }
+            debug("Handoff sender ACKed config.");
             _this.log.info("Handoff initiator ACKed our config broadcast.");
             _this.master.loadHandoffData(_this._rpc, function() {
               return _this.log.info("Handoff receiver believes all stream and source data has arrived.");

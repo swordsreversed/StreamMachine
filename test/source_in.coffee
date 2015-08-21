@@ -1,5 +1,5 @@
 SourceIn    = $src "master/source_in"
-Stream      = $src "master/stream"
+SourceMount = $src "master/source_mount"
 Logger      = $src "logger"
 IcecastSource = $src "util/icecast_source"
 
@@ -9,24 +9,21 @@ net = require "net"
 
 debug = require("debug")("sm:tests:source_in")
 
-STREAM =
-    key:                "valid"
-    source_password:    "abc123"
-    seconds:            180
-    format:             "mp3"
+MOUNT =
+    key:        "valid"
+    password:   "abc123"
+    format:     "mp3"
 
 class FakeMaster
-    constructor: (stream) ->
-        @streams = {}
-        @streams[stream.key] = stream
-
-        @stream_groups = {}
+    constructor: (mount) ->
+        @source_mounts = {}
+        @source_mounts[mount.key] = mount
 
         @log = new Logger stdout:false
 
 describe "Source In", ->
-    stream = new Stream null, STREAM.key, (new Logger stdout:false), STREAM
-    master = new FakeMaster stream
+    mount = new SourceMount MOUNT.key, (new Logger stdout:false), MOUNT
+    master = new FakeMaster mount
 
     it "should reject an invalid request", (done) ->
         source_in = new SourceIn core:master, port:0, behind_proxy:false
@@ -64,15 +61,15 @@ describe "Source In", ->
                 filePath:   mp3
                 host:       "127.0.0.1"
                 port:       source_in.server.address().port
-                stream:     STREAM.key
-                password:   STREAM.source_password
+                stream:     MOUNT.key
+                password:   MOUNT.password
 
             source.start (err) ->
                 throw err if err
                 debug "Connected with valid password"
 
                 # we should also see the source on the stream...
-                expect(stream.sources).to.have.length 1
+                expect(mount.sources).to.have.length 1
 
                 # clean up
                 source.disconnect()
@@ -91,7 +88,7 @@ describe "Source In", ->
                 filePath:   mp3
                 host:       "127.0.0.1"
                 port:       source_in.server.address().port
-                stream:     STREAM.key
+                stream:     MOUNT.key
                 password:   "bad_password"
 
             source.start (err) ->
@@ -99,7 +96,7 @@ describe "Source In", ->
                 debug "Failed to connect with invalid password"
 
                 # we should also see the source on the stream...
-                expect(stream.sources).to.have.length 0
+                expect(mount.sources).to.have.length 0
 
                 done()
 

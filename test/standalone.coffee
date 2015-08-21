@@ -43,7 +43,7 @@ describe "Standalone Mode", ->
             throw err if err
 
             status = standalone.master.streams[sa_info.stream_key].status()
-            expect(status.sources).to.have.length 1
+            expect(status.source.sources).to.have.length 1
             done()
 
     it "should accept a listener and feed it data", (done) ->

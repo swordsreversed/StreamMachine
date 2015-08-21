@@ -86,11 +86,11 @@ describe "Master Handoffs", ->
                 done()
 
         it "is configured with our test stream", (done) ->
-            streams = {}
-            streams[ STREAM1.key ] = STREAM1
-            m1rpc.request "streams", streams, (err,rstreams) ->
+            config = streams:{}
+            config.streams[ STREAM1.key ] = STREAM1
+            m1rpc.request "config", config, (err,rconfig) ->
                 throw err if err
-                expect(rstreams).to.have.key STREAM1.key
+                expect(rconfig.streams).to.have.key STREAM1.key
                 done()
 
         it "can accept a source connection", (done) ->

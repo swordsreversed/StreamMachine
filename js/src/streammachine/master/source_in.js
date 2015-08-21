@@ -1,4 +1,4 @@
-var IcecastSource, SourceIn, express, net, _u,
+var IcecastSource, SourceIn, debug, express, net, _u,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -8,6 +8,8 @@ _u = require("underscore");
 net = require("net");
 
 express = require("express");
+
+debug = require("debug")("sm:master:source_in");
 
 IcecastSource = require("../sources/icecast");
 
@@ -85,43 +87,39 @@ module.exports = SourceIn = (function(_super) {
   };
 
   SourceIn.prototype._trySource = function(sock, info) {
-    var m, mount, sg, stream, _authFunc;
+    var m, mount, _authFunc;
     _authFunc = (function(_this) {
-      return function(stream) {
+      return function(mount) {
         var source, source_ip;
-        _this.log.debug("Trying to authenticate ICY source for " + stream.key);
-        if (info.headers.authorization && _this._authorize(stream.opts.source_password, info.headers.authorization)) {
+        _this.log.debug("Trying to authenticate ICY source for " + mount.key);
+        if (info.headers.authorization && _this._authorize(mount.password, info.headers.authorization)) {
           sock.write("HTTP/1.0 200 OK\n\n");
-          _this.log.debug("ICY source authenticated for " + stream.key + ".");
+          _this.log.debug("ICY source authenticated for " + mount.key + ".");
           source_ip = sock.remoteAddress;
           if (_this.behind_proxy && info.headers['x-forwarded-for']) {
             source_ip = info.headers['x-forwarded-for'];
           }
           source = new IcecastSource({
-            format: stream.opts.format,
+            format: mount.opts.format,
             sock: sock,
             headers: info.headers,
-            logger: stream.log,
+            logger: mount.log,
             source_ip: source_ip
           });
-          return stream.addSource(source);
+          return mount.addSource(source);
         } else {
-          _this.log.debug("ICY source failed to authenticate for " + stream.key + ".");
+          _this.log.debug("ICY source failed to authenticate for " + mount.key + ".");
           sock.write("HTTP/1.0 401 Unauthorized\r\n");
           return sock.end("Invalid source or password.\r\n");
         }
       };
     })(this);
     if (Object.keys(this.core.source_mounts).length > 0 && (m = RegExp("^/(" + (Object.keys(this.core.source_mounts).join("|")) + ")").exec(info.url))) {
+      debug("Incoming source matched mount: " + m[1]);
       mount = this.core.source_mounts[m[1]];
       return _authFunc(mount);
-    } else if (Object.keys(this.core.stream_groups).length > 0 && (m = RegExp("^/(" + (Object.keys(this.core.stream_groups).join("|")) + ")").exec(info.url))) {
-      sg = this.core.stream_groups[m[1]];
-      return _authFunc(sg._stream);
-    } else if (m = RegExp("^/(" + (Object.keys(this.core.streams).join("|")) + ")").exec(info.url)) {
-      stream = this.core.streams[m[1]];
-      return _authFunc(stream);
     } else {
+      debug("Incoming source matched nothing. Disconnecting.");
       this.log.debug("ICY source attempted to connect to bad URL.", {
         url: info.url
       });

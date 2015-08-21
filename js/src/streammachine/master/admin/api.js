@@ -93,6 +93,11 @@ module.exports = API = (function() {
         return api.ok(req, res, _this.master.groupsInfo());
       };
     })(this));
+    this.app.get("/sources", (function(_this) {
+      return function(req, res) {
+        return api.ok(req, res, _this.master.sourcesInfo());
+      };
+    })(this));
     this.app.get("/config", (function(_this) {
       return function(req, res) {
         return api.ok(req, res, _this.master.config());
