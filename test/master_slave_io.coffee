@@ -5,6 +5,8 @@ Logger      = $src "logger"
 _       = require "underscore"
 http    = require "http"
 
+debug = require("debug")("sm:tests:master_slave_io")
+
 log = new Logger stdout:false
 
 class FakeMaster extends require("events").EventEmitter
@@ -107,9 +109,11 @@ describe "Master/Slave IO", ->
             slave.on "audio:#{k}", (rchunk) ->
                 expect(rchunk.ts).to.eql chunk.ts
                 expect(rchunk.data).to.be.instanceof Buffer
+                debug "Audio chunk arrived as #{rchunk.data.length}.", rchunk.data
                 expect(rchunk.data.length).to.be.eql chunk.data.length
                 done()
 
+            debug "Broadcasting audio chunk of #{chunk.data.length}.", chunk
             master.broadcastAudio k, chunk
 
     describe "Disconnects", ->
