@@ -7,6 +7,7 @@ URL             = require "url"
 uuid            = require "node-uuid"
 _               = require "underscore"
 request         = require "request"
+debug           = require("debug")("sm:tests:analytics")
 
 user_id     = uuid.v4()
 session_id  = uuid.v4()
@@ -53,7 +54,7 @@ describe "Analytics", ->
         start_ts = new Date()
         es_args = "-D es.foreground=yes -D es.cluster.name=streammachine_test -D es.node.name=node-1 -D es.http.port=9250 -D es.gateway.type=none -D es.index.store.type=memory -D es.path.data=/tmp -D es.path.work=/tmp -D es.cluster.routing.allocation.disk.threshold_enabled=false -D es.network.host=0.0.0.0 -D es.discovery.zen.ping.multicast.enabled=false -D es.node.test=true -D es.node.bench=true -D es.logger.level=ERROR"
 
-        console.log "Starting in-memory Elasticsearch instance with: #{es_args}"
+        debug "Starting in-memory Elasticsearch instance with: #{es_args}"
         es_server = (require "child_process").spawn "elasticsearch", es_args.split(" ")
 
         # for some reason ES won't work if its stdout isn't being read, so just
@@ -67,7 +68,7 @@ describe "Analytics", ->
         es_server.stdout.pipe(devnull)
 
         process.on "exit", ->
-            console.log "Shutting down Elasticsearch instance"
+            debug "Shutting down Elasticsearch instance"
             es_server?.kill()
 
         config.es_uri = "http://localhost:9250/stream-test"
@@ -87,7 +88,7 @@ describe "Analytics", ->
 
         tryConnection 20, ->
             duration = Number(new Date()) - Number(start_ts)
-            console.log "In-memory ES start took #{ duration }ms"
+            debug "In-memory ES start took #{ duration }ms"
             done()
 
     # -- Our test setup -- #
@@ -104,6 +105,7 @@ describe "Analytics", ->
 
         # -- make sure we can access ES -- #
 
+        debug "Pinging ES"
         es.ping (err) ->
             throw err if err
 
