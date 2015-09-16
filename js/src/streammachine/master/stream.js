@@ -278,17 +278,13 @@ module.exports = Stream = (function(_super) {
       this.streams = {};
       this.transcoders = {};
       this.hls_min_id = null;
-      this._stream = null;
     }
 
     StreamGroup.prototype.addStream = function(stream) {
-      var delFunc, tsource, _ref;
+      var delFunc, _ref;
       if (!this.streams[stream.key]) {
         this.log.debug("SG " + this.key + ": Adding stream " + stream.key);
         this.streams[stream.key] = stream;
-        if (!this._stream) {
-          this._cloneStream(stream);
-        }
         delFunc = (function(_this) {
           return function() {
             _this.log.debug("SG " + _this.key + ": Stream disconnected: " + stream.key);
@@ -298,58 +294,27 @@ module.exports = Stream = (function(_super) {
         stream.on("disconnect", delFunc);
         stream.on("config", (function(_this) {
           return function() {
-            var tsource;
             if (stream.opts.group !== _this.key) {
-              delFunc();
-            }
-            if (stream.opts.ffmpeg_args && !_this.transcoders[stream.key]) {
-              tsource = _this._startTranscoder(stream);
-              return _this.transcoders[stream.key] = tsource;
+              return delFunc();
             }
           };
         })(this));
-        if (stream.opts.ffmpeg_args) {
-          tsource = this._startTranscoder(stream);
-          this.transcoders[stream.key] = tsource;
-        }
         return (_ref = stream.rewind.hls_segmenter) != null ? _ref.syncToGroup(this) : void 0;
       }
     };
 
     StreamGroup.prototype.status = function() {
-      var s;
+      var k, s, sstatus, _ref;
+      sstatus = {};
+      _ref = this.streams;
+      for (k in _ref) {
+        s = _ref[k];
+        sstatus[k] = s.status();
+      }
       return {
         id: this.key,
-        sources: (function() {
-          var _i, _len, _ref, _results;
-          _ref = this._stream.sources;
-          _results = [];
-          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-            s = _ref[_i];
-            _results.push(s.info());
-          }
-          return _results;
-        }).call(this)
+        streams: sstatus
       };
-    };
-
-    StreamGroup.prototype._startTranscoder = function(stream) {
-      var tsource;
-      this.log.debug("SG " + this.key + ": Setting up transcoding source for " + stream.key);
-      tsource = new TranscodingSource({
-        stream: this._stream,
-        ffmpeg_args: stream.opts.ffmpeg_args,
-        format: stream.opts.format,
-        logger: stream.log
-      });
-      stream.addSource(tsource);
-      tsource.once("disconnect", (function(_this) {
-        return function() {
-          _this.log.info("SG " + _this.key + ": Transcoder disconnected for " + stream.key + ". Restarting.");
-          return _this._startTranscoder(stream);
-        };
-      })(this));
-      return tsource;
     };
 
     StreamGroup.prototype.hlsUpdateMinSegment = function(id) {
@@ -360,14 +325,6 @@ module.exports = Stream = (function(_super) {
         this.emit("hls_update_min_segment", id);
         return this.log.debug("New HLS min segment id: " + id + " (Previously: " + prev + ")");
       }
-    };
-
-    StreamGroup.prototype._cloneStream = function(stream) {
-      return this._stream = new Stream(this.key, this.log.child({
-        stream: "_" + this.key
-      }), stream.source, _u.extend({}, stream.opts, {
-        seconds: 30
-      }));
     };
 
     return StreamGroup;

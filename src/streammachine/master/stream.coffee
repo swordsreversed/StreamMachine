@@ -267,8 +267,6 @@ module.exports = class Stream extends require('events').EventEmitter
             @transcoders    = {}
             @hls_min_id     = null
 
-            @_stream = null
-
         #----------
 
         addStream: (stream) ->
@@ -276,8 +274,6 @@ module.exports = class Stream extends require('events').EventEmitter
                 @log.debug "SG #{@key}: Adding stream #{stream.key}"
 
                 @streams[ stream.key ] = stream
-
-                @_cloneStream(stream) if !@_stream
 
                 # listen in case it goes away
                 delFunc = =>
@@ -289,44 +285,17 @@ module.exports = class Stream extends require('events').EventEmitter
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
 
-                    if stream.opts.ffmpeg_args && !@transcoders[ stream.key ]
-                        tsource = @_startTranscoder stream
-                        @transcoders[ stream.key ] = tsource
-
-                if stream.opts.ffmpeg_args
-                    tsource = @_startTranscoder stream
-                    @transcoders[ stream.key ] = tsource
-
                 # if HLS is enabled, sync the stream to the rest of the group
                 stream.rewind.hls_segmenter?.syncToGroup @
 
         #----------
 
         status: ->
+            sstatus = {}
+            sstatus[k] = s.status() for k,s of @streams
+
             id:         @key
-            sources:    ( s.info() for s in @_stream.sources )
-
-        #----------
-
-        _startTranscoder: (stream) ->
-            @log.debug "SG #{@key}: Setting up transcoding source for #{ stream.key }"
-
-            # -- create a transcoding source -- #
-
-            tsource = new TranscodingSource
-                stream:         @_stream
-                ffmpeg_args:    stream.opts.ffmpeg_args
-                format:         stream.opts.format
-                logger:         stream.log
-
-            stream.addSource tsource
-
-            # if our transcoder goes down, restart it
-            tsource.once "disconnect", =>
-                @log.info "SG #{@key}: Transcoder disconnected for #{ stream.key}. Restarting."
-                @_startTranscoder(stream)
-
-            tsource
+            streams:    sstatus
 
         #----------
 
@@ -336,10 +305,5 @@ module.exports = class Stream extends require('events').EventEmitter
                 @hls_min_id = id
                 @emit "hls_update_min_segment", id
                 @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
-
-        #----------
-
-        _cloneStream: (stream) ->
-            @_stream = new Stream @key, @log.child(stream:"_#{@key}"), stream.source, _u.extend {}, stream.opts, seconds:30
 
         #----------

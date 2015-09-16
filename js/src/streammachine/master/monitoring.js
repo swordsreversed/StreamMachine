@@ -13,20 +13,13 @@ module.exports = Monitoring = (function(_super) {
     this.opts = opts;
     this._streamInt = setInterval((function(_this) {
       return function() {
-        var k, s, sg, _ref, _ref1, _results;
+        var k, s, _ref, _results;
         _ref = _this.master.streams;
+        _results = [];
         for (k in _ref) {
           s = _ref[k];
           if (s.opts.monitored) {
-            _this.master.alerts.update("sourceless", s.key, s.source == null);
-          }
-        }
-        _ref1 = _this.master.stream_groups;
-        _results = [];
-        for (k in _ref1) {
-          sg = _ref1[k];
-          if (sg._stream.opts.monitored) {
-            _results.push(_this.master.alerts.update("sourceless", sg._stream.key, sg._stream.source == null));
+            _results.push(_this.master.alerts.update("sourceless", s.key, s.source == null));
           } else {
             _results.push(void 0);
           }

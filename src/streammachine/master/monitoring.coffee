@@ -8,9 +8,6 @@ module.exports = class Monitoring extends require("events").EventEmitter
             for k,s of @master.streams
                 @master.alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
 
-            for k,sg of @master.stream_groups
-                @master.alerts.update "sourceless", sg._stream.key, !sg._stream.source? if sg._stream.opts.monitored
-
         , 5*1000
 
         # -- Monitor Slave Status -- #
