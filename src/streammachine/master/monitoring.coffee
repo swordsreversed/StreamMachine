@@ -2,12 +2,11 @@ _ = require "underscore"
 
 module.exports = class Monitoring extends require("events").EventEmitter
     constructor: (@master,@log,@opts) ->
-        # -- check monitored streams and stream groups for sources -- #
+        # -- check monitored source mounts for sources -- #
 
         @_streamInt = setInterval =>
-            for k,s of @master.streams
-                @master.alerts.update "sourceless", s.key, !s.source? if s.opts.monitored
-
+            for k,sm of @master.source_mounts
+                @master.alerts.update "sourceless", sm.key, !sm.source? if sm.opts.monitored
         , 5*1000
 
         # -- Monitor Slave Status -- #

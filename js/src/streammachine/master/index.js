@@ -189,7 +189,7 @@ module.exports = Master = (function(_super) {
       all_keys[mount_key] = 1;
       if (!this.source_mounts[mount_key]) {
         this.log.debug("Creating an unspecified source mount for " + mount_key + " (via " + key + ").");
-        this._startSourceMount(mount_key, _(opts).pick('source_password', 'format'));
+        this._startSourceMount(mount_key, _(opts).pick('source_password', 'format', 'monitored'));
       }
       mount = this.source_mounts[mount_key];
       if (this.streams[key]) {

@@ -171,7 +171,7 @@ module.exports = class Master extends require("events").EventEmitter
             if !@source_mounts[mount_key]
                 # create a mount
                 @log.debug "Creating an unspecified source mount for #{mount_key} (via #{key})."
-                @_startSourceMount mount_key, _(opts).pick('source_password','format')
+                @_startSourceMount mount_key, _(opts).pick('source_password','format','monitored')
 
             mount = @source_mounts[mount_key]
 
