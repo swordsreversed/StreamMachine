@@ -7,10 +7,17 @@ _ = require("underscore");
 module.exports = SourceMount = (function(_super) {
   __extends(SourceMount, _super);
 
+  SourceMount.prototype.DefaultOptions = {
+    monitored: false,
+    password: false,
+    source_password: false,
+    format: "mp3"
+  };
+
   function SourceMount(key, log, opts) {
     this.key = key;
     this.log = log;
-    this.opts = opts;
+    this.opts = _.defaults(opts || {}, this.DefaultOptions);
     this.sources = [];
     this.source = null;
     this.password = this.opts.password || this.opts.source_password;
@@ -48,6 +55,26 @@ module.exports = SourceMount = (function(_super) {
 
   SourceMount.prototype.config = function() {
     return this.opts;
+  };
+
+  SourceMount.prototype.configure = function(new_opts, cb) {
+    var k, v, _ref;
+    _ref = this.DefaultOptions;
+    for (k in _ref) {
+      v = _ref[k];
+      if (new_opts[k] != null) {
+        this.opts[k] = new_opts[k];
+      }
+      if (_.isNumber(this.DefaultOptions[k])) {
+        this.opts[k] = Number(this.opts[k]);
+      }
+    }
+    if (this.key !== this.opts.key) {
+      this.key = this.opts.key;
+    }
+    this.password = this.opts.password || this.opts.source_password;
+    this.emit("config");
+    return typeof cb === "function" ? cb(null, this.config()) : void 0;
   };
 
   SourceMount.prototype.vitals = function(cb) {

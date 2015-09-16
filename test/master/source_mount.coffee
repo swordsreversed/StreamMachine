@@ -24,6 +24,27 @@ describe "Master Source Mount", ->
 
     #----------
 
+    describe "Configuration", ->
+        it "can be configured during creation", (done) ->
+            mount = new SourceMount "test1", logger, STREAM1
+
+            expect(mount.password).to.equal STREAM1.source_password
+            expect(mount.config().format).to.equal STREAM1.format
+            done()
+
+        it "can be reconfigured after creation", (done) ->
+            mount = new SourceMount "test1", logger, STREAM1
+
+            new_password = "def456"
+
+            mount.configure password:new_password, (err,config) ->
+                throw err if err
+                expect(config.password).to.equal new_password
+                expect(mount.password).to.equal new_password
+                done()
+
+    #----------
+
     describe "Typical Source Connections", ->
         mount = new SourceMount "test1", logger, STREAM1
 

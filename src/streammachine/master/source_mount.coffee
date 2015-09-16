@@ -1,7 +1,15 @@
 _ = require "underscore"
 
 module.exports = class SourceMount extends require("events").EventEmitter
-    constructor: (@key,@log,@opts) ->
+    DefaultOptions:
+        monitored:          false
+        password:           false
+        source_password:    false
+        format:             "mp3"
+
+    constructor: (@key,@log,opts) ->
+        @opts = _.defaults opts||{}, @DefaultOptions
+
         @sources = []
         @source = null
 
@@ -29,6 +37,27 @@ module.exports = class SourceMount extends require("events").EventEmitter
 
     config: ->
         @opts
+
+    #----------
+
+    configure: (new_opts,cb) ->
+        # allow updates, but only to keys that are present in @DefaultOptions.
+        for k,v of @DefaultOptions
+            @opts[k] = new_opts[k] if new_opts[k]?
+
+            # convert to a number if necessary
+            @opts[k] = Number(@opts[k]) if _.isNumber(@DefaultOptions[k])
+
+        # support changing our key
+        if @key != @opts.key
+            @key = @opts.key
+
+        # Support the old streams-style password key
+        @password = @opts.password || @opts.source_password
+
+        @emit "config"
+
+        cb? null, @config()
 
     #----------
 
