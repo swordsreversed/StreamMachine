@@ -302,6 +302,60 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    createMount: (opts,cb) ->
+        @log.info "createMount called for #{opts.key}", opts:opts
+
+        # -- make sure the mount key is present and unique -- #
+
+        if !opts.key
+            cb? "Cannot create mount without key."
+            return false
+
+        if @source_mounts[ opts.key ]
+            cb? "Mount key must be unique."
+            return false
+
+        if mount = @_startSourceMount opts.key, opts
+            @emit "config_update"
+            cb? null, mount.status()
+        else
+            cb? "Mount failed to start."
+
+    #----------
+
+    updateMount: (mount,opts,cb) ->
+        @log.info "updateMount called for #{mount.key}", opts:opts
+
+        # -- if they want to rename, the key must be unique -- #
+
+        if opts.key && mount.key != opts.key
+            if @source_mounts[ opts.key ]
+                cb? "Mount key must be unique."
+                return false
+
+            @source_mounts[ opts.key ] = mount
+            delete @source_mounts[ mount.key ]
+
+        # -- if we're good, ask the mount to configure -- #
+
+        mount.configure opts, (err,config) =>
+            return cb? err if err
+            cb? null, config
+
+    #----------
+
+    removeMount: (mount,cb) ->
+        @log.info "removeMount called for #{mount.key}"
+
+        delete @source_mounts[ mount.key ]
+        mount.destroy()
+
+        @emit "config_update"
+
+        cb? null, "OK"
+
+    #----------
+
     streamsInfo: ->
         obj.status() for k,obj of @streams
 
