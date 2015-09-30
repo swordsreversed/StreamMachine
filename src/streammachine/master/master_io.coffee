@@ -7,11 +7,14 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
         @_config    = null
 
-        @master.on "config_update", =>
+        cUpdate = _.debounce =>
             config = @master.config()
             for id,s of @slaves
                 @log.debug "emit config to slave #{ id }"
                 s.sock.emit "config", config
+        , 200
+
+        @master.on "config_update", cUpdate
 
     #----------
 

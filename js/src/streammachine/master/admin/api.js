@@ -53,6 +53,17 @@ module.exports = API = (function() {
         }
       };
     })(this));
+    this.app.param("mount", (function(_this) {
+      return function(req, res, next, key) {
+        var s;
+        if ((key != null) && (s = _this.master.source_mounts[key])) {
+          req.mount = s;
+          return next();
+        } else {
+          return res.status(404).end("Invalid source mount.\n");
+        }
+      };
+    })(this));
     corsFunc = (function(_this) {
       return function(req, res, next) {
         res.header('Access-Control-Allow-Origin', '*');
@@ -140,29 +151,6 @@ module.exports = API = (function() {
         });
       };
     })(this));
-    this.app.post("/streams/:stream/promote", (function(_this) {
-      return function(req, res) {
-        return req.stream.promoteSource(req.query.uuid, function(err, msg) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, msg);
-          }
-        });
-      };
-    })(this));
-    this.app.post("/streams/:stream/drop", (function(_this) {
-      return function(req, res) {
-        var source;
-        source = _u(req.stream.sources).find(function(s) {
-          return s.uuid === req.query.uuid;
-        });
-        if (source) {
-          source.disconnect();
-        }
-        return api.ok(req, res);
-      };
-    })(this));
     this.app.put("/streams/:stream/config", express.bodyParser(), (function(_this) {
       return function(req, res) {
         return _this.master.updateStream(req.stream, req.body, function(err, obj) {
@@ -200,6 +188,71 @@ module.exports = API = (function() {
             return api.invalid(req, res, err);
           } else {
             return api.ok(req, res, req.stream.status());
+          }
+        });
+      };
+    })(this));
+    this.app.post("/sources", express.bodyParser(), (function(_this) {
+      return function(req, res) {
+        return _this.master.createMount(req.body, function(err, mount) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, mount);
+          }
+        });
+      };
+    })(this));
+    this.app.get("/sources/:mount", (function(_this) {
+      return function(req, res) {
+        return api.ok(req, res, req.mount.status());
+      };
+    })(this));
+    this.app.get("/sources/:mount/config", (function(_this) {
+      return function(req, res) {
+        return api.ok(req, res, req.mount.config());
+      };
+    })(this));
+    this.app.post("/sources/:mount/promote", (function(_this) {
+      return function(req, res) {
+        return req.mount.promoteSource(req.query.uuid, function(err, msg) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, msg);
+          }
+        });
+      };
+    })(this));
+    this.app.post("/sources/:mount/drop", (function(_this) {
+      return function(req, res) {
+        return req.mount.dropSource(req.query.uuid, function(err, msg) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, msg);
+          }
+        });
+      };
+    })(this));
+    this.app.put("/sources/:mount/config", express.bodyParser(), (function(_this) {
+      return function(req, res) {
+        return _this.master.updateMount(req.mount, req.body, function(err, obj) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, obj);
+          }
+        });
+      };
+    })(this));
+    this.app["delete"]("/sources/:mount", (function(_this) {
+      return function(req, res) {
+        return _this.master.removeMount(req.mount, function(err, obj) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, obj);
           }
         });
       };

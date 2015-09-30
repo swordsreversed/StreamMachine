@@ -328,6 +328,63 @@ module.exports = Master = (function(_super) {
     return typeof cb === "function" ? cb(null, "OK") : void 0;
   };
 
+  Master.prototype.createMount = function(opts, cb) {
+    var mount;
+    this.log.info("createMount called for " + opts.key, {
+      opts: opts
+    });
+    if (!opts.key) {
+      if (typeof cb === "function") {
+        cb("Cannot create mount without key.");
+      }
+      return false;
+    }
+    if (this.source_mounts[opts.key]) {
+      if (typeof cb === "function") {
+        cb("Mount key must be unique.");
+      }
+      return false;
+    }
+    if (mount = this._startSourceMount(opts.key, opts)) {
+      this.emit("config_update");
+      return typeof cb === "function" ? cb(null, mount.status()) : void 0;
+    } else {
+      return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
+    }
+  };
+
+  Master.prototype.updateMount = function(mount, opts, cb) {
+    this.log.info("updateMount called for " + mount.key, {
+      opts: opts
+    });
+    if (opts.key && mount.key !== opts.key) {
+      if (this.source_mounts[opts.key]) {
+        if (typeof cb === "function") {
+          cb("Mount key must be unique.");
+        }
+        return false;
+      }
+      this.source_mounts[opts.key] = mount;
+      delete this.source_mounts[mount.key];
+    }
+    return mount.configure(opts, (function(_this) {
+      return function(err, config) {
+        if (err) {
+          return typeof cb === "function" ? cb(err) : void 0;
+        }
+        return typeof cb === "function" ? cb(null, config) : void 0;
+      };
+    })(this));
+  };
+
+  Master.prototype.removeMount = function(mount, cb) {
+    this.log.info("removeMount called for " + mount.key);
+    delete this.source_mounts[mount.key];
+    mount.destroy();
+    this.emit("config_update");
+    return typeof cb === "function" ? cb(null, "OK") : void 0;
+  };
+
   Master.prototype.streamsInfo = function() {
     var k, obj, _ref, _results;
     _ref = this.streams;

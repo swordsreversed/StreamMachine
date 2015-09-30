@@ -10,13 +10,14 @@ module.exports = MasterIO = (function(_super) {
   __extends(MasterIO, _super);
 
   function MasterIO(master, log, opts) {
+    var cUpdate;
     this.master = master;
     this.log = log;
     this.opts = opts;
     this.io = null;
     this.slaves = {};
     this._config = null;
-    this.master.on("config_update", (function(_this) {
+    cUpdate = _.debounce((function(_this) {
       return function() {
         var config, id, s, _ref, _results;
         config = _this.master.config();
@@ -29,7 +30,8 @@ module.exports = MasterIO = (function(_super) {
         }
         return _results;
       };
-    })(this));
+    })(this), 200);
+    this.master.on("config_update", cUpdate);
   }
 
   MasterIO.prototype.updateConfig = function(config) {
