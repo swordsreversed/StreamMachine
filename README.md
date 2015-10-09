@@ -40,6 +40,12 @@ Unlike traditional streaming log outputs, StreamMachine's listening events
 allow deep realtime analysis of user beahvior, including playhead position and
 in-flight session durations.
 
+## Source Transcoding
+
+With the new Source Mounts support in 0.7, StreamMachine now supports taking
+one input source and transcoding it into the variety of output formats you
+may want to offer your listeners.
+
 ## Architecture
 
 StreamMachine is a [Node.js](http://nodejs.org) application.  It can run on
@@ -140,7 +146,7 @@ you can play with:
 
 To run StreamMachine locally with no service dependencies, try the included `config/standalone.json`. To do so:
 
-* Install Node.js v0.10
+* Install Node.js
 * Download the StreamMachine repository
 * Run `npm install` to install the Node modules that we depend on
 * Run `./streammachine-cmd --config ./config/standalone.json` to start the
