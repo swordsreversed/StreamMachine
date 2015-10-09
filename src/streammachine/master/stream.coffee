@@ -7,14 +7,7 @@ FileSource          = require "../sources/file"
 ProxySource         = require '../sources/proxy_room'
 TranscodingSource   = require "../sources/transcoding"
 HLSSegmenter        = require "../rewind/hls_segmenter"
-
-# Master streams are about source management.
-
-# Events:
-# * source: emits when a source is promoted to active
-# * add_source: emits when a source is added to the source list, but not made active
-# * disconnect: emits when a source disconnects. `active` boolean indicates whether
-#   this was the live source. `count` integer indicates remaining sources
+SourceMount         = require "./source_mount"
 
 module.exports = class Stream extends require('events').EventEmitter
     DefaultOptions:
@@ -40,11 +33,41 @@ module.exports = class Stream extends require('events').EventEmitter
         codec:              null
         ffmpeg_args:        null
 
-    constructor: (@core,@key,@log,opts)->
+    constructor: (@key,@log,mount,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions
 
-        @sources = []
+        # We have three options for what source we're going to use:
+        # a) Internal: Create our own source mount and manage our own sources.
+        #    Basically the original stream behavior.
+        # b) Source Mount: Connect to a source mount and use its source
+        #    directly. You'll get whatever incoming format the source gets.
+        # c) Source Mount w/ Transcoding: Connect to a source mount, but run a
+        #    transcoding source between it and us, so that we always get a
+        #    certain format as our input.
+
         @source = null
+
+        if opts.ffmpeg_args
+            # Source Mount w/ transcoding
+            @log.debug "Setting up transcoding source for #{ @key }"
+
+            # -- create a transcoding source -- #
+
+            tsource = new TranscodingSource
+                stream:         mount
+                ffmpeg_args:    opts.ffmpeg_args
+                format:         opts.format
+                logger:         @log
+
+            @source = tsource
+
+            # if our transcoder goes down, restart it
+            tsource.once "disconnect", =>
+                @log.error "Transcoder disconnected for #{ @key}."
+
+        else
+            # Source Mount directly
+            @source = mount
 
         # Cache the last stream vitals we've seen
         @_vitals = null
@@ -88,17 +111,13 @@ module.exports = class Stream extends require('events').EventEmitter
             if @opts.acceptSourceMeta
                 @setMetadata meta
 
-        @dataFunc = (data) =>
+        @source.on "data", (data) =>
             # inject our metadata into the data object
             @emit "data", _u.extend {}, data, meta:@_meta
 
-        @vitalsFunc = (vitals) =>
+        @source.on "vitals", (vitals) =>
             @_vitals = vitals
             @emit "vitals", vitals
-
-        # -- Stream Variants -- #
-
-
 
         # -- Hardcoded Source -- #
 
@@ -142,6 +161,11 @@ module.exports = class Stream extends require('events').EventEmitter
 
     #----------
 
+    addSource: (source,cb) ->
+        @source.addSource source, cb
+
+    #----------
+
     # Return our configuration
 
     config: ->
@@ -181,7 +205,7 @@ module.exports = class Stream extends require('events').EventEmitter
         key:        @key
         id:         @key
         vitals:     @_vitals
-        sources:    ( s.info() for s in @sources )
+        source:     @source.status()
         rewind:     @rewind._rStatus()
 
     #----------
@@ -196,141 +220,6 @@ module.exports = class Stream extends require('events').EventEmitter
         @emit "meta", @_meta
 
         cb? null, @_meta
-
-    #----------
-
-    addSource: (source,cb) ->
-        # add a disconnect monitor
-        source.once "disconnect", =>
-            # remove it from the list
-            @sources = _u(@sources).without source
-
-            # was this our current source?
-            if @source == source
-                # yes...  need to promote the next one (if there is one)
-                if @sources.length > 0
-                    @useSource @sources[0]
-                    @emit "disconnect", active:true, count:@sources.length, source:@source
-                else
-                    @log.alert "Source disconnected. No sources remaining."
-                    @_disconnectSource @source
-                    @source = null
-                    @emit "disconnect", active:true, count:0, source:null
-            else
-                # no... just remove it from the list
-                @log.event "Inactive source disconnected."
-                @emit "disconnect", active:false, count:@sources.length, source:@source
-
-        # -- Add the source to our list -- #
-
-        @sources.push source
-
-        # -- Should this source be made active? -- #
-
-        # check whether this source should be made active. It should be if
-        # the active source is defined as a fallback
-
-        if @sources[0] == source || @sources[0]?.isFallback
-            # our new source should be promoted
-            @log.event "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
-            @useSource source, cb
-
-        else
-            # add the source to the end of our list
-            @log.event "Source connected.", source:(source.TYPE?() ? source.TYPE)
-
-            # and emit our source event
-            @emit "add_source", source
-
-            cb? null
-
-    #----------
-
-    _disconnectSource: (s) ->
-        s.removeListener "metadata",   @sourceMetaFunc
-        s.removeListener "data",       @dataFunc
-        s.removeListener "vitals",     @vitalsFunc
-
-    #----------
-
-    useSource: (newsource,cb=null) ->
-        # stash our existing source if we have one
-        old_source = @source || null
-
-        # set a five second timeout for the switchover
-        alarm = setTimeout =>
-            @log.error "useSource failed to get switchover within five seconds.",
-                new_source: (newsource.TYPE?() ? newsource.TYPE)
-                old_source: (old_source?.TYPE?() ? old_source?.TYPE)
-
-            cb? new Error "Failed to switch."
-        , 5000
-
-        # Look for a header before switching
-        newsource.vitals (err,vitals) =>
-            if @source && old_source != @source
-                # source changed while we were waiting for vitals. we'll
-                # abort our change attempt
-                @log.event "Source changed while waiting for vitals.",
-                    new_source:     (newsource.TYPE?() ? newsource.TYPE)
-                    old_source:     (old_source?.TYPE?() ? old_source?.TYPE)
-                    current_source: (@source.TYPE?() ? @source.TYPE)
-
-                return cb? new Error "Source changed while waiting for vitals."
-
-            if old_source
-                # unhook from the old source's events
-                @_disconnectSource(old_source)
-
-            @source = newsource
-
-            # connect to the new source's events
-            newsource.on "metadata",   @sourceMetaFunc
-            newsource.on "data",       @dataFunc
-            newsource.on "vitals",     @vitalsFunc
-
-            # how often will we be emitting?
-            @emitDuration = vitals.emitDuration
-
-            # note that we've got a new source
-            process.nextTick =>
-                @log.event "New source is active.",
-                    new_source: (newsource.TYPE?() ? newsource.TYPE)
-                    old_source: (old_source?.TYPE?() ? old_source?.TYPE)
-
-                @emit "source", newsource
-                @vitalsFunc vitals
-
-            # jump our new source to the front of the list (and remove it from
-            # anywhere else in the list)
-            @sources = _u.flatten [newsource,_u(@sources).without newsource]
-
-            # cancel our timeout
-            clearTimeout alarm
-
-            # give the a-ok to the callback
-            cb? null
-
-    #----------
-
-    promoteSource: (uuid,cb) ->
-        # do we have a source with this UUID?
-        if ns = _u(@sources).find( (s) => s.uuid == uuid )
-            # we do...
-            # make sure it isn't already the active source, though
-            if ns == @sources[0]
-                # it is.  nothing to be done.
-                cb? null, msg:"Source is already active", uuid:uuid
-            else
-                # it isn't. we can try to promote it
-                @useSource ns, (err) =>
-                    if err
-                        cb? err
-                    else
-                        cb? null, msg:"Promoted source to active.", uuid:uuid
-
-        else
-            cb? "Unable to find a source with that UUID on #{@key}"
 
     #----------
 
@@ -366,7 +255,7 @@ module.exports = class Stream extends require('events').EventEmitter
 
     destroy: ->
         # shut down our sources and go away
-        s.disconnect() for s in @sources
+        @source.disconnect()
         @emit "destroy"
         true
 
@@ -378,8 +267,6 @@ module.exports = class Stream extends require('events').EventEmitter
             @transcoders    = {}
             @hls_min_id     = null
 
-            @_stream = null
-
         #----------
 
         addStream: (stream) ->
@@ -387,8 +274,6 @@ module.exports = class Stream extends require('events').EventEmitter
                 @log.debug "SG #{@key}: Adding stream #{stream.key}"
 
                 @streams[ stream.key ] = stream
-
-                @_cloneStream(stream) if !@_stream
 
                 # listen in case it goes away
                 delFunc = =>
@@ -400,44 +285,17 @@ module.exports = class Stream extends require('events').EventEmitter
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
 
-                    if stream.opts.ffmpeg_args && !@transcoders[ stream.key ]
-                        tsource = @_startTranscoder stream
-                        @transcoders[ stream.key ] = tsource
-
-                if stream.opts.ffmpeg_args
-                    tsource = @_startTranscoder stream
-                    @transcoders[ stream.key ] = tsource
-
                 # if HLS is enabled, sync the stream to the rest of the group
                 stream.rewind.hls_segmenter?.syncToGroup @
 
         #----------
 
         status: ->
+            sstatus = {}
+            sstatus[k] = s.status() for k,s of @streams
+
             id:         @key
-            sources:    ( s.info() for s in @_stream.sources )
-
-        #----------
-
-        _startTranscoder: (stream) ->
-            @log.debug "SG #{@key}: Setting up transcoding source for #{ stream.key }"
-
-            # -- create a transcoding source -- #
-
-            tsource = new TranscodingSource
-                stream:         @_stream
-                ffmpeg_args:    stream.opts.ffmpeg_args
-                format:         stream.opts.format
-                logger:         stream.log
-
-            stream.addSource tsource
-
-            # if our transcoder goes down, restart it
-            tsource.once "disconnect", =>
-                @log.info "SG #{@key}: Transcoder disconnected for #{ stream.key}. Restarting."
-                @_startTranscoder(stream)
-
-            tsource
+            streams:    sstatus
 
         #----------
 
@@ -447,10 +305,5 @@ module.exports = class Stream extends require('events').EventEmitter
                 @hls_min_id = id
                 @emit "hls_update_min_segment", id
                 @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
-
-        #----------
-
-        _cloneStream: (stream) ->
-            @_stream = new Stream null, @key, @log.child(stream:"_#{@key}"), _u.extend {}, stream.opts, seconds:30
 
         #----------

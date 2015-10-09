@@ -6,7 +6,7 @@ FileSource = require("../sources/file");
 
 net = require("net");
 
-debug = require("debug")("sm:IcecastSource");
+debug = require("debug")("sm:sources:icecast");
 
 module.exports = IcecastSource = (function(_super) {
   __extends(IcecastSource, _super);
@@ -65,7 +65,7 @@ module.exports = IcecastSource = (function(_super) {
           var err, resp;
           resp = _this.sock.read();
           clearTimeout(authTimeout);
-          if (/^HTTP\/1\.0 200 OK/.test(resp.toString())) {
+          if (resp && /^HTTP\/1\.0 200 OK/.test(resp.toString())) {
             debug("Got HTTP OK. Starting streaming.");
             return cb(null);
           } else {

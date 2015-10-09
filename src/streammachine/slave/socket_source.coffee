@@ -16,10 +16,21 @@ module.exports = class SocketSource extends require("events").EventEmitter
 
         @_streamKey = null
 
-        @slave.io.vitals @stream.key, (err,obj) =>
-            @_streamKey = obj.streamKey
-            @_vitals    = obj
-            @emit "vitals", obj
+        getVitals = (retries=0) =>
+            @slave.io.vitals @stream.key, (err,obj) =>
+                if err
+                    @log.error "Failed to get vitals (#{retries} retries remaining): #{err}"
+
+                    if retries > 0
+                        getVitals()
+
+                    return
+
+                @_streamKey = obj.streamKey
+                @_vitals    = obj
+                @emit "vitals", obj
+
+        getVitals 2
 
     #----------
 

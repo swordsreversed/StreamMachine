@@ -8,6 +8,7 @@ module.exports = SocketSource = (function(_super) {
   __extends(SocketSource, _super);
 
   function SocketSource(slave, stream) {
+    var getVitals;
     this.slave = slave;
     this.stream = stream;
     this.log = this.stream.log.child({
@@ -25,13 +26,26 @@ module.exports = SocketSource = (function(_super) {
       };
     })(this));
     this._streamKey = null;
-    this.slave.io.vitals(this.stream.key, (function(_this) {
-      return function(err, obj) {
-        _this._streamKey = obj.streamKey;
-        _this._vitals = obj;
-        return _this.emit("vitals", obj);
+    getVitals = (function(_this) {
+      return function(retries) {
+        if (retries == null) {
+          retries = 0;
+        }
+        return _this.slave.io.vitals(_this.stream.key, function(err, obj) {
+          if (err) {
+            _this.log.error("Failed to get vitals (" + retries + " retries remaining): " + err);
+            if (retries > 0) {
+              getVitals();
+            }
+            return;
+          }
+          _this._streamKey = obj.streamKey;
+          _this._vitals = obj;
+          return _this.emit("vitals", obj);
+        });
       };
-    })(this));
+    })(this);
+    getVitals(2);
   }
 
   SocketSource.prototype.vitals = function(cb) {

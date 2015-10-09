@@ -103,7 +103,7 @@ module.exports = class TranscodingSource extends require("./base")
 
     #----------
 
-    info: ->
+    status: ->
         source:     @TYPE?() ? @TYPE
         connected:  @connected
         url:        "N/A"

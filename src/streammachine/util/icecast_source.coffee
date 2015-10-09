@@ -1,7 +1,7 @@
 FileSource = require "../sources/file"
 net = require "net"
 
-debug = require("debug")("sm:IcecastSource")
+debug = require("debug")("sm:sources:icecast")
 
 module.exports = class IcecastSource extends require("events").EventEmitter
     constructor: (@opts) ->
@@ -49,7 +49,7 @@ module.exports = class IcecastSource extends require("events").EventEmitter
                 resp = @sock.read()
                 clearTimeout authTimeout
 
-                if /^HTTP\/1\.0 200 OK/.test(resp.toString())
+                if resp && /^HTTP\/1\.0 200 OK/.test(resp.toString())
                     debug "Got HTTP OK. Starting streaming."
                     cb null
 

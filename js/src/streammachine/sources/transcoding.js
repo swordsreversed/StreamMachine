@@ -125,7 +125,7 @@ module.exports = TranscodingSource = (function(_super) {
     })(this));
   }
 
-  TranscodingSource.prototype.info = function() {
+  TranscodingSource.prototype.status = function() {
     var _ref;
     return {
       source: (_ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? _ref : this.TYPE,

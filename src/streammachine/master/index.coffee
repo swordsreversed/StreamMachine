@@ -5,6 +5,8 @@ fs      = require "fs"
 express     = require "express"
 Throttle    = require "throttle"
 
+debug = require("debug")("sm:master:index")
+
 Redis       = require "../redis"
 RedisConfig = require "../redis_config"
 API         = require "./admin/api"
@@ -14,6 +16,7 @@ Alerts      = require "../alerts"
 Analytics   = require "./analytics"
 Monitoring  = require "./monitoring"
 SlaveIO     = require "./master_io"
+SourceMount = require "./source_mount"
 
 RewindDumpRestore   = require "../rewind/dump_restore"
 
@@ -23,6 +26,7 @@ module.exports = class Master extends require("events").EventEmitter
     constructor: (@options) ->
         @_configured = false
 
+        @source_mounts  = {}
         @streams        = {}
         @stream_groups  = {}
         @proxies        = {}
@@ -30,7 +34,6 @@ module.exports = class Master extends require("events").EventEmitter
         # -- set up logging -- #
 
         @log = @options.logger
-
 
         if @options.redis?
             # -- load our streams configuration from redis -- #
@@ -43,22 +46,18 @@ module.exports = class Master extends require("events").EventEmitter
                 @options = _.defaults config||{}, @options
 
                 # (re-)configure our master stream objects
-                @configureStreams @options.streams
+                @configure @options
 
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
             @on "config_update", =>
                 @redis_config._update @config()
 
-        else if @options.streams
+        else
             # -- look for hard-coded configuration -- #
 
             process.nextTick =>
-                @configureStreams @options.streams
-        else
-            # nothing there...
-            process.nextTick =>
-                @configureStreams {}
+                @configure @options
 
         @once "streams", =>
             @_configured = true
@@ -122,40 +121,68 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     config: ->
-        config = streams:{}
+        config = streams:{}, sources:{}
 
         config.streams[k] = s.config() for k,s of @streams
+        config.sources[k] = s.config() for k,s of @source_mounts
 
         return config
 
     #----------
 
-    # configureStreams can be called on a new core, or it can be called to
+    # configre can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
-    configureStreams: (options,cb) ->
-        @log.debug "In configure with ", options
+    configure: (options,cb) ->
+        all_keys = {}
 
         # -- Sources -- #
 
+        new_sources = options?.sources || {}
+
+        for k,opts of new_sources
+            all_keys[ k ] = 1
+            @log.debug "Configuring Source Mapping #{k}"
+            if @source_mounts[k]
+                # existing...
+                @source_mounts[k].configure opts
+            else
+                @_startSourceMount k, opts
+
+        # -- Streams -- #
+
         # are any of our current streams missing from the new options? if so,
         # disconnect them
+        new_streams = options?.streams || {}
         for k,obj of @streams
-            @log.debug "calling destroy on ", k
-            if !options?[k]
+            if !new_streams?[k]
+                @log.debug "calling destroy on ", k
                 obj.destroy()
                 delete @streams[ k ]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
-        for key,opts of options
+        for key,opts of new_streams
             @log.debug "Parsing stream for #{key}"
+
+            # does this stream have a mount?
+            mount_key = opts.source || key
+            all_keys[mount_key] = 1
+
+            if !@source_mounts[mount_key]
+                # create a mount
+                @log.debug "Creating an unspecified source mount for #{mount_key} (via #{key})."
+                @_startSourceMount mount_key, _(opts).pick('source_password','format','monitored')
+
+            mount = @source_mounts[mount_key]
+
+            # do we need to create the stream?
             if @streams[key]
                 # existing stream...  pass it updated configuration
                 @log.debug "Passing updated config to master stream: #{key}", opts:opts
                 @streams[key].configure opts
             else
                 @log.debug "Starting up master stream: #{key}", opts:opts
-                @_startStream key, opts
+                @_startStream key, mount, opts
 
             # part of a stream group?
             if g = @streams[key].opts.group
@@ -165,12 +192,31 @@ module.exports = class Master extends require("events").EventEmitter
 
         @emit "streams", @streams
 
-        cb? null, @streams
+        # -- Remove Old Source Mounts -- #
+
+        for k,obj of @source_mounts
+            if !all_keys[k]
+                @log.debug "Destroying source mount #{k}"
+                # FIXME: Implement?
+
+        cb? null, streams:@streams, sources:@source_mounts
 
     #----------
 
-    _startStream: (key,opts) ->
-        stream = new Stream @, key, @log.child(stream:key), _.extend opts,
+    _startSourceMount: (key,opts) ->
+        mount = new SourceMount key, @log.child(source_mount:key), opts
+
+        if mount
+            @source_mounts[ key ] = mount
+            @emit "new_source_mount", mount
+            return mount
+        else
+            return false
+
+    #----------
+
+    _startStream: (key,mount,opts) ->
+        stream = new Stream key, @log.child(stream:key), mount, _.extend opts,
             hls:        @options.hls
 
         if stream
@@ -200,9 +246,17 @@ module.exports = class Master extends require("events").EventEmitter
             cb? "Stream key must be unique."
             return false
 
+        # -- Is there a Source Mount? -- #
+
+        mount_key = opts.source || opts.key
+        if !@source_mounts[mount_key]
+            # create a mount
+            @log.debug "Creating an unspecified source mount for #{mount_key} (via #{opts.key})."
+            @_startSourceMount mount_key, _(opts).pick('source_password','format')
+
         # -- create the stream -- #
 
-        if stream = @_startStream opts.key, opts
+        if stream = @_startStream opts.key, @source_mounts[mount_key], opts
             @emit "config_update"
             @emit "streams"
             cb? null, stream.status()
@@ -248,11 +302,68 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    createMount: (opts,cb) ->
+        @log.info "createMount called for #{opts.key}", opts:opts
+
+        # -- make sure the mount key is present and unique -- #
+
+        if !opts.key
+            cb? "Cannot create mount without key."
+            return false
+
+        if @source_mounts[ opts.key ]
+            cb? "Mount key must be unique."
+            return false
+
+        if mount = @_startSourceMount opts.key, opts
+            @emit "config_update"
+            cb? null, mount.status()
+        else
+            cb? "Mount failed to start."
+
+    #----------
+
+    updateMount: (mount,opts,cb) ->
+        @log.info "updateMount called for #{mount.key}", opts:opts
+
+        # -- if they want to rename, the key must be unique -- #
+
+        if opts.key && mount.key != opts.key
+            if @source_mounts[ opts.key ]
+                cb? "Mount key must be unique."
+                return false
+
+            @source_mounts[ opts.key ] = mount
+            delete @source_mounts[ mount.key ]
+
+        # -- if we're good, ask the mount to configure -- #
+
+        mount.configure opts, (err,config) =>
+            return cb? err if err
+            cb? null, config
+
+    #----------
+
+    removeMount: (mount,cb) ->
+        @log.info "removeMount called for #{mount.key}"
+
+        delete @source_mounts[ mount.key ]
+        mount.destroy()
+
+        @emit "config_update"
+
+        cb? null, "OK"
+
+    #----------
+
     streamsInfo: ->
         obj.status() for k,obj of @streams
 
     groupsInfo: ->
         obj.status() for k,obj of @stream_groups
+
+    sourcesInfo: ->
+        obj.status() for k,obj of @source_mounts
 
     #----------
 
@@ -293,145 +404,146 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     sendHandoffData: (rpc,cb) ->
-        streams_sent = {}
-
-        fFunc = _.after (Object.keys(@streams).length+Object.keys(@stream_groups).length), =>
+        fFunc = _.after 2, =>
             @log.info "Rewind buffers and sources sent."
             cb null
 
-        # -- Stream Group Sources -- #
+        # -- Source Mounts -- #
 
-        # no rewind buffers, only sources
+        rpc.once "sources", (msg,handle,cb) =>
+            @log.info "Received request for sources."
 
-        rpc.on "group_sources", (msg,handle,cb) =>
-            @log.info "StreamGroup sources requested for #{ msg.key }"
+            # iterate through each source mount, sending each of its sources
 
-            sg = @stream_groups[ msg.key ]
+            mounts = _.values @source_mounts
 
-            if sg._stream.sources.length == 0
-                # no sources to send... return right away
-                fFunc()
-                return cb null
+            _sendMount = =>
+                mount = mounts.shift()
 
-            # if we have sources, count up to make sure we return them all
-            af = _.after sg._stream.sources.length, =>
-                fFunc()
-                cb null
+                if !mount
+                    cb null
+                    return fFunc()
 
-            for source in sg._stream.sources
-                if source._shouldHandoff
-                    do (source) =>
-                        @log.info "Sending StreamGroup source #{msg.key}/#{source.uuid}"
-                        rpc.request "group_source",
-                            group:      sg.key
-                            type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
-                        , source.opts.sock
-                        , (err,reply) =>
-                            @log.error "Error sending group source #{msg.key}/#{source.uuid}: #{err}" if err
-                            af()
-                else
-                    af()
+                sources = mount.sources.slice()
 
+                _sendSource = =>
+                    source = sources.shift()
+                    return _sendMount() if !source
 
-        # -- Stream Rewind Buffers and Sources -- #
+                    @log.info "Sending source #{mount.key}/#{source.uuid}"
+                    rpc.request "source",
+                        mount:      mount.key
+                        type:       source.HANDOFF_TYPE
+                        opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
+                    , source.opts.sock
+                    , (err,reply) =>
+                        @log.error "Error sending source #{mount.key}/#{source.uuid}: #{err}" if err
+                        _sendSource()
 
-        rpc.on "stream_rewind", (msg,handle,cb) =>
-            @log.info "Rewind buffer requested for #{ msg.key }"
-            stream = @streams[msg.key]
+                _sendSource()
 
-            # go ahead and send over any sources...
-            for source in stream.sources
-                if source._shouldHandoff
-                    do (source) =>
-                        rpc.request "stream_source",
-                            stream:     stream.key
-                            type:       source.HANDOFF_TYPE
-                            opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
-                        , source.opts.sock
-                        , (err,reply) =>
-                            @log.error "Error sending stream source #{msg.key}/#{source.uuid}: #{err}" if err
+            _sendMount()
 
-            if stream.rewind.bufferedSecs() > 0
-                @log.info "RewindBuffer write for #{ msg.key } to #{ msg.path }"
-                sock = net.connect msg.path, (err) =>
-                    @log.info "Writer socket connected for rewind buffer #{msg.key}", error:err
-                    return cb err if err
+        # -- Stream Rewind Buffers -- #
 
-                    stream.getRewind (err,writer) =>
-                        return cb err if err
+        rpc.on "stream_rewinds", (msg,handle,cb) =>
+            @log.info "Received request for rewind buffers."
 
-                        writer.pipe(sock)
-                        writer.on "end", =>
-                            @log.info "RewindBuffer for #{ msg.key } written to socket."
+            streams = _(@streams).values()
 
-                        @log.info "Waiting for sock close for #{ msg.key }..."
-                        sock.on "close", (err) =>
-                            @log.info "Dumped buffer for #{msg.key}", bytesWritten:sock.bytesWritten, error:err
-                            fFunc()
-                            cb null
+            _sendStream = =>
+                stream = streams.shift()
 
-            else
-                @log.info "No rewind buffer to send for #{msg.key}."
-                fFunc()
-                cb null
+                if !stream
+                    cb null
+                    return fFunc()
+
+                _next = _.once =>
+                    _sendStream()
+
+                if stream.rewind.bufferedSecs() > 0
+                    # set up a socket to accept the buffer on
+                    spath = temp.path suffix:".sock"
+
+                    @log.info "Asking to send rewind buffer for #{stream.key} over #{spath}."
+
+                    sock = net.createServer()
+
+                    sock.listen spath, =>
+                        sock.once "connection", (c) =>
+                            stream.getRewind (err,writer) =>
+                                if err
+                                    @log.error "Failed to get rewind buffer for #{stream.key}"
+                                    _next()
+
+                                writer.pipe(c)
+                                writer.once "end", =>
+                                    @log.info "RewindBuffer for #{ stream.key } written to socket."
+
+                        rpc.request "stream_rewind", key:stream.key,path:spath, null, timeout:10000, (err) =>
+                            if err
+                                @log.error "Error sending rewind buffer for #{stream.key}: #{err}"
+                            else
+                                @log.info "Rewind buffer sent and ACKed for #{stream.key}"
+
+                            # cleanup...
+                            sock.close => fs.unlink spath, (err) =>
+                                @log.info "RewindBuffer socket unlinked.", error:err
+                                _next()
+
+            _sendStream()
 
     #----------
 
     loadHandoffData: (rpc,cb) ->
-        # -- set up a listener for sources -- #
+        # -- set up a listener for stream rewinds and sources -- #
 
-        rpc.on "stream_source", (msg,handle,cb) =>
-            stream = @streams[ msg.stream ]
-            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
-            stream.addSource source
-            @log.info "Added stream source: #{stream.key}/#{source.uuid}"
+        rpc.on "source", (msg,handle,cb) =>
+            mount = @source_mounts[ msg.mount ]
+            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:mount.log
+            mount.addSource source
+            @log.info "Added mount source: #{mount.key}/#{source.uuid}"
             cb null
 
-        rpc.on "group_source", (msg,handle,cb) =>
-            sg = @stream_groups[ msg.group ]
-            source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:stream.log
-            sg._stream.addSource source
-            @log.info "Added group source: #{stream.key}/#{source.uuid}"
+        rpc.on "stream_rewind", (msg,handle,cb) =>
+            stream = @streams[msg.key]
+
+            @log.info "Stream Rewind will load over #{msg.path}."
+
+            sock = net.connect msg.path, (err) =>
+                @log.info "Reader socket connected for rewind buffer #{msg.key}", error:err
+                return cb err if err
+
+                stream.rewind.loadBuffer sock, (err,stats) =>
+                    if err
+                        @log.error "Error loading rewind buffer: #{err}"
+                        cb err
+
+                    cb null
+
+        af = _.after 2, =>
             cb null
 
-        af = _.after (Object.keys(@streams).length+Object.keys(@stream_groups).length), =>
-            cb null
 
-        for key,group of @stream_groups
-            do (key,group) =>
-                # we don't need rewind buffers for stream groups, but we do
-                # need sources.
-                rpc.request "group_sources", key:key, null, timeout:10000, (err) =>
-                    @log.error "Error getting StreamGroup sources: #{err}" if err
-                    @log.info "Sources received for StreamGroup #{ key }."
-                    af()
+        # -- Request Sources -- #
 
-        for key,stream of @streams
-            do (key,stream) =>
-                # set up a socket to accept the buffer on
-                # create a socket
-                spath = temp.path suffix:".sock"
+        rpc.request "sources", {}, null, timeout:10000, (err) =>
+            if err
+                @log.error "Failed to get sources from handoff initiator: #{err}"
+            else
+                @log.info "Received sources from handoff initiator."
 
-                @log.info "Asking to get rewind buffer for #{key} over #{spath}."
+            af()
 
-                sock = net.createServer()
+        # -- Request Stream Rewind Buffers -- #
 
-                sock.listen spath, =>
-                    sock.once "connection", (c) =>
-                        stream.rewind.loadBuffer c, (err) =>
-                            @log.error "Error loading rewind buffer: #{err}" if err
-                            c.end()
+        rpc.request "stream_rewinds", {}, null, timeout:10000, (err) =>
+            if err
+                @log.error "Failed to get stream rewinds from handoff initiator: #{err}"
+            else
+                @log.info "Received stream rewinds from handoff initiator."
 
-                    rpc.request "stream_rewind", key:key,path:spath, null, timeout:10000, (err) =>
-                        return @log.error "Error loading rewind buffer for #{key}: #{err}" if err
-                        @log.info "Rewind buffer loaded for #{key}"
-
-                        # cleanup...
-                        sock.close => fs.unlink spath, (err) =>
-                            @log.info "RewindBuffer socket unlinked.", error:err
-                            af()
-
+            af()
 
     #----------
 

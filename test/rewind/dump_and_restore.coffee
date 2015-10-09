@@ -1,4 +1,5 @@
 Stream          = $src "master/stream"
+SourceMount     = $src "master/source_mount"
 FileSource      = $src "sources/file"
 DumpRestore     = $src "rewind/dump_restore"
 Logger          = $src "logger"
@@ -35,6 +36,11 @@ describe "Rewind Buffer Dump and Restore", ->
 
     run_id = uuid.v4()
 
+    _createStream = ->
+        mount = new SourceMount "test__#{run_id}", logger, STREAM1
+        stream = new Stream "test__#{run_id}", logger, mount, STREAM1
+        stream
+
     dump_filepath = null
 
     after (done) ->
@@ -46,8 +52,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
     describe "Empty RewindBuffer", ->
         before (done) ->
-
-            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            stream = _createStream(run_id)
             master = new FakeMaster logger, stream
             dump_restore = new DumpRestore master, rewind_opts
 
@@ -66,7 +71,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
     describe "When dumping", ->
         before (done) ->
-            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            stream = _createStream()
             master = new FakeMaster logger, stream
             dump_restore = new DumpRestore master, rewind_opts
 
@@ -106,7 +111,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
     describe "When restoring", ->
         before (done) ->
-            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            stream = _createStream()
             master = new FakeMaster logger, stream
             dump_restore = new DumpRestore master, rewind_opts
 
@@ -124,7 +129,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
     describe "When reset", ->
         beforeEach (done) ->
-            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            stream = _createStream(run_id)
             master = new FakeMaster logger, stream
             dump_restore = new DumpRestore master, rewind_opts
 
@@ -142,7 +147,7 @@ describe "Rewind Buffer Dump and Restore", ->
 
     describe "When RewindBuffer is loading", ->
         before (done) ->
-            stream = new Stream null, "test__#{run_id}", logger, STREAM1
+            stream = _createStream()
             master = new FakeMaster logger, stream
             dump_restore = new DumpRestore master, rewind_opts
 

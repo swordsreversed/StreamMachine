@@ -39,6 +39,14 @@ module.exports = class API
             else
                 res.status(404).end "Invalid stream.\n"
 
+        @app.param "mount", (req,res,next,key) =>
+            # make sure it's a valid source mount key
+            if key? && s = @master.source_mounts[ key ]
+                req.mount = s
+                next()
+            else
+                res.status(404).end "Invalid source mount.\n"
+
         # -- options support for CORS -- #
 
         corsFunc = (req,res,next) =>
@@ -75,6 +83,10 @@ module.exports = class API
             # return JSON version of the status for all streams
             api.ok req, res, @master.groupsInfo()
 
+        # list source mounts
+        @app.get "/sources", (req,res) =>
+            api.ok req, res, @master.sourcesInfo()
+
         # list streams
         @app.get "/config", (req,res) =>
             # return JSON version of the status for all streams
@@ -110,23 +122,6 @@ module.exports = class API
                 else
                     api.ok req, res, meta
 
-        # Promote a source to live
-        @app.post "/streams/:stream/promote", (req,res) =>
-            # promote a stream source to active
-            # We'll just pass on the UUID and leave any logic to the stream
-            req.stream.promoteSource req.query.uuid, (err,msg) =>
-                if err
-                    api.invalid req, res, err
-                else
-                    api.ok req, res, msg
-
-        # Drop a source
-        @app.post "/streams/:stream/drop", (req,res) =>
-            source = _u(req.stream.sources).find((s) -> s.uuid == req.query.uuid)
-            if source then source.disconnect()
-            api.ok req, res
-
-
         # Update a stream's configuration
         @app.put "/streams/:stream/config", express.bodyParser(), (req,res) =>
             @master.updateStream req.stream, req.body, (err,obj) =>
@@ -159,6 +154,56 @@ module.exports = class API
                     api.invalid req, res, err
                 else
                     api.ok req, res, req.stream.status()
+
+        # -- Source Mount API -- #
+
+        @app.post "/sources", express.bodyParser(), (req,res) =>
+            # add a new source mount
+            @master.createMount req.body, (err,mount) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, mount
+
+        @app.get "/sources/:mount", (req,res) =>
+            api.ok req, res, req.mount.status()
+
+        @app.get "/sources/:mount/config", (req,res) =>
+            api.ok req, res, req.mount.config()
+
+        # Promote a source to live
+        @app.post "/sources/:mount/promote", (req,res) =>
+            # promote a stream source to active
+            # We'll just pass on the UUID and leave any logic to the stream
+            req.mount.promoteSource req.query.uuid, (err,msg) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, msg
+
+        # Drop a source
+        @app.post "/sources/:mount/drop", (req,res) =>
+            req.mount.dropSource req.query.uuid, (err,msg) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, msg
+
+        # Update a source's configuration
+        @app.put "/sources/:mount/config", express.bodyParser(), (req,res) =>
+            @master.updateMount req.mount, req.body, (err,obj) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, obj
+
+        # Delete a stream
+        @app.delete "/sources/:mount", (req,res) =>
+            @master.removeMount req.mount, (err,obj) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, obj
 
         # -- User Management -- #
 

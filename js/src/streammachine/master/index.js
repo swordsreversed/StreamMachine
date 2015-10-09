@@ -1,4 +1,4 @@
-var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, Stream, Throttle, express, fs, net, temp, _,
+var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, debug, express, fs, net, temp, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -13,6 +13,8 @@ fs = require("fs");
 express = require("express");
 
 Throttle = require("throttle");
+
+debug = require("debug")("sm:master:index");
 
 Redis = require("../redis");
 
@@ -32,6 +34,8 @@ Monitoring = require("./monitoring");
 
 SlaveIO = require("./master_io");
 
+SourceMount = require("./source_mount");
+
 RewindDumpRestore = require("../rewind/dump_restore");
 
 module.exports = Master = (function(_super) {
@@ -41,6 +45,7 @@ module.exports = Master = (function(_super) {
     var _ref, _ref1;
     this.options = options;
     this._configured = false;
+    this.source_mounts = {};
     this.streams = {};
     this.stream_groups = {};
     this.proxies = {};
@@ -52,7 +57,7 @@ module.exports = Master = (function(_super) {
       this.redis_config.on("config", (function(_this) {
         return function(config) {
           _this.options = _.defaults(config || {}, _this.options);
-          return _this.configureStreams(_this.options.streams);
+          return _this.configure(_this.options);
         };
       })(this));
       this.log.debug("Registering config_update listener");
@@ -61,16 +66,10 @@ module.exports = Master = (function(_super) {
           return _this.redis_config._update(_this.config());
         };
       })(this));
-    } else if (this.options.streams) {
-      process.nextTick((function(_this) {
-        return function() {
-          return _this.configureStreams(_this.options.streams);
-        };
-      })(this));
     } else {
       process.nextTick((function(_this) {
         return function() {
-          return _this.configureStreams({});
+          return _this.configure(_this.options);
         };
       })(this));
     }
@@ -141,33 +140,58 @@ module.exports = Master = (function(_super) {
   };
 
   Master.prototype.config = function() {
-    var config, k, s, _ref;
+    var config, k, s, _ref, _ref1;
     config = {
-      streams: {}
+      streams: {},
+      sources: {}
     };
     _ref = this.streams;
     for (k in _ref) {
       s = _ref[k];
       config.streams[k] = s.config();
     }
+    _ref1 = this.source_mounts;
+    for (k in _ref1) {
+      s = _ref1[k];
+      config.sources[k] = s.config();
+    }
     return config;
   };
 
-  Master.prototype.configureStreams = function(options, cb) {
-    var g, k, key, obj, opts, sg, _base, _ref;
-    this.log.debug("In configure with ", options);
+  Master.prototype.configure = function(options, cb) {
+    var all_keys, g, k, key, mount, mount_key, new_sources, new_streams, obj, opts, sg, _base, _ref, _ref1;
+    all_keys = {};
+    new_sources = (options != null ? options.sources : void 0) || {};
+    for (k in new_sources) {
+      opts = new_sources[k];
+      all_keys[k] = 1;
+      this.log.debug("Configuring Source Mapping " + k);
+      if (this.source_mounts[k]) {
+        this.source_mounts[k].configure(opts);
+      } else {
+        this._startSourceMount(k, opts);
+      }
+    }
+    new_streams = (options != null ? options.streams : void 0) || {};
     _ref = this.streams;
     for (k in _ref) {
       obj = _ref[k];
-      this.log.debug("calling destroy on ", k);
-      if (!(options != null ? options[k] : void 0)) {
+      if (!(new_streams != null ? new_streams[k] : void 0)) {
+        this.log.debug("calling destroy on ", k);
         obj.destroy();
         delete this.streams[k];
       }
     }
-    for (key in options) {
-      opts = options[key];
+    for (key in new_streams) {
+      opts = new_streams[key];
       this.log.debug("Parsing stream for " + key);
+      mount_key = opts.source || key;
+      all_keys[mount_key] = 1;
+      if (!this.source_mounts[mount_key]) {
+        this.log.debug("Creating an unspecified source mount for " + mount_key + " (via " + key + ").");
+        this._startSourceMount(mount_key, _(opts).pick('source_password', 'format', 'monitored'));
+      }
+      mount = this.source_mounts[mount_key];
       if (this.streams[key]) {
         this.log.debug("Passing updated config to master stream: " + key, {
           opts: opts
@@ -177,7 +201,7 @@ module.exports = Master = (function(_super) {
         this.log.debug("Starting up master stream: " + key, {
           opts: opts
         });
-        this._startStream(key, opts);
+        this._startStream(key, mount, opts);
       }
       if (g = this.streams[key].opts.group) {
         sg = ((_base = this.stream_groups)[g] || (_base[g] = new Stream.StreamGroup(g, this.log.child({
@@ -187,14 +211,38 @@ module.exports = Master = (function(_super) {
       }
     }
     this.emit("streams", this.streams);
-    return typeof cb === "function" ? cb(null, this.streams) : void 0;
+    _ref1 = this.source_mounts;
+    for (k in _ref1) {
+      obj = _ref1[k];
+      if (!all_keys[k]) {
+        this.log.debug("Destroying source mount " + k);
+      }
+    }
+    return typeof cb === "function" ? cb(null, {
+      streams: this.streams,
+      sources: this.source_mounts
+    }) : void 0;
   };
 
-  Master.prototype._startStream = function(key, opts) {
+  Master.prototype._startSourceMount = function(key, opts) {
+    var mount;
+    mount = new SourceMount(key, this.log.child({
+      source_mount: key
+    }), opts);
+    if (mount) {
+      this.source_mounts[key] = mount;
+      this.emit("new_source_mount", mount);
+      return mount;
+    } else {
+      return false;
+    }
+  };
+
+  Master.prototype._startStream = function(key, mount, opts) {
     var stream;
-    stream = new Stream(this, key, this.log.child({
+    stream = new Stream(key, this.log.child({
       stream: key
-    }), _.extend(opts, {
+    }), mount, _.extend(opts, {
       hls: this.options.hls
     }));
     if (stream) {
@@ -214,7 +262,7 @@ module.exports = Master = (function(_super) {
   };
 
   Master.prototype.createStream = function(opts, cb) {
-    var stream;
+    var mount_key, stream;
     this.log.debug("createStream called with ", opts);
     if (!opts.key) {
       if (typeof cb === "function") {
@@ -228,7 +276,12 @@ module.exports = Master = (function(_super) {
       }
       return false;
     }
-    if (stream = this._startStream(opts.key, opts)) {
+    mount_key = opts.source || opts.key;
+    if (!this.source_mounts[mount_key]) {
+      this.log.debug("Creating an unspecified source mount for " + mount_key + " (via " + opts.key + ").");
+      this._startSourceMount(mount_key, _(opts).pick('source_password', 'format'));
+    }
+    if (stream = this._startStream(opts.key, this.source_mounts[mount_key], opts)) {
       this.emit("config_update");
       this.emit("streams");
       return typeof cb === "function" ? cb(null, stream.status()) : void 0;
@@ -275,6 +328,63 @@ module.exports = Master = (function(_super) {
     return typeof cb === "function" ? cb(null, "OK") : void 0;
   };
 
+  Master.prototype.createMount = function(opts, cb) {
+    var mount;
+    this.log.info("createMount called for " + opts.key, {
+      opts: opts
+    });
+    if (!opts.key) {
+      if (typeof cb === "function") {
+        cb("Cannot create mount without key.");
+      }
+      return false;
+    }
+    if (this.source_mounts[opts.key]) {
+      if (typeof cb === "function") {
+        cb("Mount key must be unique.");
+      }
+      return false;
+    }
+    if (mount = this._startSourceMount(opts.key, opts)) {
+      this.emit("config_update");
+      return typeof cb === "function" ? cb(null, mount.status()) : void 0;
+    } else {
+      return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
+    }
+  };
+
+  Master.prototype.updateMount = function(mount, opts, cb) {
+    this.log.info("updateMount called for " + mount.key, {
+      opts: opts
+    });
+    if (opts.key && mount.key !== opts.key) {
+      if (this.source_mounts[opts.key]) {
+        if (typeof cb === "function") {
+          cb("Mount key must be unique.");
+        }
+        return false;
+      }
+      this.source_mounts[opts.key] = mount;
+      delete this.source_mounts[mount.key];
+    }
+    return mount.configure(opts, (function(_this) {
+      return function(err, config) {
+        if (err) {
+          return typeof cb === "function" ? cb(err) : void 0;
+        }
+        return typeof cb === "function" ? cb(null, config) : void 0;
+      };
+    })(this));
+  };
+
+  Master.prototype.removeMount = function(mount, cb) {
+    this.log.info("removeMount called for " + mount.key);
+    delete this.source_mounts[mount.key];
+    mount.destroy();
+    this.emit("config_update");
+    return typeof cb === "function" ? cb(null, "OK") : void 0;
+  };
+
   Master.prototype.streamsInfo = function() {
     var k, obj, _ref, _results;
     _ref = this.streams;
@@ -289,6 +399,17 @@ module.exports = Master = (function(_super) {
   Master.prototype.groupsInfo = function() {
     var k, obj, _ref, _results;
     _ref = this.stream_groups;
+    _results = [];
+    for (k in _ref) {
+      obj = _ref[k];
+      _results.push(obj.status());
+    }
+    return _results;
+  };
+
+  Master.prototype.sourcesInfo = function() {
+    var k, obj, _ref, _results;
+    _ref = this.source_mounts;
     _results = [];
     for (k in _ref) {
       obj = _ref[k];
@@ -356,219 +477,182 @@ module.exports = Master = (function(_super) {
   };
 
   Master.prototype.sendHandoffData = function(rpc, cb) {
-    var fFunc, streams_sent;
-    streams_sent = {};
-    fFunc = _.after(Object.keys(this.streams).length + Object.keys(this.stream_groups).length, (function(_this) {
+    var fFunc;
+    fFunc = _.after(2, (function(_this) {
       return function() {
         _this.log.info("Rewind buffers and sources sent.");
         return cb(null);
       };
     })(this));
-    rpc.on("group_sources", (function(_this) {
+    rpc.once("sources", (function(_this) {
       return function(msg, handle, cb) {
-        var af, sg, source, _i, _len, _ref, _results;
-        _this.log.info("StreamGroup sources requested for " + msg.key);
-        sg = _this.stream_groups[msg.key];
-        if (sg._stream.sources.length === 0) {
-          fFunc();
-          return cb(null);
-        }
-        af = _.after(sg._stream.sources.length, function() {
-          fFunc();
-          return cb(null);
-        });
-        _ref = sg._stream.sources;
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          source = _ref[_i];
-          if (source._shouldHandoff) {
-            _results.push((function(source) {
-              _this.log.info("Sending StreamGroup source " + msg.key + "/" + source.uuid);
-              return rpc.request("group_source", {
-                group: sg.key,
-                type: source.HANDOFF_TYPE,
-                opts: {
-                  format: source.opts.format,
-                  uuid: source.uuid,
-                  source_ip: source.opts.source_ip,
-                  connectedAt: source.connectedAt
-                }
-              }, source.opts.sock, function(err, reply) {
-                if (err) {
-                  _this.log.error("Error sending group source " + msg.key + "/" + source.uuid + ": " + err);
-                }
-                return af();
-              });
-            })(source));
-          } else {
-            _results.push(af());
+        var mounts, _sendMount;
+        _this.log.info("Received request for sources.");
+        mounts = _.values(_this.source_mounts);
+        _sendMount = function() {
+          var mount, sources, _sendSource;
+          mount = mounts.shift();
+          if (!mount) {
+            cb(null);
+            return fFunc();
           }
-        }
-        return _results;
+          sources = mount.sources.slice();
+          _sendSource = function() {
+            var source;
+            source = sources.shift();
+            if (!source) {
+              return _sendMount();
+            }
+            _this.log.info("Sending source " + mount.key + "/" + source.uuid);
+            return rpc.request("source", {
+              mount: mount.key,
+              type: source.HANDOFF_TYPE,
+              opts: {
+                format: source.opts.format,
+                uuid: source.uuid,
+                source_ip: source.opts.source_ip,
+                connectedAt: source.connectedAt
+              }
+            }, source.opts.sock, function(err, reply) {
+              if (err) {
+                _this.log.error("Error sending source " + mount.key + "/" + source.uuid + ": " + err);
+              }
+              return _sendSource();
+            });
+          };
+          return _sendSource();
+        };
+        return _sendMount();
       };
     })(this));
-    return rpc.on("stream_rewind", (function(_this) {
+    return rpc.on("stream_rewinds", (function(_this) {
       return function(msg, handle, cb) {
-        var sock, source, stream, _i, _len, _ref;
-        _this.log.info("Rewind buffer requested for " + msg.key);
-        stream = _this.streams[msg.key];
-        _ref = stream.sources;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          source = _ref[_i];
-          if (source._shouldHandoff) {
-            (function(source) {
-              return rpc.request("stream_source", {
-                stream: stream.key,
-                type: source.HANDOFF_TYPE,
-                opts: {
-                  format: source.opts.format,
-                  uuid: source.uuid,
-                  source_ip: source.opts.source_ip,
-                  connectedAt: source.connectedAt
-                }
-              }, source.opts.sock, function(err, reply) {
-                if (err) {
-                  return _this.log.error("Error sending stream source " + msg.key + "/" + source.uuid + ": " + err);
-                }
-              });
-            })(source);
+        var streams, _sendStream;
+        _this.log.info("Received request for rewind buffers.");
+        streams = _(_this.streams).values();
+        _sendStream = function() {
+          var sock, spath, stream, _next;
+          stream = streams.shift();
+          if (!stream) {
+            cb(null);
+            return fFunc();
           }
-        }
-        if (stream.rewind.bufferedSecs() > 0) {
-          _this.log.info("RewindBuffer write for " + msg.key + " to " + msg.path);
-          return sock = net.connect(msg.path, function(err) {
-            _this.log.info("Writer socket connected for rewind buffer " + msg.key, {
-              error: err
-            });
-            if (err) {
-              return cb(err);
-            }
-            return stream.getRewind(function(err, writer) {
-              if (err) {
-                return cb(err);
-              }
-              writer.pipe(sock);
-              writer.on("end", function() {
-                return _this.log.info("RewindBuffer for " + msg.key + " written to socket.");
-              });
-              _this.log.info("Waiting for sock close for " + msg.key + "...");
-              return sock.on("close", function(err) {
-                _this.log.info("Dumped buffer for " + msg.key, {
-                  bytesWritten: sock.bytesWritten,
-                  error: err
-                });
-                fFunc();
-                return cb(null);
-              });
-            });
+          _next = _.once(function() {
+            return _sendStream();
           });
-        } else {
-          _this.log.info("No rewind buffer to send for " + msg.key + ".");
-          fFunc();
-          return cb(null);
-        }
+          if (stream.rewind.bufferedSecs() > 0) {
+            spath = temp.path({
+              suffix: ".sock"
+            });
+            _this.log.info("Asking to send rewind buffer for " + stream.key + " over " + spath + ".");
+            sock = net.createServer();
+            return sock.listen(spath, function() {
+              sock.once("connection", function(c) {
+                return stream.getRewind(function(err, writer) {
+                  if (err) {
+                    _this.log.error("Failed to get rewind buffer for " + stream.key);
+                    _next();
+                  }
+                  writer.pipe(c);
+                  return writer.once("end", function() {
+                    return _this.log.info("RewindBuffer for " + stream.key + " written to socket.");
+                  });
+                });
+              });
+              return rpc.request("stream_rewind", {
+                key: stream.key,
+                path: spath
+              }, null, {
+                timeout: 10000
+              }, function(err) {
+                if (err) {
+                  _this.log.error("Error sending rewind buffer for " + stream.key + ": " + err);
+                } else {
+                  _this.log.info("Rewind buffer sent and ACKed for " + stream.key);
+                }
+                return sock.close(function() {
+                  return fs.unlink(spath, function(err) {
+                    _this.log.info("RewindBuffer socket unlinked.", {
+                      error: err
+                    });
+                    return _next();
+                  });
+                });
+              });
+            });
+          }
+        };
+        return _sendStream();
       };
     })(this));
   };
 
   Master.prototype.loadHandoffData = function(rpc, cb) {
-    var af, group, key, stream, _fn, _ref, _ref1, _results;
-    rpc.on("stream_source", (function(_this) {
+    var af;
+    rpc.on("source", (function(_this) {
       return function(msg, handle, cb) {
-        var source, stream;
-        stream = _this.streams[msg.stream];
+        var mount, source;
+        mount = _this.source_mounts[msg.mount];
         source = new (require("../sources/" + msg.type))(_.extend({}, msg.opts, {
           sock: handle,
-          logger: stream.log
+          logger: mount.log
         }));
-        stream.addSource(source);
-        _this.log.info("Added stream source: " + stream.key + "/" + source.uuid);
+        mount.addSource(source);
+        _this.log.info("Added mount source: " + mount.key + "/" + source.uuid);
         return cb(null);
       };
     })(this));
-    rpc.on("group_source", (function(_this) {
+    rpc.on("stream_rewind", (function(_this) {
       return function(msg, handle, cb) {
-        var sg, source;
-        sg = _this.stream_groups[msg.group];
-        source = new (require("../sources/" + msg.type))(_.extend({}, msg.opts, {
-          sock: handle,
-          logger: stream.log
-        }));
-        sg._stream.addSource(source);
-        _this.log.info("Added group source: " + stream.key + "/" + source.uuid);
-        return cb(null);
+        var sock, stream;
+        stream = _this.streams[msg.key];
+        _this.log.info("Stream Rewind will load over " + msg.path + ".");
+        return sock = net.connect(msg.path, function(err) {
+          _this.log.info("Reader socket connected for rewind buffer " + msg.key, {
+            error: err
+          });
+          if (err) {
+            return cb(err);
+          }
+          return stream.rewind.loadBuffer(sock, function(err, stats) {
+            if (err) {
+              _this.log.error("Error loading rewind buffer: " + err);
+              cb(err);
+            }
+            return cb(null);
+          });
+        });
       };
     })(this));
-    af = _.after(Object.keys(this.streams).length + Object.keys(this.stream_groups).length, (function(_this) {
+    af = _.after(2, (function(_this) {
       return function() {
         return cb(null);
       };
     })(this));
-    _ref = this.stream_groups;
-    _fn = (function(_this) {
-      return function(key, group) {
-        return rpc.request("group_sources", {
-          key: key
-        }, null, {
-          timeout: 10000
-        }, function(err) {
-          if (err) {
-            _this.log.error("Error getting StreamGroup sources: " + err);
-          }
-          _this.log.info("Sources received for StreamGroup " + key + ".");
-          return af();
-        });
+    rpc.request("sources", {}, null, {
+      timeout: 10000
+    }, (function(_this) {
+      return function(err) {
+        if (err) {
+          _this.log.error("Failed to get sources from handoff initiator: " + err);
+        } else {
+          _this.log.info("Received sources from handoff initiator.");
+        }
+        return af();
       };
-    })(this);
-    for (key in _ref) {
-      group = _ref[key];
-      _fn(key, group);
-    }
-    _ref1 = this.streams;
-    _results = [];
-    for (key in _ref1) {
-      stream = _ref1[key];
-      _results.push((function(_this) {
-        return function(key, stream) {
-          var sock, spath;
-          spath = temp.path({
-            suffix: ".sock"
-          });
-          _this.log.info("Asking to get rewind buffer for " + key + " over " + spath + ".");
-          sock = net.createServer();
-          return sock.listen(spath, function() {
-            sock.once("connection", function(c) {
-              return stream.rewind.loadBuffer(c, function(err) {
-                if (err) {
-                  _this.log.error("Error loading rewind buffer: " + err);
-                }
-                return c.end();
-              });
-            });
-            return rpc.request("stream_rewind", {
-              key: key,
-              path: spath
-            }, null, {
-              timeout: 10000
-            }, function(err) {
-              if (err) {
-                return _this.log.error("Error loading rewind buffer for " + key + ": " + err);
-              }
-              _this.log.info("Rewind buffer loaded for " + key);
-              return sock.close(function() {
-                return fs.unlink(spath, function(err) {
-                  _this.log.info("RewindBuffer socket unlinked.", {
-                    error: err
-                  });
-                  return af();
-                });
-              });
-            });
-          });
-        };
-      })(this)(key, stream));
-    }
-    return _results;
+    })(this));
+    return rpc.request("stream_rewinds", {}, null, {
+      timeout: 10000
+    }, (function(_this) {
+      return function(err) {
+        if (err) {
+          _this.log.error("Failed to get stream rewinds from handoff initiator: " + err);
+        } else {
+          _this.log.info("Received stream rewinds from handoff initiator.");
+        }
+        return af();
+      };
+    })(this));
   };
 
   Master.prototype._attachIOProxy = function(stream) {
