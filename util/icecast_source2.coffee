@@ -3,27 +3,23 @@ IcecastSource = require "../src/streammachine/util/icecast_source"
 path = require "path"
 fs = require "fs"
 
-console.log "argv is ", process.argv
-
 @args = require("yargs")
     .usage("Usage: $0 --host localhost --port 8001 --stream foo --password abc123 [file]")
     .describe
         host:       "Server"
         port:       "Server source port"
-        stream:     "Stream key"
-        password:   "Stream password"
-        format:     "File Format (mp3, aac)"
-    .demand(["host","port","stream","format"])
+        source:     "Source Mount key"
+        password:   "Source password"
+        format:     "File Format (mp3 or aac)"
+    .demand(["host","port","source","format"])
+    .alias('stream','source')
     .default
         host:       "127.0.0.1"
-        stream:     "test"
         format:     "mp3"
     .argv
 
 if @args._?[0] == "source"
     @args._.shift()
-
-console.log "args is ", @args
 
 # -- Make sure they gave us a file -- #
 

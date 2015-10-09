@@ -6,25 +6,20 @@ path = require("path");
 
 fs = require("fs");
 
-console.log("argv is ", process.argv);
-
 this.args = require("yargs").usage("Usage: $0 --host localhost --port 8001 --stream foo --password abc123 [file]").describe({
   host: "Server",
   port: "Server source port",
-  stream: "Stream key",
-  password: "Stream password",
-  format: "File Format (mp3, aac)"
-}).demand(["host", "port", "stream", "format"])["default"]({
+  source: "Source Mount key",
+  password: "Source password",
+  format: "File Format (mp3 or aac)"
+}).demand(["host", "port", "source", "format"]).alias('stream', 'source')["default"]({
   host: "127.0.0.1",
-  stream: "test",
   format: "mp3"
 }).argv;
 
 if (((_ref = this.args._) != null ? _ref[0] : void 0) === "source") {
   this.args._.shift();
 }
-
-console.log("args is ", this.args);
 
 filepath = (_ref1 = this.args._) != null ? _ref1[0] : void 0;
 
