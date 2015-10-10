@@ -15,12 +15,19 @@ STREAM1 =
     seconds:            60*60*4
     format:             "mp3"
 
-class FakeSlave
+class FakeSlave extends require("events").EventEmitter
     constructor: ->
         @streams = null
 
     configureStreams: (s) ->
         @streams = s
+        @emit "config"
+
+    onceConfigured: (cb) ->
+        if @streams
+            cb()
+        else
+            @once "config", cb
 
 describe "StreamMachine Master Mode", ->
     mm = null
@@ -121,10 +128,13 @@ describe "StreamMachine Master Mode", ->
 
                 done()
 
-        it "should have emitted configuration to the slave", (done) ->
-            expect(slave.streams).to.be.object
-            expect(slave.streams).to.have.property STREAM1.key
-            done()
+        it "should emit configuration to the slave", (done) ->
+            # it's possible (and fine) to not get config immediately if the master
+            # hasn't finished its config
+            slave.onceConfigured ->
+                expect(slave.streams).to.be.object
+                expect(slave.streams).to.have.property STREAM1.key
+                done()
 
         it "should deny a slave that provides the wrong password"
 
