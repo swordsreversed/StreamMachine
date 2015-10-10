@@ -436,6 +436,14 @@ module.exports = Master = (function(_super) {
     }
   };
 
+  Master.prototype.status = function() {
+    return {
+      streams: this.streamsInfo(),
+      groups: this.groupsInfo(),
+      sources: this.sourcesInfo()
+    };
+  };
+
   Master.prototype._rewindStatus = function() {
     var key, s, status, _ref;
     status = {};

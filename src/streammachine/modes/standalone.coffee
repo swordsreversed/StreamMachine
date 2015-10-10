@@ -60,11 +60,14 @@ module.exports = class StandaloneMode extends require("./base")
                     cb null, api_handle?.address()?.port||"NONE"
 
                 stream_listener: (msg,handle,cb) =>
-                    @slave.landListener null, msg, handle, cb
+                    @slave.landListener msg, handle, cb
 
                 config: (config,handle,cb) =>
                     @master.configure config, (err) =>
                         cb err, @master.config()
+
+                status: (msg,handle,cb) =>
+                    @status cb
 
         # -- Proxy data events from master -> slave -- #
 
@@ -114,6 +117,24 @@ module.exports = class StandaloneMode extends require("./base")
             @api_handle = @api_server.listen @opts.api_port
 
         cb? null, @
+
+    #----------
+
+    status: (cb) ->
+        status = master:null, slave:null
+
+        aF = _.after 2, =>
+            cb null, status
+
+        # master status
+        status.master = @master.status()
+        aF()
+
+        # slave status
+        @slave._streamStatus (err,s) =>
+            return cb err if err
+            status.slave = s
+            aF()
 
     #----------
 

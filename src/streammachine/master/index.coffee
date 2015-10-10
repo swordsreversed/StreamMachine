@@ -383,6 +383,13 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
+    status: ->
+        streams:    @streamsInfo()
+        groups:     @groupsInfo()
+        sources:    @sourcesInfo()
+
+    #----------
+
     # Get a status snapshot by looping through each stream to get buffer stats
     _rewindStatus: ->
         status = {}

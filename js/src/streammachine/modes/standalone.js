@@ -77,7 +77,7 @@ module.exports = StandaloneMode = (function(_super) {
           })(this),
           stream_listener: (function(_this) {
             return function(msg, handle, cb) {
-              return _this.slave.landListener(null, msg, handle, cb);
+              return _this.slave.landListener(msg, handle, cb);
             };
           })(this),
           config: (function(_this) {
@@ -85,6 +85,11 @@ module.exports = StandaloneMode = (function(_super) {
               return _this.master.configure(config, function(err) {
                 return cb(err, _this.master.config());
               });
+            };
+          })(this),
+          status: (function(_this) {
+            return function(msg, handle, cb) {
+              return _this.status(cb);
             };
           })(this)
         }
@@ -146,6 +151,30 @@ module.exports = StandaloneMode = (function(_super) {
       this.api_handle = this.api_server.listen(this.opts.api_port);
     }
     return typeof cb === "function" ? cb(null, this) : void 0;
+  };
+
+  StandaloneMode.prototype.status = function(cb) {
+    var aF, status;
+    status = {
+      master: null,
+      slave: null
+    };
+    aF = _.after(2, (function(_this) {
+      return function() {
+        return cb(null, status);
+      };
+    })(this));
+    status.master = this.master.status();
+    aF();
+    return this.slave._streamStatus((function(_this) {
+      return function(err, s) {
+        if (err) {
+          return cb(err);
+        }
+        status.slave = s;
+        return aF();
+      };
+    })(this));
   };
 
   StandaloneMode.prototype._sendHandoff = function(rpc) {
