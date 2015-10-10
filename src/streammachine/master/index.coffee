@@ -446,7 +446,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Stream Rewind Buffers -- #
 
-        rpc.on "stream_rewinds", (msg,handle,cb) =>
+        rpc.once "stream_rewinds", (msg,handle,cb) =>
             @log.info "Received request for rewind buffers."
 
             streams = _(@streams).values()
@@ -490,6 +490,9 @@ module.exports = class Master extends require("events").EventEmitter
                             sock.close => fs.unlink spath, (err) =>
                                 @log.info "RewindBuffer socket unlinked.", error:err
                                 _next()
+                else
+                    # no need to send a buffer for an empty stream
+                    _next()
 
             _sendStream()
 

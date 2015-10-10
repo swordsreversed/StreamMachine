@@ -525,7 +525,7 @@ module.exports = Master = (function(_super) {
         return _sendMount();
       };
     })(this));
-    return rpc.on("stream_rewinds", (function(_this) {
+    return rpc.once("stream_rewinds", (function(_this) {
       return function(msg, handle, cb) {
         var streams, _sendStream;
         _this.log.info("Received request for rewind buffers.");
@@ -580,6 +580,8 @@ module.exports = Master = (function(_super) {
                 });
               });
             });
+          } else {
+            return _next();
           }
         };
         return _sendStream();

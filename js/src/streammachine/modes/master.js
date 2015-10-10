@@ -57,12 +57,6 @@ module.exports = MasterMode = (function(_super) {
                 return cb(err, _this.master.config());
               });
             };
-          })(this),
-          start_handoff: (function(_this) {
-            return function(msg, handle, cb) {
-              _this._sendHandoff();
-              return cb(null, "OK");
-            };
           })(this)
         }
       });
@@ -155,10 +149,10 @@ module.exports = MasterMode = (function(_super) {
     })(this), 5000);
     debug("Waiting for HANDOFF_GO");
     return this._rpc.once("HANDOFF_GO", (function(_this) {
-      return function(msg, handle, cb) {
+      return function(msg, handle, ccb) {
         clearTimeout(handoff_timer);
         debug("HANDOFF_GO received.");
-        cb(null, "GO");
+        ccb(null, "GO");
         debug("Waiting for internal configuration signal.");
         return _this.master.once_configured(function() {
           debug("Telling handoff sender that we're configured.");

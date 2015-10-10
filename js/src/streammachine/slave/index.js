@@ -216,10 +216,7 @@ module.exports = Slave = (function(_super) {
       }
     }
     if (this._enqueued.length === 0) {
-      if (typeof cb === "function") {
-        cb();
-      }
-      return true;
+      return typeof cb === "function" ? cb() : void 0;
     }
     sFunc = (function(_this) {
       return function() {
