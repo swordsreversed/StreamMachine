@@ -226,12 +226,12 @@ describe "Standalone Handoffs", ->
                 done()
 
         it "listener should still receive data", (done) ->
-            this.timeout 3000
+            this.timeout 5000
             listener.once "bytes", ->
                 done()
 
         it "new process should accept a new listener connection", (done) ->
-            this.timeout 5000
+            this.timeout 8000
 
             l2 = new StreamListener "127.0.0.1", main_port, STREAM1.key
 
