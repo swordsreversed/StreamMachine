@@ -21,7 +21,7 @@ cp = require "child_process"
 _ = require "underscore"
 util = require "util"
 
-debug = require("debug")("sm:tests:slave_handoffs")
+debug = require("debug")("sm:tests:handoffs:slave")
 
 describe "Slave Handoffs/Respawns", ->
     master_info = null

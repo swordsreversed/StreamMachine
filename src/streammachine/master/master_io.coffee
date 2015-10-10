@@ -1,5 +1,7 @@
 _ = require "underscore"
 
+debug = require("debug")("sm:master:master_io")
+
 module.exports = class MasterIO extends require("events").EventEmitter
     constructor: (@master,@log,@opts) ->
         @io         = null
@@ -34,20 +36,23 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
         # add our authentication
         @io.use (socket,next) =>
-            @log.silly "Authenticating slave connection."
+            debug "Authenticating slave connection."
             if @opts.password == socket.request._query?.password
-                @log.silly "Slave password is valid."
+                debug "Slave password is valid."
                 next()
             else
                 @log.debug "Slave password is incorrect."
+                debug "Slave password is incorrect."
                 next new Error "Invalid slave password."
 
         # look for slave connections
         @io.on "connection", (sock) =>
-            @log.silly "Master got connection"
+            debug "Master got connection"
             # a slave may make multiple connections to test transports. we're
             # only interested in the one that gives us the OK
             sock.once "ok", (cb) =>
+                debug "Got OK from incoming slave connection at #{sock.id}"
+
                 # ping back to let the slave know we're here
                 cb "OK"
 

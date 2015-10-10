@@ -50,9 +50,9 @@ module.exports = class MasterMode extends require("./base")
                     @master.configure config, (err) =>
                         cb err, @master.config()
 
-                start_handoff: (msg,handle,cb) =>
-                    @_sendHandoff()
-                    cb null, "OK"
+                #start_handoff: (msg,handle,cb) =>
+                #    @_sendHandoff()
+                #    cb null, "OK"
 
         if nconf.get("handoff")
             @_handoffStart cb
@@ -147,12 +147,12 @@ module.exports = class MasterMode extends require("./base")
         , 5000
 
         debug "Waiting for HANDOFF_GO"
-        @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
+        @_rpc.once "HANDOFF_GO", (msg,handle,ccb) =>
             clearTimeout handoff_timer
 
             debug "HANDOFF_GO received."
 
-            cb null, "GO"
+            ccb null, "GO"
 
             # watch for streams
             debug "Waiting for internal configuration signal."

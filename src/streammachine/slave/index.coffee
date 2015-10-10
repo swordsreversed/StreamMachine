@@ -198,9 +198,7 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # -- short-circuit if there are no listeners -- #
 
-        if @_enqueued.length == 0
-            cb?()
-            return true
+        return cb?() if @_enqueued.length == 0
 
         # -- now send them one-by-one -- #
 

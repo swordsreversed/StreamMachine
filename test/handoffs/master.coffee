@@ -2,7 +2,7 @@
 # master to another, as we would during a graceful restart. Test that
 # the new master is listening on the correct ports.
 
-debug = require("debug")("sm:tests:master_handoffs")
+debug = require("debug")("sm:tests:handoffs:master")
 
 MasterMode      = $src "modes/master"
 IcecastSource   = $src "util/icecast_source"

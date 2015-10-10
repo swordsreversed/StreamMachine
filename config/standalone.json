@@ -1,6 +1,7 @@
 {
-	"port":			    8001,
-	"source_port":	8002,
+	"port":         8001,
+	"source_port":  8002,
+  "api_port":     8003,
 	"log": {
 		"stdout":     true
   },
