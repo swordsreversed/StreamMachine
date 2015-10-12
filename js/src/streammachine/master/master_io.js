@@ -1,8 +1,10 @@
-var MasterIO, _,
+var MasterIO, debug, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 _ = require("underscore");
+
+debug = require("debug")("sm:master:master_io");
 
 module.exports = MasterIO = (function(_super) {
   var Slave;
@@ -52,20 +54,22 @@ module.exports = MasterIO = (function(_super) {
     this.io.use((function(_this) {
       return function(socket, next) {
         var _ref;
-        _this.log.silly("Authenticating slave connection.");
+        debug("Authenticating slave connection.");
         if (_this.opts.password === ((_ref = socket.request._query) != null ? _ref.password : void 0)) {
-          _this.log.silly("Slave password is valid.");
+          debug("Slave password is valid.");
           return next();
         } else {
           _this.log.debug("Slave password is incorrect.");
+          debug("Slave password is incorrect.");
           return next(new Error("Invalid slave password."));
         }
       };
     })(this));
     return this.io.on("connection", (function(_this) {
       return function(sock) {
-        _this.log.silly("Master got connection");
+        debug("Master got connection");
         return sock.once("ok", function(cb) {
+          debug("Got OK from incoming slave connection at " + sock.id);
           cb("OK");
           _this.log.debug("slave connection is " + sock.id);
           if (_this._config) {

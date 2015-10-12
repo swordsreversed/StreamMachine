@@ -207,23 +207,21 @@ StreamMachineRunner = (function(_super) {
   StreamMachineRunner.prototype.terminate = function(cb) {
     this._terminating = true;
     if (this.process) {
-      if (this.process) {
-        this.process.stopping = true;
-        this.process.p.once("exit", (function(_this) {
-          return function() {
-            var uptime;
-            debug("Command is stopped.");
-            uptime = Number(new Date) - _this.process.start;
-            debug("Command uptime was " + (Math.floor(uptime / 1000)) + " seconds.");
-            _this.process = null;
-            return cb();
-          };
-        })(this));
-        return this.process.p.kill();
-      } else {
-        debug("Stop called with no process running?");
-        return cb();
-      }
+      this.process.stopping = true;
+      this.process.p.once("exit", (function(_this) {
+        return function() {
+          var uptime;
+          debug("Command is stopped.");
+          uptime = Number(new Date) - _this.process.start;
+          debug("Command uptime was " + (Math.floor(uptime / 1000)) + " seconds.");
+          _this.process = null;
+          return cb();
+        };
+      })(this));
+      return this.process.p.kill();
+    } else {
+      debug("Stop called with no process running?");
+      return cb();
     }
   };
 

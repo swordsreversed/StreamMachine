@@ -208,21 +208,20 @@ class StreamMachineRunner extends require("events").EventEmitter
         @_terminating = true
 
         if @process
-            if @process
-                @process.stopping = true
-                @process.p.once "exit", =>
-                    debug "Command is stopped."
+            @process.stopping = true
+            @process.p.once "exit", =>
+                debug "Command is stopped."
 
-                    uptime = Number(new Date) - @process.start
-                    debug "Command uptime was #{ Math.floor(uptime / 1000) } seconds."
+                uptime = Number(new Date) - @process.start
+                debug "Command uptime was #{ Math.floor(uptime / 1000) } seconds."
 
-                    @process = null
-                    cb()
-
-                @process.p.kill()
-            else
-                debug "Stop called with no process running?"
+                @process = null
                 cb()
+
+            @process.p.kill()
+        else
+            debug "Stop called with no process running?"
+            cb()
 
 #----------
 
