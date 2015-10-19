@@ -14,6 +14,9 @@ _ = require "underscore"
 # * pumpOnly: Boolean, default false
 #   - Don't hook the Rewinder up to incoming data. Pump whatever data is
 #     requested and then send EOF
+# * impressionCB: Callback function, optional
+#   - If present, function will be called once the session crosses one minute
+#     of delivered audio. Used for preroll impression tracking.
 
 module.exports = class Rewinder extends require("stream").Readable
     constructor: (@rewind,@conn_id,opts={},cb) ->
@@ -41,6 +44,8 @@ module.exports = class Rewinder extends require("stream").Readable
         , 100
 
         @_segTimer = null
+
+        @_impressionCB = opts.impressionCB
 
         @pumpSecs = if opts.pump == true then @rewind.opts.burst else opts.pump
 
@@ -197,6 +202,11 @@ module.exports = class Rewinder extends require("stream").Readable
             @_queuedBytes   -= next_buf.data.length
             @_sentBytes     += next_buf.data.length
             @_sentDuration  += (next_buf.duration / 1000)
+
+            if @_impressionCB && @_sentDuration > 60
+                # call impression callback and then clear it
+                @_impressionCB()
+                @_impressionCB = null
 
             # Not all chunks will contain metadata, but go ahead and send
             # ours out if it does

@@ -65,7 +65,8 @@ module.exports = class Shoutcast extends BaseOutput
         delete @client.bytesToNextMeta
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
-            @stream.preroll.pump @socket, @ice, => @connectToStream()
+            @stream.preroll.pump @client, @socket, @ice,
+                (err,impression_cb) => @connectToStream impression_cb
         else
             @connectToStream()
 
@@ -94,13 +95,14 @@ module.exports = class Shoutcast extends BaseOutput
 
     #----------
 
-    connectToStream: ->
+    connectToStream: (impression_cb) ->
         unless @disconnected
             @stream.listen @,
-                offsetSecs: @client.offsetSecs,
-                offset:     @client.offset,
-                pump:       @pump,
-                startTime:  @opts.startTime,
+                offsetSecs:     @client.offsetSecs,
+                offset:         @client.offset,
+                pump:           @pump,
+                startTime:      @opts.startTime,
+                impressionCB:   impression_cb,
                 (err,@source) =>
                     if err
                         if @opts.res?

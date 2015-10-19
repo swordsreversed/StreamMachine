@@ -3,39 +3,31 @@ http = require "http"
 url = require "url"
 
 module.exports = class Preroller
-    constructor: (@stream,@key,uri,cb) ->
+    constructor: (@stream,@key,@uri,@transcode_uri,cb) ->
         @_counter = 1
-
-        # make sure this is a valid URI
-        @uri = url.parse uri
-
-        if @uri.protocol != "http:"
-            cb? "Preroller only supports HTTP connections."
-            return false
 
         # -- need to look at the stream to get characteristics -- #
 
         @stream.log.debug "Preroller calling getStreamKey"
 
         @stream.getStreamKey (@streamKey) =>
-            @uri.path = [@uri.path,@key,@streamKey].join("/").replace(/\/\//g,"/")
-            @stream.log.debug "Preroller: Stream key is #{@streamKey}. URI is #{@_uri}"
+            @stream.log.debug "Preroller: Stream key is #{@streamKey}. Ready to start serving."
 
         cb? null, @
 
     #----------
 
-    pump: (socket,writer,cb) ->
+    pump: (client,socket,writer,cb) ->
         cb = _u.once(cb)
         aborted = false
         # short-circuit if we haven't gotten a stream key yet
         if !@streamKey || !@uri
-            cb?()
+            cb new Error("Preroll request before streamKey or missing URI.")
             return true
 
         # short-circuit if the socket has already disconnected
         if socket.destroyed
-            cb?()
+            cb new Error("Preroll request got destroyed socket.")
             return true
 
         count = @_counter++
@@ -48,8 +40,16 @@ module.exports = class Preroller
             req.abort()
             aborted = true
             detach()
-            cb?()
+            cb new Error("Preroll request timed out.")
         , 5*1000)
+
+        # -- Set up our ad URI -- #
+
+        uri = @uri
+            .replace("KEY", @streamKey)
+            .replace("IP", client.ip)
+            .replace("STREAM", @stream.key)
+            .replace("UA", encodeURIComponent(client.ua))
 
         # -- make a request to the preroll server -- #
 
