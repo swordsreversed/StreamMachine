@@ -52,7 +52,7 @@
         "yargs":                "~3.18",
         "watch-for-path":       "~0.0.1",
         "xmldom":               "~0.1.19",
-        "xpath":                "~0.0.19"
+        "xpath":                "~0.0.9"
     },
     "devDependencies": {
         "coffee-script":          "~1.7.1",
