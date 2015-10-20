@@ -27,6 +27,7 @@ module.exports = class Stream extends require('events').EventEmitter
         format:             "mp3"
         preroll:            ""
         preroll_key:        ""
+        transcoder:         ""
         root_route:         false
         group:              null
         bandwidth:          0

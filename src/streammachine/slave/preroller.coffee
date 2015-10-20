@@ -60,7 +60,8 @@ module.exports = class Preroller
 
         # -- make a request to the ad server -- #
 
-        request.get uri, (err,res,body) =>
+        treq = null
+        adreq = request.get uri, (err,res,body) =>
             if err
                 perr = new Error "Ad request returned error: #{err}"
                 @stream.log.error perr, error:err
@@ -90,11 +91,15 @@ module.exports = class Preroller
                                         # we return by giving a function that should be called when the
                                         # impression criteria have been met
                                         detach null, =>
-                                            request.get obj.impressionURL, (err,resp,body) =>
-                                                if err
-                                                    @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
-                                                else
-                                                    debug "Impression URL hit successfully."
+                                            if obj.impressionURL
+                                                request.get obj.impressionURL, (err,resp,body) =>
+                                                    if err
+                                                        @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
+                                                    else
+                                                        debug "Impression URL hit successfully."
+                                            else
+                                                @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
+                                                debug "No impression URL found."
                                 else
                                     err = new Error "Non-200 response from transcoder."
                                     debug err
@@ -125,7 +130,8 @@ module.exports = class Preroller
             detach()
             if socket.destroyed
                 @stream.log.debug "aborting preroll ", count
-                req.abort()
+                adreq?.abort()
+                treq?.abort()
                 aborted = true
 
         socket.once "close", conn_pre_abort

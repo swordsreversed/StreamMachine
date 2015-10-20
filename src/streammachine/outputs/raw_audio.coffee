@@ -2,9 +2,13 @@ _u = require 'underscore'
 
 BaseOutput = require "./base"
 
+debug = require("debug")("sm:outputs:raw_audio")
+
 module.exports = class RawAudio extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
+
+        debug "Incoming request."
 
         super "raw"
 
@@ -33,7 +37,7 @@ module.exports = class RawAudio extends BaseOutput
                     # -- send a preroll if we have one -- #
 
                     if @stream.preroll && !@opts.req.param("preskip")
-                        @stream.log.debug "making preroll request", stream:@stream.key
+                        debug "making preroll request on stream #{@stream.key}"
                         @stream.preroll.pump @client, @socket, @socket,
                             (err,impression_cb) => @connectToStream impression_cb
                     else
@@ -76,12 +80,12 @@ module.exports = class RawAudio extends BaseOutput
 
     connectToStream: (impression_cb) ->
         unless @disconnected
+            debug "Connecting to stream #{@stream.key}"
             @stream.listen @,
                 offsetSecs:     @client.offsetSecs,
                 offset:         @client.offset,
                 pump:           @pump,
                 startTime:      @opts.startTime,
-                impressionCB:   impression_cb,
                 (err,@source) =>
                     if err
                         if @opts.res?
@@ -95,3 +99,17 @@ module.exports = class RawAudio extends BaseOutput
                     @client.offset = @source.offset()
 
                     @source.pipe @socket
+
+                    if impression_cb
+                        totalSecs = 0
+
+                        iF = (listen) =>
+                            totalSecs += listen.seconds
+                            debug "Impression total is at #{totalSecs}"
+
+                            if totalSecs > 60
+                                debug "Triggering impression callback"
+                                impression_cb()
+                                @source.removeListener "listen", iF
+
+                        @source.addListener "listen", iF
