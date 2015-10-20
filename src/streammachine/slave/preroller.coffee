@@ -1,6 +1,11 @@
-_u = require "underscore"
-http = require "http"
-url = require "url"
+_       = require "underscore"
+http    = require "http"
+url     = require "url"
+request = require "request"
+xmldom  = require "xmldom"
+xpath   = require "xpath"
+
+debug = require("debug")("sm:slave:preroller")
 
 module.exports = class Preroller
     constructor: (@stream,@key,@uri,@transcode_uri,cb) ->
@@ -18,7 +23,7 @@ module.exports = class Preroller
     #----------
 
     pump: (client,socket,writer,cb) ->
-        cb = _u.once(cb)
+        cb = _.once(cb)
         aborted = false
         # short-circuit if we haven't gotten a stream key yet
         if !@streamKey || !@uri
@@ -39,52 +44,79 @@ module.exports = class Preroller
             @stream.log.debug "preroll request timeout. Aborting.", count
             req.abort()
             aborted = true
-            detach()
-            cb new Error("Preroll request timed out.")
+            detach new Error("Preroll request timed out.")
         , 5*1000)
 
         # -- Set up our ad URI -- #
 
         uri = @uri
-            .replace("KEY", @streamKey)
-            .replace("IP", client.ip)
-            .replace("STREAM", @stream.key)
-            .replace("UA", encodeURIComponent(client.ua))
+            .replace("!KEY!", @streamKey)
+            .replace("!IP!", client.ip)
+            .replace("!STREAM!", @stream.key)
+            .replace("!UA!", encodeURIComponent(client.ua))
+            .replace("!UUID!", client.session_id)
+            
+        debug "Ad request URI is #{uri}"
 
-        # -- make a request to the preroll server -- #
-
-        @stream.log.debug "firing preroll request", count, @_uri
-        req = http.get @uri, (res) =>
-            @stream.log.debug "got preroll response ", count
+        # -- make a request to the ad server -- #
+        
+        request.get uri, (err,resp,body) =>
+            if err
+                perr = new Error "Ad request returned error: #{err}"
+                @stream.log.error perr, error:err
+                debug perr
+                return detach perr
+                
             if res.statusCode == 200
-                # stream preroll through to the output
-                res.on "data", (chunk) =>
-                    writer?.write(chunk)
-
-                # when preroll is done, call the output's callback
-                res.on "end", =>
-                    detach()
-                    cb?()
-                    return true
-
+                new Preroller.AdObject body, (err,obj) =>
+                    if err
+                        @stream.log.debug "Ad request was unsuccessful: #{err}"
+                        return detach err
+                        
+                    if obj.creativeURL
+                        # we need to take the creative URL and pass it off 
+                        # to the transcoder
+                        debug "Preparing transcoder request for #{obj.creativeURL} with key #{@streamKey}."
+                        
+                        treq = request.get(@transcode_uri, qs:{ uri:obj.creativeURL, key:@streamKey })
+                            .once "response", (resp) =>
+                                debug "Transcoder response received: #{resp.responseCode}"
+                                
+                                if resp.responseCode == 200
+                                    treq.pipe(writer,end:false)
+                                    treq.once "end", =>
+                                        debug "Transcoder pipe complete."
+                                        
+                                        # we return by giving a function that should be called when the 
+                                        # impression criteria have been met
+                                        detach null, =>
+                                            request.get obj.impressionURL, (err,resp,body) =>
+                                                if err
+                                                    @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
+                                                else
+                                                    debug "Impression URL hit successfully."
+                                else
+                                    err = new Error "Non-200 response from transcoder."
+                                    debug err
+                                    detach err
+                            .once "error", (err) =>
+                                debug "Transcoder request error: #{err}"
+                                detach err
+                        
+                    else
+                        # no creative means just send the client on their way
+                        detach()
+                
             else
-                detach()
-                cb?()
-                return true
+                perr = new Error "Ad request returned non-200 response: #{body}"
+                @stream.log.debug perr
+                return detach perr
 
-        req.on "socket", (sock) =>
-            @stream.log.debug "socket granted for ", count
-
-        req.on "error", (err) =>
-            if !aborted
-                @stream.log.debug "got a request error for ", count, err
-                detach()
-                cb?()
-
-        detach = =>
+        detach = (err,impcb) =>
             clearTimeout(prerollTimeout) if prerollTimeout
             socket.removeListener "close", conn_pre_abort
             socket.removeListener "end", conn_pre_abort
+            cb err, impcb
 
         # attach a close listener to the response, to be fired if it gets
         # shut down and we should abort the request
@@ -99,14 +131,48 @@ module.exports = class Preroller
         socket.once "close", conn_pre_abort
         socket.once "end", conn_pre_abort
 
-
     #----------
+    
+    class @AdObject
+        constructor: (xmldoc,cb) ->
+            @creativeURL    = null
+            @impressionURL  = null
+            
+            @doc            = null
+            
+            debug "Parsing ad object XML"
+            
+            doc = new xmldom.DOMParser().parseFromString(xmldoc)
+            
+            debug "XML doc parsed."
+            
+            # -- VAST Support -- #
+            
+            if xpath.select("/VAST",doc)
+                debug "VAST wrapper detected"
+                
+                if ad = xpath.select("VAST/Ad/InLine",doc)?[0]
+                    debug "Ad document found."
+                    
+                    # find our linear creative
+                    if creative = xpath.select("./Creatives/Creative/Linear",ad)?[0]
+                        
+                        # find the mpeg mediafile
+                        if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())",creative)
+                            debug "Media File is #{mediafile}"
+                            @creativeURL = mediafile
+                    
+                    # find the impression URL
+                    if impression = xpath.select("string(./Impression/text())",ad)
+                        debug "Impression URL is #{impression}"
+                        @impressionURL = impression
+                        
+                    return cb null, @
+                    
+                else
+                    # VAST wrapper but no ad
+                    return cb null, null
 
-    connect: ->
-
-
-    #----------
-
-    disconnect: ->
-
-    #----------
+            cb new Error "Unsupported ad format"
+    
+    

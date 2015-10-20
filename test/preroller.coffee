@@ -2,6 +2,9 @@ Preroller   = $src "slave/preroller"
 SlaveStream = $src "slave/stream"
 Logger      = $src "logger"
 
+fs = require "fs"
+debug = require("debug")("sm:tests:preroller")
+
 mp3 = $file "mp3/tone250Hz-44100-128-m.mp3"
 
 STREAM1 =
@@ -18,41 +21,25 @@ http = require "http"
 describe "Preroller", ->
     logger = new Logger {}
 
-    describe "Setup Scenarios", ->
-        stream = null
+    describe "XML Ad Formats", ->
+        doc = ""
+        
         before (done) ->
-            stream = new SlaveStream {}, "test1", logger, STREAM1
-            done()
-
-        it "accepts an HTTP preroller URI", (done) ->
-            new Preroller stream, "test1", "http://localhost/test1", (err,pre) ->
-                expect(err).to.be.null
-                expect(pre).to.be.an.instanceof Preroller
+            debug "Loading VAST doc"
+            s = fs.createReadStream $file "ads/vast.xml"
+            s.on "readable", ->
+                doc += r while r = s.read()
+            
+            s.once "end", ->
+                debug "VAST XML loaded. Length is #{doc.length}."
                 done()
-
-        it "rejects a non-HTTP preroller URI", (done) ->
-            new Preroller stream, "test1", "file:///localhost/test1", (err,pre) ->
-                expect(err).to.not.be.null
-                expect(pre).to.be.undefined
+        
+        it "Parses VAST ad", (done) ->
+            new Preroller.AdObject doc, (err,obj) ->
+                throw err if err
+                
+                expect(obj.creativeURL).to.eql "AUDIO"
+                expect(obj.impressionURL).to.eql "IMPRESSION"
                 done()
-
-    describe "Stream Handling", ->
-        stream = null
-        before (done) ->
-            stream = new SlaveStream {}, "test1", logger, STREAM1
-            done()
-
-
-
-        it "calls back immediately if it doesn't have a streamKey"
-
-        it "adds the stream key to requests"
-
-    describe "Bad Server", ->
-
-        it "calls back after a timeout if it can't reach preroll server"
-
-    describe "Request Scenarios", ->
-
-        it "pumps the preroll and returns on a normal request"
+            
 
