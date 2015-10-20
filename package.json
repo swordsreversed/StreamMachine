@@ -50,7 +50,9 @@
         "compression":          "~1.4.0",
         "debug":                "~2.2.0",
         "yargs":                "~3.18",
-        "watch-for-path":       "~0.0.1"
+        "watch-for-path":       "~0.0.1",
+        "xmldom":               "~0.1.19",
+        "xpath":                "~0.0.19"
     },
     "devDependencies": {
         "coffee-script":          "~1.7.1",
