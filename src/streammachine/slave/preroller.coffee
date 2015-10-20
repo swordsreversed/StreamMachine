@@ -37,11 +37,15 @@ module.exports = class Preroller
 
         count = @_counter++
 
+        pdebug = (msg,args...) ->
+            debug "#{count}: #{msg}", args...
+
         # If the preroll request can't be made in 5 seconds or less,
         # abort the preroll.
         # TODO: Make the timeout wait configurable
         prerollTimeout = setTimeout(=>
             @stream.log.debug "preroll request timeout. Aborting.", count
+            pdebug "Hit timeout. Triggering abort."
             req.abort()
             aborted = true
             detach new Error("Preroll request timed out.")
@@ -56,7 +60,7 @@ module.exports = class Preroller
             .replace("!UA!", encodeURIComponent(client.ua))
             .replace("!UUID!", client.session_id)
 
-        debug "Ad request URI is #{uri}"
+        pdebug "Ad request URI is #{uri}"
 
         # -- make a request to the ad server -- #
 
@@ -65,28 +69,30 @@ module.exports = class Preroller
             if err
                 perr = new Error "Ad request returned error: #{err}"
                 @stream.log.error perr, error:err
-                debug perr
+                pdebug perr
                 return detach perr
 
             if res.statusCode == 200
                 new Preroller.AdObject body, (err,obj) =>
                     if err
-                        @stream.log.debug "Ad request was unsuccessful: #{err}"
+                        perr = "Ad request was unsuccessful: #{err}"
+                        @stream.log.debug perr
+                        pdebug perr
                         return detach err
 
                     if obj.creativeURL
                         # we need to take the creative URL and pass it off
                         # to the transcoder
-                        debug "Preparing transcoder request for #{obj.creativeURL} with key #{@streamKey}."
+                        pdebug "Preparing transcoder request for #{obj.creativeURL} with key #{@streamKey}."
 
                         treq = request.get(@transcode_uri, qs:{ uri:obj.creativeURL, key:@streamKey })
                             .once "response", (resp) =>
-                                debug "Transcoder response received: #{resp.statusCode}"
+                                pdebug "Transcoder response received: #{resp.statusCode}"
 
                                 if resp.statusCode == 200
                                     treq.pipe(writer,end:false)
                                     treq.once "end", =>
-                                        debug "Transcoder pipe complete."
+                                        pdebug "Transcoder pipe complete."
 
                                         # we return by giving a function that should be called when the
                                         # impression criteria have been met
@@ -96,16 +102,16 @@ module.exports = class Preroller
                                                     if err
                                                         @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
                                                     else
-                                                        debug "Impression URL hit successfully."
+                                                        pdebug "Impression URL hit successfully."
                                             else
                                                 @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
-                                                debug "No impression URL found."
+                                                pdebug "No impression URL found."
                                 else
                                     err = new Error "Non-200 response from transcoder."
-                                    debug err
+                                    pdebug err
                                     detach err
                             .once "error", (err) =>
-                                debug "Transcoder request error: #{err}"
+                                pdebug "Transcoder request error: #{err}"
                                 detach err
 
                     else
@@ -115,9 +121,11 @@ module.exports = class Preroller
             else
                 perr = new Error "Ad request returned non-200 response: #{body}"
                 @stream.log.debug perr
+                pdebug perr
                 return detach perr
 
-        detach = (err,impcb) =>
+        detach = _.once (err,impcb) =>
+            pdebug "In detach"
             clearTimeout(prerollTimeout) if prerollTimeout
             socket.removeListener "close", conn_pre_abort
             socket.removeListener "end", conn_pre_abort
@@ -129,6 +137,7 @@ module.exports = class Preroller
         conn_pre_abort = =>
             detach()
             if socket.destroyed
+                pdebug "Aborting"
                 @stream.log.debug "aborting preroll ", count
                 adreq?.abort()
                 treq?.abort()
