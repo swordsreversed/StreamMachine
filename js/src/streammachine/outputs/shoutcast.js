@@ -70,9 +70,9 @@ module.exports = Shoutcast = (function(_super) {
     this.ice.metaint = this.client.meta_int;
     delete this.client.bytesToNextMeta;
     if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {
-      return this.stream.preroll.pump(this.socket, this.ice, (function(_this) {
-        return function() {
-          return _this.connectToStream();
+      return this.stream.preroll.pump(this.client, this.socket, this.ice, (function(_this) {
+        return function(err, impression_cb) {
+          return _this.connectToStream(impression_cb);
         };
       })(this));
     } else {
@@ -102,13 +102,14 @@ module.exports = Shoutcast = (function(_super) {
     return typeof cb === "function" ? cb() : void 0;
   };
 
-  Shoutcast.prototype.connectToStream = function() {
+  Shoutcast.prototype.connectToStream = function(impression_cb) {
     if (!this.disconnected) {
       return this.stream.listen(this, {
         offsetSecs: this.client.offsetSecs,
         offset: this.client.offset,
         pump: this.pump,
-        startTime: this.opts.startTime
+        startTime: this.opts.startTime,
+        impressionCB: impression_cb
       }, (function(_this) {
         return function(err, source) {
           var _ref;

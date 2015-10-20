@@ -40,6 +40,7 @@ module.exports = Stream = (function(_super) {
     format: "mp3",
     preroll: "",
     preroll_key: "",
+    transcoder: "",
     root_route: false,
     group: null,
     bandwidth: 0,

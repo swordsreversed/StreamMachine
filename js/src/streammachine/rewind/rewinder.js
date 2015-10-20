@@ -1,10 +1,12 @@
-var Rewinder, _,
+var Rewinder, debug, _,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   __slice = [].slice;
 
 _ = require("underscore");
+
+debug = require("debug")("sm:rewind:rewinder");
 
 module.exports = Rewinder = (function(_super) {
   __extends(Rewinder, _super);
@@ -43,12 +45,15 @@ module.exports = Rewinder = (function(_super) {
         args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
         if (!_this._pumpOnly) {
           _this._segTimer = setInterval(function() {
-            _this.rewind.recordListen({
+            var obj;
+            obj = {
               id: _this.conn_id,
               bytes: _this._sentBytes,
               seconds: _this._sentDuration,
               contentTime: _this._contentTime
-            });
+            };
+            _this.emit("listen", obj);
+            _this.rewind.recordListen(obj);
             _this._sentBytes = 0;
             _this._sentDuration = 0;
             return _this._contentTime = null;
@@ -62,7 +67,7 @@ module.exports = Rewinder = (function(_super) {
     oFunc = (function(_this) {
       return function(_offset) {
         _this._offset = _offset;
-        _this.rewind.log.silly("Rewinder: creation with ", {
+        debug("Rewinder: creation with ", {
           opts: opts,
           offset: _this._offset
         });
@@ -72,7 +77,7 @@ module.exports = Rewinder = (function(_super) {
             if (err) {
               return cb(err);
             }
-            _this.rewind.log.silly("Pumping HLS segment with ", {
+            debug("Pumping HLS segment with ", {
               duration: info.duration,
               length: info.length,
               offsetSeconds: info.offsetSeconds
@@ -90,7 +95,7 @@ module.exports = Rewinder = (function(_super) {
           });
         } else if (opts != null ? opts.pump : void 0) {
           if (_this._offset === 0) {
-            _this.rewind.log.silly("Rewinder: Pumping " + _this.rewind.opts.burst + " seconds.");
+            debug("Rewinder: Pumping " + _this.rewind.opts.burst + " seconds.");
             _this.rewind.pumpSeconds(_this, _this.pumpSecs, true);
             return finalizeFunc();
           } else {
@@ -165,6 +170,7 @@ module.exports = Rewinder = (function(_super) {
         _this._queuedBytes -= next_buf.data.length;
         _this._sentBytes += next_buf.data.length;
         _this._sentDuration += next_buf.duration / 1000;
+        debug("Sent duration is now " + _this._sentDuration);
         if (next_buf.meta) {
           _this.emit("meta", next_buf.meta);
         }
@@ -205,7 +211,7 @@ module.exports = Rewinder = (function(_super) {
     this._offset = this.rewind.checkOffsetSecs(offset);
     this._queue.slice(0);
     if (this._offset === 0) {
-      this.rewind.log.silly("Rewinder: Pumping " + this.rewind.opts.burst + " seconds.");
+      debug("Rewinder: Pumping " + this.rewind.opts.burst + " seconds.");
       this.rewind.pumpSeconds(this, this.pumpSecs);
     } else {
       _ref = this.rewind.burstFrom(this._offset, this.pumpSecs), this._offset = _ref[0], data = _ref[1];
@@ -223,14 +229,17 @@ module.exports = Rewinder = (function(_super) {
   };
 
   Rewinder.prototype.disconnect = function() {
+    var obj;
     this.rewind._rremoveListener(this);
-    this.rewind.recordListen({
+    obj = {
       id: this.conn_id,
       bytes: this._sentBytes,
       seconds: this._sentDuration,
       offsetSeconds: this._offsetSeconds,
       contentTime: this._contentTime
-    });
+    };
+    this.emit("listen", obj);
+    this.rewind.recordListen(obj);
     if (this._segTimer) {
       clearInterval(this._segTimer);
     }

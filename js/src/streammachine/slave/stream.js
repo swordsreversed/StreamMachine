@@ -153,7 +153,7 @@ module.exports = Stream = (function(_super) {
     });
     if ((opts.preroll != null) && opts.preroll !== "") {
       key = opts.preroll_key && opts.preroll_key !== "" ? opts.preroll_key : this.key;
-      new Preroller(this, key, opts.preroll, (function(_this) {
+      new Preroller(this, key, opts.preroll, opts.transcoder, (function(_this) {
         return function(err, pre) {
           if (err) {
             _this.log.error("Failed to create preroller: " + err);
