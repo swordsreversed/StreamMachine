@@ -75,6 +75,8 @@ describe "Preroller", ->
     describe "Preroll Scenarios", ->
         adserver = null
         transcoder = null
+        
+        impression_cb = null
 
         before (done) ->
             debug "Setting up fake services"
@@ -97,12 +99,23 @@ describe "Preroller", ->
 
                     writer = new WriteCollector()
 
-                    preroller.pump CLIENT, writer, writer, (err,impression_cb) ->
+                    preroller.pump CLIENT, writer, writer, (err,icb) ->
                         throw err if err
+                        
+                        impression_cb = icb
 
                         writer.onceWritten ->
                             debug "writer got bytes"
                             done()
+                            
+        it "hits impression URL when callback is triggered", (done) ->
+            adserver.once "impression", (req_id) ->
+                debug "Got impression from req_id #{req_id}"
+                done()
+                
+            expect(impression_cb).to.be.function
+            
+            impression_cb()
 
 
 
