@@ -163,10 +163,10 @@ module.exports = class Preroller
 
             # -- VAST Support -- #
 
-            if xpath.select("/VAST",doc)
+            if wrapper = xpath.select("/VAST",doc)?[0]
                 debug "VAST wrapper detected"
 
-                if ad = xpath.select("VAST/Ad/InLine",doc)?[0]
+                if ad = xpath.select("Ad/InLine",wrapper)?[0]
                     debug "Ad document found."
 
                     # find our linear creative
@@ -174,7 +174,10 @@ module.exports = class Preroller
 
                         # find the mpeg mediafile
                         if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())",creative)
-                            debug "Media File is #{mediafile}"
+                            debug "MP3 Media File is #{mediafile}"
+                            @creativeURL = mediafile
+                        else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())",creative)
+                            debug "MP4 Media File is #{mediafile}"
                             @creativeURL = mediafile
 
                     # find the impression URL
@@ -186,6 +189,37 @@ module.exports = class Preroller
 
                 else
                     # VAST wrapper but no ad
+                    return cb null, null
+
+            # -- DAAST Support -- #
+
+            if wrapper = xpath.select("/DAAST",doc)?[0]
+                debug "DAAST wrapper detected"
+
+                if ad = xpath.select("Ad/InLine",wrapper)?[0]
+                    debug "Ad document found."
+
+                    # find our linear creative
+                    if creative = xpath.select("./Creatives/Creative/Linear",ad)?[0]
+
+                        # find the mpeg mediafile
+                        if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())",creative)
+                            debug "MP3 Media File is #{mediafile}"
+                            @creativeURL = mediafile
+                        else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())",creative)
+                            debug "MP4 Media File is #{mediafile}"
+                            @creativeURL = mediafile
+
+
+                    # find the impression URL
+                    if impression = xpath.select("string(./Impression/text())",ad)
+                        debug "Impression URL is #{impression}"
+                        @impressionURL = impression
+
+                    return cb null, @
+
+                else
+                    # DAAST wrapper but no ad
                     return cb null, null
 
             cb new Error "Unsupported ad format"

@@ -52,30 +52,52 @@ describe "Preroller", ->
     logger = new Logger {}
 
     describe "XML Ad Formats", ->
-        doc = ""
+        describe "VAST", ->
+            doc = ""
 
-        before (done) ->
-            debug "Loading VAST doc"
-            s = fs.createReadStream $file "ads/vast.xml"
-            s.on "readable", ->
-                doc += r while r = s.read()
+            before (done) ->
+                debug "Loading VAST doc"
+                s = fs.createReadStream $file "ads/VAST.xml"
+                s.on "readable", ->
+                    doc += r while r = s.read()
 
-            s.once "end", ->
-                debug "VAST XML loaded. Length is #{doc.length}."
-                done()
+                s.once "end", ->
+                    debug "VAST XML loaded. Length is #{doc.length}."
+                    done()
 
-        it "Parses VAST ad", (done) ->
-            new Preroller.AdObject doc, (err,obj) ->
-                throw err if err
+            it "Parses VAST ad", (done) ->
+                new Preroller.AdObject doc, (err,obj) ->
+                    throw err if err
 
-                expect(obj.creativeURL).to.eql "AUDIO"
-                expect(obj.impressionURL).to.eql "IMPRESSION"
-                done()
+                    expect(obj.creativeURL).to.eql "AUDIO"
+                    expect(obj.impressionURL).to.eql "IMPRESSION"
+                    done()
+
+        describe "DAAST", ->
+            doc = ""
+
+            before (done) ->
+                debug "Loading DAAST doc"
+                s = fs.createReadStream $file "ads/DAAST.xml"
+                s.on "readable", ->
+                    doc += r while r = s.read()
+
+                s.once "end", ->
+                    debug "DAAST XML loaded. Length is #{doc.length}."
+                    done()
+
+            it "Parses DAAST ad", (done) ->
+                new Preroller.AdObject doc, (err,obj) ->
+                    throw err if err
+
+                    expect(obj.creativeURL).to.eql "AUDIO"
+                    expect(obj.impressionURL).to.eql "IMPRESSION"
+                    done()
 
     describe "Preroll Scenarios", ->
         adserver = null
         transcoder = null
-        
+
         impression_cb = null
 
         before (done) ->
@@ -84,7 +106,7 @@ describe "Preroller", ->
             transcoder = new Transcoder 0, $file "mp3/"
             debug "Transcoder is listening on port #{transcoder.port}"
 
-            adserver = new AdServer 0, $file("ads/vast.xml"), =>
+            adserver = new AdServer 0, $file("ads/VAST.xml"), =>
                 debug "Ad server is listening on port #{adserver.port}"
                 done()
 
@@ -101,20 +123,20 @@ describe "Preroller", ->
 
                     preroller.pump CLIENT, writer, writer, (err,icb) ->
                         throw err if err
-                        
+
                         impression_cb = icb
 
                         writer.onceWritten ->
                             debug "writer got bytes"
                             done()
-                            
+
         it "hits impression URL when callback is triggered", (done) ->
             adserver.once "impression", (req_id) ->
                 debug "Got impression from req_id #{req_id}"
                 done()
-                
+
             expect(impression_cb).to.be.function
-            
+
             impression_cb()
 
 
