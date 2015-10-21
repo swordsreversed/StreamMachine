@@ -167,20 +167,45 @@ module.exports = Preroller = (function() {
 
   Preroller.AdObject = (function() {
     function AdObject(xmldoc, cb) {
-      var ad, creative, doc, impression, mediafile, _ref, _ref1;
+      var ad, creative, doc, impression, mediafile, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
       this.creativeURL = null;
       this.impressionURL = null;
       this.doc = null;
       debug("Parsing ad object XML");
       doc = new xmldom.DOMParser().parseFromString(xmldoc);
       debug("XML doc parsed.");
-      if (xpath.select("/VAST", doc)) {
+      if (wrapper = (_ref = xpath.select("/VAST", doc)) != null ? _ref[0] : void 0) {
         debug("VAST wrapper detected");
-        if (ad = (_ref = xpath.select("VAST/Ad/InLine", doc)) != null ? _ref[0] : void 0) {
+        if (ad = (_ref1 = xpath.select("Ad/InLine", wrapper)) != null ? _ref1[0] : void 0) {
           debug("Ad document found.");
-          if (creative = (_ref1 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref1[0] : void 0) {
+          if (creative = (_ref2 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref2[0] : void 0) {
             if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())", creative)) {
-              debug("Media File is " + mediafile);
+              debug("MP3 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
+              debug("MP4 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            }
+          }
+          if (impression = xpath.select("string(./Impression/text())", ad)) {
+            debug("Impression URL is " + impression);
+            this.impressionURL = impression;
+          }
+          return cb(null, this);
+        } else {
+          return cb(null, null);
+        }
+      }
+      if (wrapper = (_ref3 = xpath.select("/DAAST", doc)) != null ? _ref3[0] : void 0) {
+        debug("DAAST wrapper detected");
+        if (ad = (_ref4 = xpath.select("Ad/InLine", wrapper)) != null ? _ref4[0] : void 0) {
+          debug("Ad document found.");
+          if (creative = (_ref5 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref5[0] : void 0) {
+            if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())", creative)) {
+              debug("MP3 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
+              debug("MP4 Media File is " + mediafile);
               this.creativeURL = mediafile;
             }
           }
