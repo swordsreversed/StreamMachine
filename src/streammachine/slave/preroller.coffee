@@ -46,7 +46,8 @@ module.exports = class Preroller
         prerollTimeout = setTimeout(=>
             @stream.log.debug "preroll request timeout. Aborting.", count
             pdebug "Hit timeout. Triggering abort."
-            req.abort()
+            adreq?.abort()
+            treq?.abort()
             aborted = true
             detach new Error("Preroll request timed out.")
         , 5*1000)

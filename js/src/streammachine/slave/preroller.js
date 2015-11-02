@@ -56,7 +56,12 @@ module.exports = Preroller = (function() {
       return function() {
         _this.stream.log.debug("preroll request timeout. Aborting.", count);
         pdebug("Hit timeout. Triggering abort.");
-        req.abort();
+        if (typeof adreq !== "undefined" && adreq !== null) {
+          adreq.abort();
+        }
+        if (typeof treq !== "undefined" && treq !== null) {
+          treq.abort();
+        }
         aborted = true;
         return detach(new Error("Preroll request timed out."));
       };
