@@ -9,31 +9,35 @@ module.exports = Core = (function(_super) {
 
   function Core() {
     this.log.debug("Attaching listener for SIGUSR2 restarts.");
-    process.on("SIGUSR2", (function(_this) {
-      return function() {
-        if (_this._restarting) {
-          return false;
-        }
-        _this._restarting = true;
-        if (!_this._rpc) {
-          _this.log.error("StreamMachine process was asked for external handoff, but there is no RPC interface");
-          _this._restarting = false;
-          return false;
-        }
-        _this.log.info("Sending process for USR2. Starting handoff via proxy.");
-        return _this._rpc.request("HANDOFF_GO", null, null, {
-          timeout: 20000
-        }, function(err, reply) {
-          if (err) {
-            _this.log.error("Error handshaking handoff: " + err);
+    if (process.listenerCount("SIGUSR2") > 0) {
+      this.log.info("Skipping SIGUSR2 registration for handoffs since another listener is registered.");
+    } else {
+      process.on("SIGUSR2", (function(_this) {
+        return function() {
+          if (_this._restarting) {
+            return false;
+          }
+          _this._restarting = true;
+          if (!_this._rpc) {
+            _this.log.error("StreamMachine process was asked for external handoff, but there is no RPC interface");
             _this._restarting = false;
             return false;
           }
-          _this.log.info("Sender got handoff handshake. Starting send.");
-          return _this._sendHandoff(_this._rpc);
-        });
-      };
-    })(this));
+          _this.log.info("Sending process for USR2. Starting handoff via proxy.");
+          return _this._rpc.request("HANDOFF_GO", null, null, {
+            timeout: 20000
+          }, function(err, reply) {
+            if (err) {
+              _this.log.error("Error handshaking handoff: " + err);
+              _this._restarting = false;
+              return false;
+            }
+            _this.log.info("Sender got handoff handshake. Starting send.");
+            return _this._sendHandoff(_this._rpc);
+          });
+        };
+      })(this));
+    }
   }
 
   Core.prototype.streamInfo = function() {
