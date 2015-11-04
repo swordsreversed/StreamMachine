@@ -31,6 +31,10 @@ class FakeStream
     getStreamKey: (cb) ->
         cb @key
 
+class FakeOutput extends require('events').EventEmitter
+    constructor: ->
+        @client = CLIENT
+
 class WriteCollector extends require("stream").Writable
     constructor: ->
         @length = 0
@@ -134,7 +138,9 @@ describe "Preroller", ->
 
                     writer = new WriteCollector()
 
-                    preroller.pump CLIENT, writer, writer, (err,icb) ->
+
+
+                    preroller.pump new FakeOutput, writer, (err,icb) ->
                         throw err if err
 
                         impression_cb = icb

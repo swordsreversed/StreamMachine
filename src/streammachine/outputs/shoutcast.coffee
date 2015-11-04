@@ -71,18 +71,16 @@ module.exports = class Shoutcast extends BaseOutput
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
             debug "Pumping preroll"
-            @stream.preroll.pump @client, @socket, @ice,
-                (err,impression_cb) =>
-                    debug "Back from preroll. Connecting to stream."
-                    @connectToStream impression_cb
+            @stream.preroll.pump @, @ice, (err,impression_cb) =>
+                debug "Back from preroll. Connecting to stream."
+                @connectToStream impression_cb
         else
             @connectToStream()
 
     #----------
 
     disconnect: ->
-        if !@disconnected
-            @disconnected = true
+        super =>
             @ice?.unpipe()
             @source?.disconnect()
             @socket?.end() unless @socket?.destroyed
@@ -137,19 +135,7 @@ module.exports = class Shoutcast extends BaseOutput
                     @source.pipe @ice
                     @source.on "meta", @metaFunc
 
-                    if impression_cb
-                        totalSecs = 0
-
-                        iF = (listen) =>
-                            totalSecs += listen.seconds
-                            debug "Impression total is at #{totalSecs}"
-
-                            if totalSecs > 60
-                                debug "Triggering impression callback"
-                                impression_cb()
-                                @source.removeListener "listen", iF
-
-                        @source.addListener "listen", iF
+                    @_handleImpression(impression_cb) if impression_cb
 
     #----------
 

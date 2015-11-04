@@ -34,7 +34,7 @@ module.exports = Preroller = (function() {
     }
   }
 
-  Preroller.prototype.pump = function(client, socket, writer, cb) {
+  Preroller.prototype.pump = function(output, writer, cb) {
     var aborted, adreq, conn_pre_abort, count, detach, pdebug, prerollTimeout, treq, uri;
     cb = _.once(cb);
     aborted = false;
@@ -42,8 +42,8 @@ module.exports = Preroller = (function() {
       cb(new Error("Preroll request before streamKey or missing URI."));
       return true;
     }
-    if (socket.destroyed) {
-      cb(new Error("Preroll request got destroyed socket."));
+    if (output.disconnected) {
+      cb(new Error("Preroll request got disconnected output."));
       return true;
     }
     count = this._counter++;
@@ -66,7 +66,7 @@ module.exports = Preroller = (function() {
         return detach(new Error("Preroll request timed out."));
       };
     })(this), 5 * 1000);
-    uri = this.uri.replace("!KEY!", this.streamKey).replace("!IP!", client.ip).replace("!STREAM!", this.key).replace("!UA!", encodeURIComponent(client.ua)).replace("!UUID!", client.session_id);
+    uri = this.uri.replace("!KEY!", this.streamKey).replace("!IP!", output.client.ip).replace("!STREAM!", this.key).replace("!UA!", encodeURIComponent(output.client.ua)).replace("!UUID!", output.client.session_id);
     pdebug("Ad request URI is " + uri);
     treq = null;
     adreq = request.get(uri, (function(_this) {
@@ -95,8 +95,8 @@ module.exports = Preroller = (function() {
                   if (err) {
                     return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
                   } else {
-                    pdebug("Impression URL hit successfully for " + client.session_id + ".");
-                    return _this.stream.log.debug("Impression URL hit successfully for " + client.session_id);
+                    pdebug("Impression URL hit successfully for " + output.client.session_id + ".");
+                    return _this.stream.log.debug("Impression URL hit successfully for " + output.client.session_id);
                   }
                 });
               } else {
@@ -148,8 +148,7 @@ module.exports = Preroller = (function() {
         if (prerollTimeout) {
           clearTimeout(prerollTimeout);
         }
-        socket.removeListener("close", conn_pre_abort);
-        socket.removeListener("end", conn_pre_abort);
+        output.removeListener("disconnect", conn_pre_abort);
         return cb(err, impcb);
       };
     })(this));
@@ -157,21 +156,16 @@ module.exports = Preroller = (function() {
       return function() {
         pdebug("conn_pre_abort triggered");
         detach();
-        if (socket.destroyed) {
-          pdebug("Aborting");
-          _this.stream.log.debug("aborting preroll ", count);
-          if (adreq != null) {
-            adreq.abort();
-          }
-          if (treq != null) {
-            treq.abort();
-          }
-          return aborted = true;
+        if (adreq != null) {
+          adreq.abort();
         }
+        if (treq != null) {
+          treq.abort();
+        }
+        return aborted = true;
       };
     })(this);
-    socket.once("close", conn_pre_abort);
-    return socket.once("end", conn_pre_abort);
+    return output.once("disconnect", conn_pre_abort);
   };
 
   Preroller.AdObject = (function() {

@@ -39,7 +39,7 @@ module.exports = class RawAudio extends BaseOutput
 
                     if @stream.preroll && !@opts.req.param("preskip")
                         debug "making preroll request on stream #{@stream.key}"
-                        @stream.preroll.pump @client, @socket, @socket,
+                        @stream.preroll.pump @, @socket,
                             (err,impression_cb) => @connectToStream impression_cb
                     else
                         @connectToStream()
@@ -64,8 +64,7 @@ module.exports = class RawAudio extends BaseOutput
     #----------
 
     disconnect: ->
-        if !@disconnected
-            @disconnected = true
+        super =>
             @source?.disconnect()
             @socket?.end() unless (@socket.destroyed)
 
@@ -101,16 +100,4 @@ module.exports = class RawAudio extends BaseOutput
 
                     @source.pipe @socket
 
-                    if impression_cb
-                        totalSecs = 0
-
-                        iF = (listen) =>
-                            totalSecs += listen.seconds
-                            debug "Impression total is at #{totalSecs}"
-
-                            if totalSecs > 60
-                                debug "Triggering impression callback"
-                                impression_cb()
-                                @source.removeListener "listen", iF
-
-                        @source.addListener "listen", iF
+                    @_handleImpression(impression_cb) if impression_cb

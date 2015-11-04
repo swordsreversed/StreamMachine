@@ -76,7 +76,7 @@ module.exports = Shoutcast = (function(_super) {
     delete this.client.bytesToNextMeta;
     if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {
       debug("Pumping preroll");
-      return this.stream.preroll.pump(this.client, this.socket, this.ice, (function(_this) {
+      return this.stream.preroll.pump(this, this.ice, (function(_this) {
         return function(err, impression_cb) {
           debug("Back from preroll. Connecting to stream.");
           return _this.connectToStream(impression_cb);
@@ -88,19 +88,20 @@ module.exports = Shoutcast = (function(_super) {
   };
 
   Shoutcast.prototype.disconnect = function() {
-    var _ref, _ref1, _ref2, _ref3;
-    if (!this.disconnected) {
-      this.disconnected = true;
-      if ((_ref = this.ice) != null) {
-        _ref.unpipe();
-      }
-      if ((_ref1 = this.source) != null) {
-        _ref1.disconnect();
-      }
-      if (!((_ref2 = this.socket) != null ? _ref2.destroyed : void 0)) {
-        return (_ref3 = this.socket) != null ? _ref3.end() : void 0;
-      }
-    }
+    return Shoutcast.__super__.disconnect.call(this, (function(_this) {
+      return function() {
+        var _ref, _ref1, _ref2, _ref3;
+        if ((_ref = _this.ice) != null) {
+          _ref.unpipe();
+        }
+        if ((_ref1 = _this.source) != null) {
+          _ref1.disconnect();
+        }
+        if (!((_ref2 = _this.socket) != null ? _ref2.destroyed : void 0)) {
+          return (_ref3 = _this.socket) != null ? _ref3.end() : void 0;
+        }
+      };
+    })(this));
   };
 
   Shoutcast.prototype.prepForHandoff = function(cb) {
@@ -118,7 +119,7 @@ module.exports = Shoutcast = (function(_super) {
         startTime: this.opts.startTime
       }, (function(_this) {
         return function(err, source) {
-          var iF, totalSecs, _ref;
+          var _ref;
           _this.source = source;
           if (err) {
             if (_this.opts.res != null) {
@@ -146,17 +147,7 @@ module.exports = Shoutcast = (function(_super) {
           _this.source.pipe(_this.ice);
           _this.source.on("meta", _this.metaFunc);
           if (impression_cb) {
-            totalSecs = 0;
-            iF = function(listen) {
-              totalSecs += listen.seconds;
-              debug("Impression total is at " + totalSecs);
-              if (totalSecs > 60) {
-                debug("Triggering impression callback");
-                impression_cb();
-                return _this.source.removeListener("listen", iF);
-              }
-            };
-            return _this.source.addListener("listen", iF);
+            return _this._handleImpression(impression_cb);
           }
         };
       })(this));

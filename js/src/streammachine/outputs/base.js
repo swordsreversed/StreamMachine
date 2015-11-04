@@ -1,12 +1,19 @@
-var BaseOutput, uuid, _;
+var BaseOutput, debug, uuid, _,
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 _ = require("underscore");
 
 uuid = require("node-uuid");
 
-module.exports = BaseOutput = (function() {
+debug = require('debug')('sm:outputs:base');
+
+module.exports = BaseOutput = (function(_super) {
+  __extends(BaseOutput, _super);
+
   function BaseOutput(output) {
     var a_session, _ref, _ref1;
+    this.disconnected = false;
     this.client = {
       output: output
     };
@@ -25,8 +32,32 @@ module.exports = BaseOutput = (function() {
     }
   }
 
+  BaseOutput.prototype.disconnect = function(cb) {
+    if (!this.disconnected) {
+      this.disconnected = true;
+      this.emit("disconnect");
+      return typeof cb === "function" ? cb() : void 0;
+    }
+  };
+
+  BaseOutput.prototype._handleImpression = function(cb) {
+    var iF, targetSecs, totalSecs;
+    totalSecs = 0;
+    targetSecs = 60;
+    iF = (function(_this) {
+      return function(listen) {
+        if ((totalSecs += listen.seconds) > targetSecs) {
+          debug("Triggering impression callback after " + totalSecs + " delivered.");
+          cb();
+          return _this.source.removeListener("listen", iF);
+        }
+      };
+    })(this);
+    return this.source.on("listen", iF);
+  };
+
   return BaseOutput;
 
-})();
+})(require("events").EventEmitter);
 
 //# sourceMappingURL=base.js.map

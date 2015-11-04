@@ -35,7 +35,7 @@ module.exports = RawAudio = (function(_super) {
             _this.client.session_id = session_id;
             if (_this.stream.preroll && !_this.opts.req.param("preskip")) {
               debug("making preroll request on stream " + _this.stream.key);
-              return _this.stream.preroll.pump(_this.client, _this.socket, _this.socket, function(err, impression_cb) {
+              return _this.stream.preroll.pump(_this, _this.socket, function(err, impression_cb) {
                 return _this.connectToStream(impression_cb);
               });
             } else {
@@ -73,16 +73,17 @@ module.exports = RawAudio = (function(_super) {
   }
 
   RawAudio.prototype.disconnect = function() {
-    var _ref, _ref1;
-    if (!this.disconnected) {
-      this.disconnected = true;
-      if ((_ref = this.source) != null) {
-        _ref.disconnect();
-      }
-      if (!this.socket.destroyed) {
-        return (_ref1 = this.socket) != null ? _ref1.end() : void 0;
-      }
-    }
+    return RawAudio.__super__.disconnect.call(this, (function(_this) {
+      return function() {
+        var _ref, _ref1;
+        if ((_ref = _this.source) != null) {
+          _ref.disconnect();
+        }
+        if (!_this.socket.destroyed) {
+          return (_ref1 = _this.socket) != null ? _ref1.end() : void 0;
+        }
+      };
+    })(this));
   };
 
   RawAudio.prototype.prepForHandoff = function(cb) {
@@ -100,7 +101,7 @@ module.exports = RawAudio = (function(_super) {
         startTime: this.opts.startTime
       }, (function(_this) {
         return function(err, source) {
-          var iF, totalSecs, _ref;
+          var _ref;
           _this.source = source;
           if (err) {
             if (_this.opts.res != null) {
@@ -115,17 +116,7 @@ module.exports = RawAudio = (function(_super) {
           _this.client.offset = _this.source.offset();
           _this.source.pipe(_this.socket);
           if (impression_cb) {
-            totalSecs = 0;
-            iF = function(listen) {
-              totalSecs += listen.seconds;
-              debug("Impression total is at " + totalSecs);
-              if (totalSecs > 60) {
-                debug("Triggering impression callback");
-                impression_cb();
-                return _this.source.removeListener("listen", iF);
-              }
-            };
-            return _this.source.addListener("listen", iF);
+            return _this._handleImpression(impression_cb);
           }
         };
       })(this));

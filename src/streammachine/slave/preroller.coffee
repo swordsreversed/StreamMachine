@@ -22,7 +22,7 @@ module.exports = class Preroller
 
     #----------
 
-    pump: (client,socket,writer,cb) ->
+    pump: (output,writer,cb) ->
         cb = _.once(cb)
         aborted = false
         # short-circuit if we haven't gotten a stream key yet
@@ -30,9 +30,9 @@ module.exports = class Preroller
             cb new Error("Preroll request before streamKey or missing URI.")
             return true
 
-        # short-circuit if the socket has already disconnected
-        if socket.destroyed
-            cb new Error("Preroll request got destroyed socket.")
+        # short-circuit if the output has already disconnected
+        if output.disconnected
+            cb new Error("Preroll request got disconnected output.")
             return true
 
         count = @_counter++
@@ -56,10 +56,10 @@ module.exports = class Preroller
 
         uri = @uri
             .replace("!KEY!", @streamKey)
-            .replace("!IP!", client.ip)
+            .replace("!IP!", output.client.ip)
             .replace("!STREAM!", @key)
-            .replace("!UA!", encodeURIComponent(client.ua))
-            .replace("!UUID!", client.session_id)
+            .replace("!UA!", encodeURIComponent(output.client.ua))
+            .replace("!UUID!", output.client.session_id)
 
         pdebug "Ad request URI is #{uri}"
 
@@ -87,8 +87,8 @@ module.exports = class Preroller
                                if err
                                    @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
                                else
-                                   pdebug "Impression URL hit successfully for #{client.session_id}."
-                                   @stream.log.debug "Impression URL hit successfully for #{client.session_id}"
+                                   pdebug "Impression URL hit successfully for #{output.client.session_id}."
+                                   @stream.log.debug "Impression URL hit successfully for #{output.client.session_id}"
                         else
                            @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
                            pdebug "No impression URL found."
@@ -131,8 +131,7 @@ module.exports = class Preroller
         detach = _.once (err,impcb) =>
             pdebug "In detach"
             clearTimeout(prerollTimeout) if prerollTimeout
-            socket.removeListener "close", conn_pre_abort
-            socket.removeListener "end", conn_pre_abort
+            output.removeListener "disconnect", conn_pre_abort
             cb err, impcb
 
         # attach a close listener to the response, to be fired if it gets
@@ -141,15 +140,11 @@ module.exports = class Preroller
         conn_pre_abort = =>
             pdebug "conn_pre_abort triggered"
             detach()
-            if socket.destroyed
-                pdebug "Aborting"
-                @stream.log.debug "aborting preroll ", count
-                adreq?.abort()
-                treq?.abort()
-                aborted = true
+            adreq?.abort()
+            treq?.abort()
+            aborted = true
 
-        socket.once "close", conn_pre_abort
-        socket.once "end", conn_pre_abort
+        output.once "disconnect", conn_pre_abort
 
     #----------
 
