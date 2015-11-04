@@ -57,11 +57,10 @@ describe "Preroller", ->
 
             before (done) ->
                 debug "Loading VAST doc"
-                s = fs.createReadStream $file "ads/VAST.xml"
-                s.on "readable", ->
-                    doc += r while r = s.read()
+                s = fs.readFile $file("ads/VAST.xml"), (err,data) ->
+                    throw err if err
 
-                s.once "end", ->
+                    doc = data.toString()
                     debug "VAST XML loaded. Length is #{doc.length}."
                     done()
 
@@ -78,21 +77,35 @@ describe "Preroller", ->
 
             before (done) ->
                 debug "Loading DAAST doc"
-                s = fs.createReadStream $file "ads/DAAST.xml"
-                s.on "readable", ->
-                    doc += r while r = s.read()
+                s = fs.readFile $file("ads/DAAST.xml"), (err,data) ->
+                    throw err if err
 
-                s.once "end", ->
+                    doc = data.toString()
                     debug "DAAST XML loaded. Length is #{doc.length}."
                     done()
 
-            it "Parses DAAST ad", (done) ->
+            it "Parses Inline DAAST ad", (done) ->
                 new Preroller.AdObject doc, (err,obj) ->
                     throw err if err
 
                     expect(obj.creativeURL).to.eql "AUDIO"
                     expect(obj.impressionURL).to.eql "IMPRESSION"
                     done()
+
+            it "Selects Error element if there is no ad", (done) ->
+                fs.readFile $file("ads/DAAST-error.xml"), (err,data) ->
+                    throw err if err
+
+                    errdoc = data.toString()
+                    debug "DAAST error XML loaded. Length is #{doc.length}."
+
+                    new Preroller.AdObject errdoc, (err,obj) ->
+                        throw err if err
+
+                        expect(obj.creativeURL).to.be.nil
+                        expect(obj.impressionURL).to.eql "NOAD_IMPRESSION"
+                        done()
+
 
     describe "Preroll Scenarios", ->
         adserver = null

@@ -58,7 +58,7 @@ module.exports = Stream = (function(_super) {
     })(this));
     process.nextTick((function(_this) {
       return function() {
-        return _this.configure(opts);
+        return _this.configure(_this.opts);
       };
     })(this));
     if (this.opts.hls) {
@@ -149,11 +149,11 @@ module.exports = Stream = (function(_super) {
     var key;
     this.opts = opts;
     this.log.debug("Preroll settings are ", {
-      preroll: opts.preroll
+      preroll: this.opts.preroll
     });
-    if ((opts.preroll != null) && opts.preroll !== "") {
-      key = opts.preroll_key && opts.preroll_key !== "" ? opts.preroll_key : this.key;
-      new Preroller(this, key, opts.preroll, opts.transcoder, (function(_this) {
+    if ((this.opts.preroll != null) && this.opts.preroll !== "") {
+      key = this.opts.preroll_key && this.opts.preroll_key !== "" ? this.opts.preroll_key : this.key;
+      new Preroller(this, key, this.opts.preroll, this.opts.transcoder, (function(_this) {
         return function(err, pre) {
           if (err) {
             _this.log.error("Failed to create preroller: " + err);

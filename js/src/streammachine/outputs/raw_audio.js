@@ -24,7 +24,8 @@ module.exports = RawAudio = (function(_super) {
       this.opts.res.chunkedEncoding = false;
       this.opts.res.useChunkedEncodingByDefault = false;
       headers = {
-        "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aacp" : "unknown"
+        "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aacp" : "unknown",
+        "Accept-Ranges": "none"
       };
       this.opts.res.writeHead(200, headers);
       this.opts.res._send('');

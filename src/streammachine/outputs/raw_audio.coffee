@@ -25,6 +25,7 @@ module.exports = class RawAudio extends BaseOutput
                     if @stream.opts.format == "mp3"         then "audio/mpeg"
                     else if @stream.opts.format == "aac"    then "audio/aacp"
                     else "unknown"
+                "Accept-Ranges": "none"
 
             # write out our headers
             @opts.res.writeHead 200, headers

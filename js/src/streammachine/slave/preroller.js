@@ -82,12 +82,28 @@ module.exports = Preroller = (function() {
         }
         if (res.statusCode === 200) {
           return new Preroller.AdObject(body, function(err, obj) {
+            var impressionCB;
             if (err) {
               perr = "Ad request was unsuccessful: " + err;
               _this.stream.log.debug(perr);
               pdebug(perr);
               return detach(err);
             }
+            impressionCB = function() {
+              if (obj.impressionURL) {
+                return request.get(obj.impressionURL, function(err, resp, body) {
+                  if (err) {
+                    return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
+                  } else {
+                    pdebug("Impression URL hit successfully for " + client.session_id + ".");
+                    return _this.stream.log.debug("Impression URL hit successfully for " + client.session_id);
+                  }
+                });
+              } else {
+                _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
+                return pdebug("No impression URL found.");
+              }
+            };
             if (obj.creativeURL) {
               pdebug("Preparing transcoder request for " + obj.creativeURL + " with key " + _this.streamKey + ".");
               return treq = request.get(_this.transcode_uri, {
@@ -103,20 +119,7 @@ module.exports = Preroller = (function() {
                   });
                   return treq.once("end", function() {
                     pdebug("Transcoder pipe complete.");
-                    return detach(null, function() {
-                      if (obj.impressionURL) {
-                        return request.get(obj.impressionURL, function(err, resp, body) {
-                          if (err) {
-                            return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
-                          } else {
-                            return pdebug("Impression URL hit successfully.");
-                          }
-                        });
-                      } else {
-                        _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
-                        return pdebug("No impression URL found.");
-                      }
-                    });
+                    return detach(null, impressionCB);
                   });
                 } else {
                   err = new Error("Non-200 response from transcoder.");
@@ -128,7 +131,7 @@ module.exports = Preroller = (function() {
                 return detach(err);
               });
             } else {
-              return detach();
+              return detach(null, impressionCB);
             }
           });
         } else {
@@ -152,6 +155,7 @@ module.exports = Preroller = (function() {
     })(this));
     conn_pre_abort = (function(_this) {
       return function() {
+        pdebug("conn_pre_abort triggered");
         detach();
         if (socket.destroyed) {
           pdebug("Aborting");
@@ -172,7 +176,7 @@ module.exports = Preroller = (function() {
 
   Preroller.AdObject = (function() {
     function AdObject(xmldoc, cb) {
-      var ad, creative, doc, impression, mediafile, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+      var ad, creative, doc, error, impression, mediafile, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
       this.creativeURL = null;
       this.impressionURL = null;
       this.doc = null;
@@ -220,7 +224,13 @@ module.exports = Preroller = (function() {
           }
           return cb(null, this);
         } else {
-          return cb(null, null);
+          if (error = xpath.select("string(./Error/text())", wrapper)) {
+            debug("Error URL found: " + error);
+            this.impressionURL = error;
+            return cb(null, this);
+          } else {
+            return cb(null, null);
+          }
         }
       }
       cb(new Error("Unsupported ad format"));

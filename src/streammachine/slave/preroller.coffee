@@ -81,6 +81,18 @@ module.exports = class Preroller
                         pdebug perr
                         return detach err
 
+                    impressionCB = =>
+                        if obj.impressionURL
+                           request.get obj.impressionURL, (err,resp,body) =>
+                               if err
+                                   @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
+                               else
+                                   pdebug "Impression URL hit successfully for #{client.session_id}."
+                                   @stream.log.debug "Impression URL hit successfully for #{client.session_id}"
+                        else
+                           @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
+                           pdebug "No impression URL found."
+
                     if obj.creativeURL
                         # we need to take the creative URL and pass it off
                         # to the transcoder
@@ -97,16 +109,7 @@ module.exports = class Preroller
 
                                         # we return by giving a function that should be called when the
                                         # impression criteria have been met
-                                        detach null, =>
-                                            if obj.impressionURL
-                                                request.get obj.impressionURL, (err,resp,body) =>
-                                                    if err
-                                                        @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
-                                                    else
-                                                        pdebug "Impression URL hit successfully."
-                                            else
-                                                @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
-                                                pdebug "No impression URL found."
+                                        detach null, impressionCB
                                 else
                                     err = new Error "Non-200 response from transcoder."
                                     pdebug err
@@ -117,7 +120,7 @@ module.exports = class Preroller
 
                     else
                         # no creative means just send the client on their way
-                        detach()
+                        detach null, impressionCB
 
             else
                 perr = new Error "Ad request returned non-200 response: #{body}"
@@ -136,6 +139,7 @@ module.exports = class Preroller
         # shut down and we should abort the request
 
         conn_pre_abort = =>
+            pdebug "conn_pre_abort triggered"
             detach()
             if socket.destroyed
                 pdebug "Aborting"
@@ -221,7 +225,16 @@ module.exports = class Preroller
 
                 else
                     # DAAST wrapper but no ad
-                    return cb null, null
+
+                    # Is there an error element? If so, we're supposed to hit
+                    # it as our impression URL
+                    if error = xpath.select("string(./Error/text())",wrapper)
+                        debug "Error URL found: #{error}"
+                        @impressionURL = error
+                        return cb null, @
+
+                    else
+                        return cb null, null
 
             cb new Error "Unsupported ad format"
 

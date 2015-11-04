@@ -3,6 +3,8 @@ icecast = require "icecast"
 
 BaseOutput = require "./base"
 
+debug = require("debug")("sm:outputs:shoutcast")
+
 module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
@@ -15,6 +17,7 @@ module.exports = class Shoutcast extends BaseOutput
         @_lastMeta = null
 
         if @opts.req && @opts.res
+            debug "Incoming Request Headers: ", @opts.req.headers
             # -- startup mode...  sending headers -- #
 
             @client.offsetSecs  = @opts.req.param("offset") || -1
@@ -31,12 +34,14 @@ module.exports = class Shoutcast extends BaseOutput
                 "icy-name":             @stream.StreamTitle
                 "icy-url":              @stream.StreamUrl
                 "icy-metaint":          @client.meta_int
+                "Accept-Ranges":        "none"
 
             # write out our headers
             @opts.res.writeHead 200, @headers
             @opts.res._send ''
 
             @stream.startSession @client, (err,session_id) =>
+                debug "Incoming connection given session_id of #{session_id}"
                 @client.session_id = session_id
                 process.nextTick => @_startAudio(true)
 
@@ -65,8 +70,11 @@ module.exports = class Shoutcast extends BaseOutput
         delete @client.bytesToNextMeta
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
+            debug "Pumping preroll"
             @stream.preroll.pump @client, @socket, @ice,
-                (err,impression_cb) => @connectToStream impression_cb
+                (err,impression_cb) =>
+                    debug "Back from preroll. Connecting to stream."
+                    @connectToStream impression_cb
         else
             @connectToStream()
 
@@ -102,7 +110,6 @@ module.exports = class Shoutcast extends BaseOutput
                 offset:         @client.offset,
                 pump:           @pump,
                 startTime:      @opts.startTime,
-                impressionCB:   impression_cb,
                 (err,@source) =>
                     if err
                         if @opts.res?
@@ -129,6 +136,20 @@ module.exports = class Shoutcast extends BaseOutput
 
                     @source.pipe @ice
                     @source.on "meta", @metaFunc
+
+                    if impression_cb
+                        totalSecs = 0
+
+                        iF = (listen) =>
+                            totalSecs += listen.seconds
+                            debug "Impression total is at #{totalSecs}"
+
+                            if totalSecs > 60
+                                debug "Triggering impression callback"
+                                impression_cb()
+                                @source.removeListener "listen", iF
+
+                        @source.addListener "listen", iF
 
     #----------
 
