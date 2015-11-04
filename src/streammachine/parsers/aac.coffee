@@ -1,4 +1,4 @@
-strtok = require('strtok')
+strtok = require('strtok2')
 assert = require("assert")
 
 PROFILES = [

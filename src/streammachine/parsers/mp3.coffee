@@ -1,4 +1,4 @@
-strtok = require('strtok')
+strtok = require('strtok2')
 assert = require("assert")
 
 module.exports = class MP3 extends require("stream").Writable
