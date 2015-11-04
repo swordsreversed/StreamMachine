@@ -6,7 +6,7 @@ module.exports = class Core extends require("events").EventEmitter
     constructor: ->
         @log.debug "Attaching listener for SIGUSR2 restarts."
 
-        if process.listenerCount("SIGUSR2") > 0
+        if process.listeners("SIGUSR2").length > 0
             @log.info "Skipping SIGUSR2 registration for handoffs since another listener is registered."
         else
             # Support a handoff trigger via USR2

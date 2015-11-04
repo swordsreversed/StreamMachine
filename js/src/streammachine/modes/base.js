@@ -9,7 +9,7 @@ module.exports = Core = (function(_super) {
 
   function Core() {
     this.log.debug("Attaching listener for SIGUSR2 restarts.");
-    if (process.listenerCount("SIGUSR2") > 0) {
+    if (process.listeners("SIGUSR2").length > 0) {
       this.log.info("Skipping SIGUSR2 registration for handoffs since another listener is registered.");
     } else {
       process.on("SIGUSR2", (function(_this) {
