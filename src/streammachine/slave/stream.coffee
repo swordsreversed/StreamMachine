@@ -51,7 +51,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                 #@_buildSocketSource()
 
         # now run configure...
-        process.nextTick => @configure(opts)
+        process.nextTick => @configure(@opts)
 
 
         # -- Set up HLS Index -- #
@@ -137,13 +137,13 @@ module.exports = class Stream extends require('../rewind_buffer')
 
         # -- Preroll -- #
 
-        @log.debug "Preroll settings are ", preroll:opts.preroll
+        @log.debug "Preroll settings are ", preroll:@opts.preroll
 
-        if opts.preroll? && opts.preroll != ""
+        if @opts.preroll? && @opts.preroll != ""
             # create a Preroller connection
-            key = if (opts.preroll_key && opts.preroll_key != "") then opts.preroll_key else @key
+            key = if (@opts.preroll_key && @opts.preroll_key != "") then @opts.preroll_key else @key
 
-            new Preroller @, key, opts.preroll, (err,pre) =>
+            new Preroller @, key, @opts.preroll, @opts.transcoder, (err,pre) =>
                 if err
                     @log.error "Failed to create preroller: #{err}"
                     return false

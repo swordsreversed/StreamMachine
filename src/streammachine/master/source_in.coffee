@@ -23,6 +23,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
     listen: (spec=@port) ->
         #@core.log.debug "SourceIn listening on ", spec:spec
+        debug "SourceIn listening on #{spec}"
         @server.listen spec
 
     _connection: (sock) =>

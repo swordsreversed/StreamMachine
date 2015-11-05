@@ -24,9 +24,10 @@ mp3 = $file "mp3/mp3-44100-128-s.mp3"
 
 master_config = [
     "--mode=master"
-    "--master:port=0",
+    "--master:port=0"
     "--source_port=0"
     "--no-log:stdout"
+    "--chunk_duration=0.1"
 ]
 
 #----------

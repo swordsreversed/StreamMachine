@@ -36,6 +36,7 @@ module.exports = SourceIn = (function(_super) {
     if (spec == null) {
       spec = this.port;
     }
+    debug("SourceIn listening on " + spec);
     return this.server.listen(spec);
   };
 

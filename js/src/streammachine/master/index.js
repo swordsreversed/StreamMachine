@@ -243,7 +243,9 @@ module.exports = Master = (function(_super) {
     stream = new Stream(key, this.log.child({
       stream: key
     }), mount, _.extend(opts, {
-      hls: this.options.hls
+      hls: this.options.hls,
+      preroll: opts.preroll != null ? opts.preroll : this.options.preroll,
+      transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder
     }));
     if (stream) {
       stream.on("config", (function(_this) {

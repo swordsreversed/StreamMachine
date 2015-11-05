@@ -1,10 +1,12 @@
-var BaseOutput, RawAudio, _u,
+var BaseOutput, RawAudio, debug, _u,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 _u = require('underscore');
 
 BaseOutput = require("./base");
+
+debug = require("debug")("sm:outputs:raw_audio");
 
 module.exports = RawAudio = (function(_super) {
   __extends(RawAudio, _super);
@@ -14,6 +16,7 @@ module.exports = RawAudio = (function(_super) {
     this.stream = stream;
     this.opts = opts;
     this.disconnected = false;
+    debug("Incoming request.");
     RawAudio.__super__.constructor.call(this, "raw");
     this.pump = true;
     if (this.opts.req && this.opts.res) {
@@ -21,7 +24,8 @@ module.exports = RawAudio = (function(_super) {
       this.opts.res.chunkedEncoding = false;
       this.opts.res.useChunkedEncodingByDefault = false;
       headers = {
-        "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aacp" : "unknown"
+        "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aacp" : "unknown",
+        "Accept-Ranges": "none"
       };
       this.opts.res.writeHead(200, headers);
       this.opts.res._send('');
@@ -30,11 +34,9 @@ module.exports = RawAudio = (function(_super) {
           return _this.stream.startSession(_this.client, function(err, session_id) {
             _this.client.session_id = session_id;
             if (_this.stream.preroll && !_this.opts.req.param("preskip")) {
-              _this.stream.log.debug("making preroll request", {
-                stream: _this.stream.key
-              });
-              return _this.stream.preroll.pump(_this.socket, _this.socket, function() {
-                return _this.connectToStream();
+              debug("making preroll request on stream " + _this.stream.key);
+              return _this.stream.preroll.pump(_this, _this.socket, function(err, impression_cb) {
+                return _this.connectToStream(impression_cb);
               });
             } else {
               return _this.connectToStream();
@@ -71,16 +73,17 @@ module.exports = RawAudio = (function(_super) {
   }
 
   RawAudio.prototype.disconnect = function() {
-    var _ref, _ref1;
-    if (!this.disconnected) {
-      this.disconnected = true;
-      if ((_ref = this.source) != null) {
-        _ref.disconnect();
-      }
-      if (!this.socket.destroyed) {
-        return (_ref1 = this.socket) != null ? _ref1.end() : void 0;
-      }
-    }
+    return RawAudio.__super__.disconnect.call(this, (function(_this) {
+      return function() {
+        var _ref, _ref1;
+        if ((_ref = _this.source) != null) {
+          _ref.disconnect();
+        }
+        if (!_this.socket.destroyed) {
+          return (_ref1 = _this.socket) != null ? _ref1.end() : void 0;
+        }
+      };
+    })(this));
   };
 
   RawAudio.prototype.prepForHandoff = function(cb) {
@@ -88,8 +91,9 @@ module.exports = RawAudio = (function(_super) {
     return typeof cb === "function" ? cb() : void 0;
   };
 
-  RawAudio.prototype.connectToStream = function() {
+  RawAudio.prototype.connectToStream = function(impression_cb) {
     if (!this.disconnected) {
+      debug("Connecting to stream " + this.stream.key);
       return this.stream.listen(this, {
         offsetSecs: this.client.offsetSecs,
         offset: this.client.offset,
@@ -110,7 +114,10 @@ module.exports = RawAudio = (function(_super) {
             return false;
           }
           _this.client.offset = _this.source.offset();
-          return _this.source.pipe(_this.socket);
+          _this.source.pipe(_this.socket);
+          if (impression_cb) {
+            return _this._handleImpression(impression_cb);
+          }
         };
       })(this));
     }

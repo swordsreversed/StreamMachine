@@ -29,6 +29,7 @@ standalone_config = [
     "--source_port=0",
     "--api_port=0",
     "--no-log:stdout"
+    "--chunk_duration:0.1"
 ]
 
 describe "Standalone Handoffs", ->

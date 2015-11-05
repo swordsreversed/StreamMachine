@@ -218,6 +218,8 @@ module.exports = class Master extends require("events").EventEmitter
     _startStream: (key,mount,opts) ->
         stream = new Stream key, @log.child(stream:key), mount, _.extend opts,
             hls:        @options.hls
+            preroll:    if opts.preroll? then opts.preroll else @options.preroll
+            transcoder: if opts.transcoder? then opts.transcoder else @options.transcoder
 
         if stream
             # attach a listener for configs

@@ -3,6 +3,8 @@ icecast = require "icecast"
 
 BaseOutput = require "./base"
 
+debug = require("debug")("sm:outputs:shoutcast")
+
 module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
@@ -15,6 +17,7 @@ module.exports = class Shoutcast extends BaseOutput
         @_lastMeta = null
 
         if @opts.req && @opts.res
+            debug "Incoming Request Headers: ", @opts.req.headers
             # -- startup mode...  sending headers -- #
 
             @client.offsetSecs  = @opts.req.param("offset") || -1
@@ -31,12 +34,14 @@ module.exports = class Shoutcast extends BaseOutput
                 "icy-name":             @stream.StreamTitle
                 "icy-url":              @stream.StreamUrl
                 "icy-metaint":          @client.meta_int
+                "Accept-Ranges":        "none"
 
             # write out our headers
             @opts.res.writeHead 200, @headers
             @opts.res._send ''
 
             @stream.startSession @client, (err,session_id) =>
+                debug "Incoming connection given session_id of #{session_id}"
                 @client.session_id = session_id
                 process.nextTick => @_startAudio(true)
 
@@ -65,15 +70,17 @@ module.exports = class Shoutcast extends BaseOutput
         delete @client.bytesToNextMeta
 
         if initial && @stream.preroll && !@opts.req.param("preskip")
-            @stream.preroll.pump @socket, @ice, => @connectToStream()
+            debug "Pumping preroll"
+            @stream.preroll.pump @, @ice, (err,impression_cb) =>
+                debug "Back from preroll. Connecting to stream."
+                @connectToStream impression_cb
         else
             @connectToStream()
 
     #----------
 
     disconnect: ->
-        if !@disconnected
-            @disconnected = true
+        super =>
             @ice?.unpipe()
             @source?.disconnect()
             @socket?.end() unless @socket?.destroyed
@@ -94,13 +101,13 @@ module.exports = class Shoutcast extends BaseOutput
 
     #----------
 
-    connectToStream: ->
+    connectToStream: (impression_cb) ->
         unless @disconnected
             @stream.listen @,
-                offsetSecs: @client.offsetSecs,
-                offset:     @client.offset,
-                pump:       @pump,
-                startTime:  @opts.startTime,
+                offsetSecs:     @client.offsetSecs,
+                offset:         @client.offset,
+                pump:           @pump,
+                startTime:      @opts.startTime,
                 (err,@source) =>
                     if err
                         if @opts.res?
@@ -127,6 +134,8 @@ module.exports = class Shoutcast extends BaseOutput
 
                     @source.pipe @ice
                     @source.on "meta", @metaFunc
+
+                    @_handleImpression(impression_cb) if impression_cb
 
     #----------
 

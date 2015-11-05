@@ -1,8 +1,7 @@
 language: node_js
 node_js:
 - '0.10'
-- '0.12'
-- '4.0'
+- '4.2'
 services:
 - elasticsearch
 env: SKIP_TRANSCODING=1
@@ -10,3 +9,6 @@ sudo: false
 notifications:
   slack:
     secure: c2GoWrff8tjrQmyhYRA+kv1FKzlFLpASo5BrHBSzrvPSFB883Z/hcfR7qqQ3kCl7OV8Q+dYnYFchpV6hO99NTMs5nSd+ob9CxXAlBvVGuYWJVMmcmgt9liqtnFB5aZvQbYkXOkmpMofgSNQmUsWoqGJ/WwGmG00YuBjivDMXQxw=
+branches:
+  only:
+    - master

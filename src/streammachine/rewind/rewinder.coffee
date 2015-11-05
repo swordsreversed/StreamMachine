@@ -1,5 +1,7 @@
 _ = require "underscore"
 
+debug = require("debug")("sm:rewind:rewinder")
+
 # Rewinder is the general-purpose listener stream.
 # Arguments:
 # * offset: Number
@@ -51,11 +53,14 @@ module.exports = class Rewinder extends require("stream").Readable
                 # log a segment every 30 seconds. This allows us to use the
                 # same analytics pipeline as we do for HLS pumped data
                 @_segTimer = setInterval =>
-                    @rewind.recordListen
+                    obj =
                         id:             @conn_id
                         bytes:          @_sentBytes
                         seconds:        @_sentDuration
                         contentTime:    @_contentTime
+
+                    @emit "listen", obj
+                    @rewind.recordListen obj
 
                     # reset our stats
                     @_sentBytes     = 0
@@ -69,7 +74,7 @@ module.exports = class Rewinder extends require("stream").Readable
             cb = null
 
         oFunc = (@_offset) =>
-            @rewind.log.silly "Rewinder: creation with ", opts:opts, offset:@_offset
+            debug "Rewinder: creation with ", opts:opts, offset:@_offset
 
             # -- What are we sending? -- #
 
@@ -79,7 +84,7 @@ module.exports = class Rewinder extends require("stream").Readable
                 @rewind.hls.pumpSegment @, opts.live_segment, (err,info) =>
                     return cb err if err
 
-                    @rewind.log.silly "Pumping HLS segment with ", duration:info.duration, length:info.length, offsetSeconds:info.offsetSeconds
+                    debug "Pumping HLS segment with ", duration:info.duration, length:info.length, offsetSeconds:info.offsetSeconds
 
                     @_offsetSeconds = info.offsetSeconds
 
@@ -97,7 +102,7 @@ module.exports = class Rewinder extends require("stream").Readable
             else if opts?.pump
                 if @_offset == 0
                     # pump some data before we start regular listening
-                    @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+                    debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
                     @rewind.pumpSeconds @, @pumpSecs, true
 
                     finalizeFunc()
@@ -198,6 +203,8 @@ module.exports = class Rewinder extends require("stream").Readable
             @_sentBytes     += next_buf.data.length
             @_sentDuration  += (next_buf.duration / 1000)
 
+            debug "Sent duration is now #{ @_sentDuration }"
+
             # Not all chunks will contain metadata, but go ahead and send
             # ours out if it does
             if next_buf.meta
@@ -254,7 +261,7 @@ module.exports = class Rewinder extends require("stream").Readable
 
         if @_offset == 0
             # pump some data before we start regular listening
-            @rewind.log.silly "Rewinder: Pumping #{@rewind.opts.burst} seconds."
+            debug "Rewinder: Pumping #{@rewind.opts.burst} seconds."
             @rewind.pumpSeconds @, @pumpSecs
         else
             # we're offset, so we'll pump from the offset point forward instead of
@@ -284,12 +291,15 @@ module.exports = class Rewinder extends require("stream").Readable
         # Record either a) our full listening session (pump requests) or
         # b) the portion of the request that we haven't already recorded
         # (non-pump requests)
-        @rewind.recordListen
+        obj =
             id:             @conn_id
             bytes:          @_sentBytes
             seconds:        @_sentDuration
             offsetSeconds:  @_offsetSeconds
             contentTime:    @_contentTime
+
+        @emit "listen", obj
+        @rewind.recordListen obj
 
         # clear our listen segment timer
         clearInterval @_segTimer if @_segTimer

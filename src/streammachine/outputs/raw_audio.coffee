@@ -2,9 +2,13 @@ _u = require 'underscore'
 
 BaseOutput = require "./base"
 
+debug = require("debug")("sm:outputs:raw_audio")
+
 module.exports = class RawAudio extends BaseOutput
     constructor: (@stream,@opts) ->
         @disconnected = false
+
+        debug "Incoming request."
 
         super "raw"
 
@@ -21,6 +25,7 @@ module.exports = class RawAudio extends BaseOutput
                     if @stream.opts.format == "mp3"         then "audio/mpeg"
                     else if @stream.opts.format == "aac"    then "audio/aacp"
                     else "unknown"
+                "Accept-Ranges": "none"
 
             # write out our headers
             @opts.res.writeHead 200, headers
@@ -33,8 +38,9 @@ module.exports = class RawAudio extends BaseOutput
                     # -- send a preroll if we have one -- #
 
                     if @stream.preroll && !@opts.req.param("preskip")
-                        @stream.log.debug "making preroll request", stream:@stream.key
-                        @stream.preroll.pump @socket, @socket, => @connectToStream()
+                        debug "making preroll request on stream #{@stream.key}"
+                        @stream.preroll.pump @, @socket,
+                            (err,impression_cb) => @connectToStream impression_cb
                     else
                         @connectToStream()
 
@@ -58,8 +64,7 @@ module.exports = class RawAudio extends BaseOutput
     #----------
 
     disconnect: ->
-        if !@disconnected
-            @disconnected = true
+        super =>
             @source?.disconnect()
             @socket?.end() unless (@socket.destroyed)
 
@@ -73,13 +78,14 @@ module.exports = class RawAudio extends BaseOutput
 
     #----------
 
-    connectToStream: ->
+    connectToStream: (impression_cb) ->
         unless @disconnected
+            debug "Connecting to stream #{@stream.key}"
             @stream.listen @,
-                offsetSecs: @client.offsetSecs,
-                offset:     @client.offset,
-                pump:       @pump,
-                startTime:  @opts.startTime,
+                offsetSecs:     @client.offsetSecs,
+                offset:         @client.offset,
+                pump:           @pump,
+                startTime:      @opts.startTime,
                 (err,@source) =>
                     if err
                         if @opts.res?
@@ -93,3 +99,5 @@ module.exports = class RawAudio extends BaseOutput
                     @client.offset = @source.offset()
 
                     @source.pipe @socket
+
+                    @_handleImpression(impression_cb) if impression_cb

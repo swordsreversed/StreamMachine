@@ -1,8 +1,12 @@
 _ = require "underscore"
 uuid = require "node-uuid"
 
-module.exports = class BaseOutput
+debug = require('debug')('sm:outputs:base')
+
+module.exports = class BaseOutput extends require("events").EventEmitter
     constructor: (output) ->
+        @disconnected = false
+
         # turn @opts into @client
 
         @client = output:output
@@ -40,3 +44,28 @@ module.exports = class BaseOutput
             @socket = @opts.socket
 
     #----------
+
+    disconnect: (cb) ->
+        if !@disconnected
+            @disconnected = true
+            @emit "disconnect"
+            cb?()
+
+    #----------
+
+    _handleImpression: (cb) ->
+        totalSecs = 0
+
+        # FIXME: This needs to be configurable
+        targetSecs = 60
+
+        iF = (listen) =>
+            if (totalSecs += listen.seconds) > targetSecs
+                debug "Triggering impression callback after #{totalSecs} delivered."
+                cb()
+                @source.removeListener "listen", iF
+
+        # watch for listen events. we don't need to also watch for disconnects,
+        # since Rewinder removes all its event listeners during its own
+        # cleanup process
+        @source.on "listen", iF

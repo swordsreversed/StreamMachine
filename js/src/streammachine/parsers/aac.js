@@ -3,7 +3,7 @@ var AAC, CHANNEL_COUNTS, ID3V2_HEADER_LENGTH, MPEG_HEADER, MPEG_HEADER_LENGTH, P
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   __slice = [].slice;
 
-strtok = require('strtok');
+strtok = require('strtok2');
 
 assert = require("assert");
 

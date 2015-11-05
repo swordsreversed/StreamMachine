@@ -1,29 +1,32 @@
-var Preroller, http, url, _u;
+var Preroller, debug, http, request, url, xmldom, xpath, _,
+  __slice = [].slice;
 
-_u = require("underscore");
+_ = require("underscore");
 
 http = require("http");
 
 url = require("url");
 
+request = require("request");
+
+xmldom = require("xmldom");
+
+xpath = require("xpath");
+
+debug = require("debug")("sm:slave:preroller");
+
 module.exports = Preroller = (function() {
-  function Preroller(stream, key, uri, cb) {
+  function Preroller(stream, key, uri, transcode_uri, cb) {
     this.stream = stream;
     this.key = key;
+    this.uri = uri;
+    this.transcode_uri = transcode_uri;
     this._counter = 1;
-    this.uri = url.parse(uri);
-    if (this.uri.protocol !== "http:") {
-      if (typeof cb === "function") {
-        cb("Preroller only supports HTTP connections.");
-      }
-      return false;
-    }
     this.stream.log.debug("Preroller calling getStreamKey");
     this.stream.getStreamKey((function(_this) {
       return function(streamKey) {
         _this.streamKey = streamKey;
-        _this.uri.path = [_this.uri.path, _this.key, _this.streamKey].join("/").replace(/\/\//g, "/");
-        return _this.stream.log.debug("Preroller: Stream key is " + _this.streamKey + ". URI is " + _this._uri);
+        return _this.stream.log.debug("Preroller: Stream key is " + _this.streamKey + ". Ready to start serving.");
       };
     })(this));
     if (typeof cb === "function") {
@@ -31,96 +34,206 @@ module.exports = Preroller = (function() {
     }
   }
 
-  Preroller.prototype.pump = function(socket, writer, cb) {
-    var aborted, conn_pre_abort, count, detach, prerollTimeout, req;
-    cb = _u.once(cb);
+  Preroller.prototype.pump = function(output, writer, cb) {
+    var aborted, adreq, conn_pre_abort, count, detach, pdebug, prerollTimeout, treq, uri;
+    cb = _.once(cb);
     aborted = false;
     if (!this.streamKey || !this.uri) {
-      if (typeof cb === "function") {
-        cb();
-      }
+      cb(new Error("Preroll request before streamKey or missing URI."));
       return true;
     }
-    if (socket.destroyed) {
-      if (typeof cb === "function") {
-        cb();
-      }
+    if (output.disconnected) {
+      cb(new Error("Preroll request got disconnected output."));
       return true;
     }
     count = this._counter++;
+    pdebug = function() {
+      var args, msg;
+      msg = arguments[0], args = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+      return debug.apply(null, ["" + count + ": " + msg].concat(__slice.call(args)));
+    };
     prerollTimeout = setTimeout((function(_this) {
       return function() {
         _this.stream.log.debug("preroll request timeout. Aborting.", count);
-        req.abort();
+        pdebug("Hit timeout. Triggering abort.");
+        if (typeof adreq !== "undefined" && adreq !== null) {
+          adreq.abort();
+        }
+        if (typeof treq !== "undefined" && treq !== null) {
+          treq.abort();
+        }
         aborted = true;
-        detach();
-        return typeof cb === "function" ? cb() : void 0;
+        return detach(new Error("Preroll request timed out."));
       };
     })(this), 5 * 1000);
-    this.stream.log.debug("firing preroll request", count, this._uri);
-    req = http.get(this.uri, (function(_this) {
-      return function(res) {
-        _this.stream.log.debug("got preroll response ", count);
-        if (res.statusCode === 200) {
-          res.on("data", function(chunk) {
-            return writer != null ? writer.write(chunk) : void 0;
+    uri = this.uri.replace("!KEY!", this.streamKey).replace("!IP!", output.client.ip).replace("!STREAM!", this.key).replace("!UA!", encodeURIComponent(output.client.ua)).replace("!UUID!", output.client.session_id);
+    pdebug("Ad request URI is " + uri);
+    treq = null;
+    adreq = request.get(uri, (function(_this) {
+      return function(err, res, body) {
+        var perr;
+        if (err) {
+          perr = new Error("Ad request returned error: " + err);
+          _this.stream.log.error(perr, {
+            error: err
           });
-          return res.on("end", function() {
-            detach();
-            if (typeof cb === "function") {
-              cb();
+          pdebug(perr);
+          return detach(perr);
+        }
+        if (res.statusCode === 200) {
+          return new Preroller.AdObject(body, function(err, obj) {
+            var impressionCB;
+            if (err) {
+              perr = "Ad request was unsuccessful: " + err;
+              _this.stream.log.debug(perr);
+              pdebug(perr);
+              return detach(err);
             }
-            return true;
+            impressionCB = function() {
+              if (obj.impressionURL) {
+                return request.get(obj.impressionURL, function(err, resp, body) {
+                  if (err) {
+                    return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
+                  } else {
+                    pdebug("Impression URL hit successfully for " + output.client.session_id + ".");
+                    return _this.stream.log.debug("Impression URL hit successfully for " + output.client.session_id);
+                  }
+                });
+              } else {
+                _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
+                return pdebug("No impression URL found.");
+              }
+            };
+            if (obj.creativeURL) {
+              pdebug("Preparing transcoder request for " + obj.creativeURL + " with key " + _this.streamKey + ".");
+              return treq = request.get(_this.transcode_uri, {
+                qs: {
+                  uri: obj.creativeURL,
+                  key: _this.streamKey
+                }
+              }).once("response", function(resp) {
+                pdebug("Transcoder response received: " + resp.statusCode);
+                if (resp.statusCode === 200) {
+                  treq.pipe(writer, {
+                    end: false
+                  });
+                  return treq.once("end", function() {
+                    pdebug("Transcoder pipe complete.");
+                    return detach(null, impressionCB);
+                  });
+                } else {
+                  err = new Error("Non-200 response from transcoder.");
+                  pdebug(err);
+                  return detach(err);
+                }
+              }).once("error", function(err) {
+                pdebug("Transcoder request error: " + err);
+                return detach(err);
+              });
+            } else {
+              return detach(null, impressionCB);
+            }
           });
         } else {
-          detach();
-          if (typeof cb === "function") {
-            cb();
-          }
-          return true;
+          perr = new Error("Ad request returned non-200 response: " + body);
+          _this.stream.log.debug(perr);
+          pdebug(perr);
+          return detach(perr);
         }
       };
     })(this));
-    req.on("socket", (function(_this) {
-      return function(sock) {
-        return _this.stream.log.debug("socket granted for ", count);
-      };
-    })(this));
-    req.on("error", (function(_this) {
-      return function(err) {
-        if (!aborted) {
-          _this.stream.log.debug("got a request error for ", count, err);
-          detach();
-          return typeof cb === "function" ? cb() : void 0;
-        }
-      };
-    })(this));
-    detach = (function(_this) {
-      return function() {
+    detach = _.once((function(_this) {
+      return function(err, impcb) {
+        pdebug("In detach");
         if (prerollTimeout) {
           clearTimeout(prerollTimeout);
         }
-        socket.removeListener("close", conn_pre_abort);
-        return socket.removeListener("end", conn_pre_abort);
+        output.removeListener("disconnect", conn_pre_abort);
+        return cb(err, impcb);
       };
-    })(this);
+    })(this));
     conn_pre_abort = (function(_this) {
       return function() {
+        pdebug("conn_pre_abort triggered");
         detach();
-        if (socket.destroyed) {
-          _this.stream.log.debug("aborting preroll ", count);
-          req.abort();
-          return aborted = true;
+        if (adreq != null) {
+          adreq.abort();
         }
+        if (treq != null) {
+          treq.abort();
+        }
+        return aborted = true;
       };
     })(this);
-    socket.once("close", conn_pre_abort);
-    return socket.once("end", conn_pre_abort);
+    return output.once("disconnect", conn_pre_abort);
   };
 
-  Preroller.prototype.connect = function() {};
+  Preroller.AdObject = (function() {
+    function AdObject(xmldoc, cb) {
+      var ad, creative, doc, error, impression, mediafile, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+      this.creativeURL = null;
+      this.impressionURL = null;
+      this.doc = null;
+      debug("Parsing ad object XML");
+      doc = new xmldom.DOMParser().parseFromString(xmldoc);
+      debug("XML doc parsed.");
+      if (wrapper = (_ref = xpath.select("/VAST", doc)) != null ? _ref[0] : void 0) {
+        debug("VAST wrapper detected");
+        if (ad = (_ref1 = xpath.select("Ad/InLine", wrapper)) != null ? _ref1[0] : void 0) {
+          debug("Ad document found.");
+          if (creative = (_ref2 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref2[0] : void 0) {
+            if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())", creative)) {
+              debug("MP3 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
+              debug("MP4 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            }
+          }
+          if (impression = xpath.select("string(./Impression/text())", ad)) {
+            debug("Impression URL is " + impression);
+            this.impressionURL = impression;
+          }
+          return cb(null, this);
+        } else {
+          return cb(null, null);
+        }
+      }
+      if (wrapper = (_ref3 = xpath.select("/DAAST", doc)) != null ? _ref3[0] : void 0) {
+        debug("DAAST wrapper detected");
+        if (ad = (_ref4 = xpath.select("Ad/InLine", wrapper)) != null ? _ref4[0] : void 0) {
+          debug("Ad document found.");
+          if (creative = (_ref5 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref5[0] : void 0) {
+            if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())", creative)) {
+              debug("MP3 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
+              debug("MP4 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            }
+          }
+          if (impression = xpath.select("string(./Impression/text())", ad)) {
+            debug("Impression URL is " + impression);
+            this.impressionURL = impression;
+          }
+          return cb(null, this);
+        } else {
+          if (error = xpath.select("string(./Error/text())", wrapper)) {
+            debug("Error URL found: " + error);
+            this.impressionURL = error;
+            this.impressionURL = this.impressionURL.replace("[ERRORCODE]", 303);
+            return cb(null, this);
+          } else {
+            return cb(null, null);
+          }
+        }
+      }
+      cb(new Error("Unsupported ad format"));
+    }
 
-  Preroller.prototype.disconnect = function() {};
+    return AdObject;
+
+  })();
 
   return Preroller;
 

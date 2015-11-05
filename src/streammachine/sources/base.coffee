@@ -25,7 +25,8 @@ module.exports = class Source extends require("events").EventEmitter
         @_chunk_queue_ts = null
 
         # How often will we emit chunks of data? The default is set in StreamMachine.Defaults
-        @emitDuration = @opts.chunkDuration || nconf.get("chunk_duration") || 0.5
+
+        @emitDuration = @opts.chunkDuration || ( nconf.get("chunk_duration") && Number(nconf.get("chunk_duration")) ) || 0.5
 
         @log = @opts.logger?.child uuid:@uuid
 
