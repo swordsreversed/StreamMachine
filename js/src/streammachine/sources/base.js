@@ -27,7 +27,7 @@ module.exports = Source = (function(_super) {
     this._vitals = null;
     this._chunk_queue = [];
     this._chunk_queue_ts = null;
-    this.emitDuration = this.opts.chunkDuration || nconf.get("chunk_duration") || 0.5;
+    this.emitDuration = this.opts.chunkDuration || (nconf.get("chunk_duration") && Number(nconf.get("chunk_duration"))) || 0.5;
     this.log = (_ref = this.opts.logger) != null ? _ref.child({
       uuid: this.uuid
     }) : void 0;
