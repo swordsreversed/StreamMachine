@@ -96,19 +96,32 @@ describe "Preroller", ->
                     expect(obj.impressionURL).to.eql "IMPRESSION"
                     done()
 
-            it "Selects Error element if there is no ad", (done) ->
-                fs.readFile $file("ads/DAAST-error.xml"), (err,data) ->
-                    throw err if err
+            describe "No Ad", ->
+                edoc = ""
 
-                    errdoc = data.toString()
-                    debug "DAAST error XML loaded. Length is #{doc.length}."
+                before (done) ->
+                    fs.readFile $file("ads/DAAST-error.xml"), (err,data) ->
+                        throw err if err
+                        edoc = data.toString()
+                        debug "DAAST error XML loaded. Length is #{edoc.length}."
+                        done()
 
-                    new Preroller.AdObject errdoc, (err,obj) ->
+                it "Selects Error element if there is no ad", (done) ->
+                    new Preroller.AdObject edoc, (err,obj) ->
                         throw err if err
 
                         expect(obj.creativeURL).to.be.nil
-                        expect(obj.impressionURL).to.eql "NOAD_IMPRESSION"
+                        expect(obj.impressionURL).to.contain "NOAD_IMPRESSION"
                         done()
+
+                it "Replaces [ERRORCODE] with 303", (done) ->
+                    new Preroller.AdObject edoc, (err,obj) ->
+                        throw err if err
+
+                        expect(obj.creativeURL).to.be.nil
+                        expect(obj.impressionURL).to.contain "e303"
+                        done()
+
 
 
     describe "Preroll Scenarios", ->

@@ -221,6 +221,7 @@ module.exports = Preroller = (function() {
           if (error = xpath.select("string(./Error/text())", wrapper)) {
             debug("Error URL found: " + error);
             this.impressionURL = error;
+            this.impressionURL = this.impressionURL.replace("[ERRORCODE]", 303);
             return cb(null, this);
           } else {
             return cb(null, null);

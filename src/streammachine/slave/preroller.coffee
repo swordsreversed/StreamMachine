@@ -226,6 +226,17 @@ module.exports = class Preroller
                     if error = xpath.select("string(./Error/text())",wrapper)
                         debug "Error URL found: #{error}"
                         @impressionURL = error
+
+                        # for a no ad error url, look for an [ERRORCODE] macro
+                        # and replace it with 303, because DAAST says so
+
+                        # FIXME: Technically, I think this response is intended
+                        # for the case where we had a wrapper and hit that URL
+                        # but got no response. We don't support that case yet,
+                        # but I think it's ok to send 303 here
+
+                        @impressionURL = @impressionURL.replace("[ERRORCODE]",303)
+
                         return cb null, @
 
                     else
