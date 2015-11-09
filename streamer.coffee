@@ -15,10 +15,28 @@ nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streamma
 
 nconf.defaults StreamMachine.Defaults
 
+# -- Debugging -- #
+
+# These next two sections are for debugging and use tools that are not included
+# as dependencies.
+
 if nconf.get("enable-webkit-devtools")
     console.log "ENABLING WEBKIT DEVTOOLS"
     agent = require("webkit-devtools-agent")
     agent.start()
+
+if nconf.get("heapdump-interval")
+    console.log "ENABLING PERIODIC HEAP DUMPS"
+    heapdump = require "heapdump"
+
+    setInterval =>
+        file = "/tmp/streammachine-#{process.pid}-#{Date.now()}.heapsnapshot"
+        heapdump.writeSnapshot file, (err) =>
+            if err
+                console.error err
+            else
+                console.error "Wrote heap snapshot to #{file}"
+    , Number(nconf.get("heapdump-interval")) * 1000
 
 # There are three potential modes of operation:
 # 1) Standalone -- One server, handling boths streams and configuration
