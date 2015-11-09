@@ -122,14 +122,18 @@ module.exports = Stream = (function(_super) {
   };
 
   Stream.prototype.getStreamKey = function(cb) {
-    if (this.source) {
-      return this.source.getStreamKey(cb);
+    if (this.opts.stream_key) {
+      return cb(this.opts.stream_key);
     } else {
-      return this.once("source", (function(_this) {
-        return function() {
-          return _this.source.getStreamKey(cb);
-        };
-      })(this));
+      if (this.source) {
+        return this.source.getStreamKey(cb);
+      } else {
+        return this.once("source", (function(_this) {
+          return function() {
+            return _this.source.getStreamKey(cb);
+          };
+        })(this));
+      }
     }
   };
 

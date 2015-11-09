@@ -114,11 +114,16 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
 
     getStreamKey: (cb) ->
-        if @source
-            @source.getStreamKey cb
+        # use manual stream key if provided as part of stream configuration,
+        # to allow for AAC stream keys that can't be pulled out of a header
+        if @opts.stream_key
+            cb @opts.stream_key
         else
-            @once "source", =>
+            if @source
                 @source.getStreamKey cb
+            else
+                @once "source", =>
+                    @source.getStreamKey cb
 
     #----------
 

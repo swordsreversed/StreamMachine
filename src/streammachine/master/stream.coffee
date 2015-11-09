@@ -33,6 +33,7 @@ module.exports = class Stream extends require('events').EventEmitter
         bandwidth:          0
         codec:              null
         ffmpeg_args:        null
+        stream_key:         null
 
     constructor: (@key,@log,mount,opts)->
         @opts = _u.defaults opts||{}, @DefaultOptions

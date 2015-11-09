@@ -1,4 +1,4 @@
-var StreamMachine, agent, core, nconf;
+var StreamMachine, agent, core, heapdump, nconf;
 
 StreamMachine = require("./src/streammachine");
 
@@ -16,6 +16,24 @@ if (nconf.get("enable-webkit-devtools")) {
   console.log("ENABLING WEBKIT DEVTOOLS");
   agent = require("webkit-devtools-agent");
   agent.start();
+}
+
+if (nconf.get("heapdump-interval")) {
+  console.log("ENABLING PERIODIC HEAP DUMPS");
+  heapdump = require("heapdump");
+  setInterval((function(_this) {
+    return function() {
+      var file;
+      file = "/tmp/streammachine-" + process.pid + "-" + (Date.now()) + ".heapsnapshot";
+      return heapdump.writeSnapshot(file, function(err) {
+        if (err) {
+          return console.error(err);
+        } else {
+          return console.error("Wrote heap snapshot to " + file);
+        }
+      });
+    };
+  })(this), Number(nconf.get("heapdump-interval")) * 1000);
 }
 
 core = (function() {
