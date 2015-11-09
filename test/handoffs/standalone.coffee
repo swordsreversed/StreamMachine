@@ -120,7 +120,7 @@ describe "Standalone Handoffs", ->
             debug "Connecting listener to 127.0.0.1:#{main_port}/#{STREAM1.key}"
             listener = new StreamListener "127.0.0.1", main_port, STREAM1.key
 
-            listener.connect (err) =>
+            listener.connect 1500, (err) =>
                 throw err if err
 
                 debug "listener connected"
@@ -232,11 +232,9 @@ describe "Standalone Handoffs", ->
                 done()
 
         it "new process should accept a new listener connection", (done) ->
-            this.timeout 8000
-
             l2 = new StreamListener "127.0.0.1", main_port, STREAM1.key
 
-            l2.connect (err) =>
+            l2.connect 1500, (err) =>
                 throw err if err
 
                 l2.once "bytes", ->

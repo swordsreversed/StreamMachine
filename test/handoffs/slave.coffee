@@ -68,7 +68,7 @@ describe "Slave Handoffs/Respawns", ->
         it "can accept a stream listener", (done) ->
             listener = new StreamListener "127.0.0.1", slave_port, master_info.stream_key
 
-            listener.connect (err) =>
+            listener.connect 1500, (err) =>
                 throw err if err
                 listener.disconnect()
                 done()
@@ -275,7 +275,7 @@ describe "Slave Handoffs/Respawns", ->
             it "new slave should accept a new listener connection", (done) ->
                 l2 = new StreamListener "127.0.0.1", slave_port, master_info.stream_key
 
-                l2.connect (err) =>
+                l2.connect 1500, (err) =>
                     throw err if err
 
                     l2.once "bytes", ->

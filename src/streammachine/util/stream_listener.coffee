@@ -19,12 +19,21 @@ module.exports = class StreamListener extends require("events").EventEmitter
 
     #----------
 
-    connect: (cb) ->
-        @once "connected", =>
+    connect: (timeout,cb) ->
+        if _.isFunction(timeout)
+            cb = timeout
+            timeout = null
 
-        connect_func = if @shoutcast then Icecast.get else http.get
+        aborted = false
+        if timeout
+            abortT = setTimeout =>
+                aborted = true
+                cb new Error("Reached timeout without successful connection.")
+            , timeout
 
-        @req = connect_func @url, (res) =>
+        _connected = (res) =>
+            clearTimeout abortT if abortT
+
             @res = res
 
             debug "Connected. Response code is #{ res.statusCode }."
@@ -57,7 +66,18 @@ module.exports = class StreamListener extends require("events").EventEmitter
 
                 @emit "close" if !@disconnected
 
-        @req.once "socket", (sock) => @emit "socket", sock
+        connect_func = if @shoutcast then Icecast.get else http.get
+
+        cLoop = =>
+            @req = connect_func @url, _connected
+            @req.once "socket", (sock) => @emit "socket", sock
+            @req.once "error", (err) =>
+                if err.code? == "ECONNREFUSED"
+                    setTimeout cLoop, 50 if !aborted
+                else
+                    cb err
+
+        cLoop()
 
     #----------
 

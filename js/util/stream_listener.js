@@ -11,8 +11,8 @@ argv = require("yargs").usage("Usage: $0 --host localhost --port 8001 --stream f
   shoutcast: false
 }).boolean(['shoutcast']).demand(["host", "port", "stream"]).argv;
 
-if (((_ref = this.args._) != null ? _ref[0] : void 0) === "listener") {
-  this.args._.shift();
+if (((_ref = argv._) != null ? _ref[0] : void 0) === "listener") {
+  argv._.shift();
 }
 
 listener = new StreamListener(argv.host, argv.port, argv.stream, argv.shoutcast);

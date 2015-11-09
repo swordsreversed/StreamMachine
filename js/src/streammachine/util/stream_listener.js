@@ -26,14 +26,26 @@ module.exports = StreamListener = (function(_super) {
     this.disconnected = false;
   }
 
-  StreamListener.prototype.connect = function(cb) {
-    var connect_func;
-    this.once("connected", (function(_this) {
-      return function() {};
-    })(this));
-    connect_func = this.shoutcast ? Icecast.get : http.get;
-    this.req = connect_func(this.url, (function(_this) {
+  StreamListener.prototype.connect = function(timeout, cb) {
+    var abortT, aborted, cLoop, connect_func, _connected;
+    if (_.isFunction(timeout)) {
+      cb = timeout;
+      timeout = null;
+    }
+    aborted = false;
+    if (timeout) {
+      abortT = setTimeout((function(_this) {
+        return function() {
+          aborted = true;
+          return cb(new Error("Reached timeout without successful connection."));
+        };
+      })(this), timeout);
+    }
+    _connected = (function(_this) {
       return function(res) {
+        if (abortT) {
+          clearTimeout(abortT);
+        }
         _this.res = res;
         debug("Connected. Response code is " + res.statusCode + ".");
         if (res.statusCode !== 200) {
@@ -69,12 +81,26 @@ module.exports = StreamListener = (function(_super) {
           }
         });
       };
-    })(this));
-    return this.req.once("socket", (function(_this) {
-      return function(sock) {
-        return _this.emit("socket", sock);
+    })(this);
+    connect_func = this.shoutcast ? Icecast.get : http.get;
+    cLoop = (function(_this) {
+      return function() {
+        _this.req = connect_func(_this.url, _connected);
+        _this.req.once("socket", function(sock) {
+          return _this.emit("socket", sock);
+        });
+        return _this.req.once("error", function(err) {
+          if ((err.code != null) === "ECONNREFUSED") {
+            if (!aborted) {
+              return setTimeout(cLoop, 50);
+            }
+          } else {
+            return cb(err);
+          }
+        });
       };
-    })(this));
+    })(this);
+    return cLoop();
   };
 
   StreamListener.prototype.disconnect = function(cb) {

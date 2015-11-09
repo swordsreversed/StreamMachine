@@ -15,8 +15,8 @@ argv = require("yargs")
     .demand(["host","port","stream"])
     .argv
 
-if @args._?[0] == "listener"
-    @args._.shift()
+if argv._?[0] == "listener"
+    argv._.shift()
 
 
 listener = new StreamListener argv.host, argv.port, argv.stream, argv.shoutcast
