@@ -35,8 +35,8 @@ module.exports = RawAudio = (function(_super) {
             _this.client.session_id = session_id;
             if (_this.stream.preroll && !_this.opts.req.param("preskip")) {
               debug("making preroll request on stream " + _this.stream.key);
-              return _this.stream.preroll.pump(_this, _this.socket, function(err, impression_cb) {
-                return _this.connectToStream(impression_cb);
+              return _this.stream.preroll.pump(_this, _this.socket, function(err) {
+                return _this.connectToStream();
               });
             } else {
               return _this.connectToStream();
@@ -91,7 +91,7 @@ module.exports = RawAudio = (function(_super) {
     return typeof cb === "function" ? cb() : void 0;
   };
 
-  RawAudio.prototype.connectToStream = function(impression_cb) {
+  RawAudio.prototype.connectToStream = function() {
     if (!this.disconnected) {
       debug("Connecting to stream " + this.stream.key);
       return this.stream.listen(this, {
@@ -114,10 +114,7 @@ module.exports = RawAudio = (function(_super) {
             return false;
           }
           _this.client.offset = _this.source.offset();
-          _this.source.pipe(_this.socket);
-          if (impression_cb) {
-            return _this._handleImpression(impression_cb);
-          }
+          return _this.source.pipe(_this.socket);
         };
       })(this));
     }

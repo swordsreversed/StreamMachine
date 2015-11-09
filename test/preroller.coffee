@@ -128,8 +128,6 @@ describe "Preroller", ->
         adserver = null
         transcoder = null
 
-        impression_cb = null
-
         before (done) ->
             debug "Setting up fake services"
 
@@ -140,37 +138,81 @@ describe "Preroller", ->
                 debug "Ad server is listening on port #{adserver.port}"
                 done()
 
-        it "pumps data when preroll is active", (done) ->
-            stream = new FakeStream "mp3-44100-128-s"
-            new Preroller stream,
-                "test",
-                "http://127.0.0.1:#{adserver.port}/ad",
-                "http://127.0.0.1:#{transcoder.port}/encoding",
-                (err,preroller) =>
-                    debug "Preroller init"
+        describe "Happy Path", ->
+            stream      = null
+            output      = null
+            preroller   = null
 
-                    writer = new WriteCollector()
+            before (done) ->
+                stream = new FakeStream "mp3-44100-128-s"
+                output = new FakeOutput
 
+                new Preroller stream,
+                    "test",
+                    "http://127.0.0.1:#{adserver.port}/ad",
+                    "http://127.0.0.1:#{transcoder.port}/encoding",
+                    100
+                    (err,p) =>
+                        preroller = p
+                        debug "Preroller init"
+                        done()
 
+            it "pumps data when preroll is active", (done) ->
+                writer = new WriteCollector()
 
-                    preroller.pump new FakeOutput, writer, (err,icb) ->
-                        throw err if err
+                preroller.pump output, writer, (err) ->
+                    throw err if err
 
-                        impression_cb = icb
+                    writer.onceWritten ->
+                        debug "writer got bytes"
+                        done()
 
-                        writer.onceWritten ->
-                            debug "writer got bytes"
-                            done()
+            it "hits impression URL", (done) ->
+                adserver.once "impression", (req_id) ->
+                    debug "Got impression from req_id #{req_id}"
+                    done()
 
-        it "hits impression URL when callback is triggered", (done) ->
-            adserver.once "impression", (req_id) ->
-                debug "Got impression from req_id #{req_id}"
-                done()
+        describe "Abort", ->
+            stream      = null
+            output      = null
+            preroller   = null
 
-            expect(impression_cb).to.be.function
+            before (done) ->
+                stream = new FakeStream "mp3-44100-128-s"
+                output = new FakeOutput
 
-            impression_cb()
+                new Preroller stream,
+                    "test",
+                    "http://127.0.0.1:#{adserver.port}/ad",
+                    "http://127.0.0.1:#{transcoder.port}/encoding",
+                    100
+                    (err,p) =>
+                        preroller = p
+                        debug "Preroller init"
+                        done()
 
+            it "does not hit impression URL for aborted client", (done) ->
+                writer = new WriteCollector()
+
+                preroller.pump output, writer, (err) ->
+                    throw err if err
+
+                    impression = false
+                    bytes = false
+
+                    adserver.once "impression", (req_id) ->
+                        debug "Got impression from req_id #{req_id}"
+                        impression = true
+
+                    writer.onceWritten ->
+                        debug "writer got bytes. Triggering disconnect."
+                        output.emit "disconnect"
+                        bytes = true
+
+                    setTimeout ->
+                        expect(bytes).to.be.true
+                        expect(impression).to.be.false
+                        done()
 
 
 

@@ -16,11 +16,12 @@ xpath = require("xpath");
 debug = require("debug")("sm:slave:preroller");
 
 module.exports = Preroller = (function() {
-  function Preroller(stream, key, uri, transcode_uri, cb) {
+  function Preroller(stream, key, uri, transcode_uri, impressionDelay, cb) {
     this.stream = stream;
     this.key = key;
     this.uri = uri;
     this.transcode_uri = transcode_uri;
+    this.impressionDelay = impressionDelay;
     this._counter = 1;
     this.stream.log.debug("Preroller calling getStreamKey");
     this.stream.getStreamKey((function(_this) {
@@ -82,27 +83,44 @@ module.exports = Preroller = (function() {
         }
         if (res.statusCode === 200) {
           return new Preroller.AdObject(body, function(err, obj) {
-            var impressionCB;
+            var _armImpression;
             if (err) {
               perr = "Ad request was unsuccessful: " + err;
               _this.stream.log.debug(perr);
               pdebug(perr);
               return detach(err);
             }
-            impressionCB = function() {
-              if (obj.impressionURL) {
-                return request.get(obj.impressionURL, function(err, resp, body) {
-                  if (err) {
-                    return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
-                  } else {
-                    pdebug("Impression URL hit successfully for " + output.client.session_id + ".");
-                    return _this.stream.log.debug("Impression URL hit successfully for " + output.client.session_id);
-                  }
+            _armImpression = function() {
+              var disarm, imp_t;
+              imp_t = setTimeout(function() {
+                output.removeListener("disconnect", disarm);
+                process.nextTick(function() {
+                  var disarm;
+                  disarm = null;
+                  return imp_t = null;
                 });
-              } else {
-                _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
-                return pdebug("No impression URL found.");
-              }
+                if (obj.impressionURL) {
+                  return request.get(obj.impressionURL, function(err, resp, body) {
+                    if (err) {
+                      return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
+                    } else {
+                      pdebug("Impression URL hit successfully for " + output.client.session_id + ".");
+                      return _this.stream.log.debug("Impression URL hit successfully for " + output.client.session_id);
+                    }
+                  });
+                } else {
+                  _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
+                  return pdebug("No impression URL found.");
+                }
+              }, _this.impressionDelay);
+              pdebug("Arming impression for " + _this.impressionDelay + "ms");
+              disarm = function() {
+                pdebug("Disarming impression after early abort.");
+                if (imp_t) {
+                  return clearTimeout(imp_t);
+                }
+              };
+              return output.once("disconnect", disarm);
             };
             if (obj.creativeURL) {
               pdebug("Preparing transcoder request for " + obj.creativeURL + " with key " + _this.streamKey + ".");
@@ -119,7 +137,8 @@ module.exports = Preroller = (function() {
                   });
                   return treq.once("end", function() {
                     pdebug("Transcoder pipe complete.");
-                    return detach(null, impressionCB);
+                    _armImpression();
+                    return detach(null);
                   });
                 } else {
                   err = new Error("Non-200 response from transcoder.");
@@ -131,7 +150,8 @@ module.exports = Preroller = (function() {
                 return detach(err);
               });
             } else {
-              return detach(null, impressionCB);
+              _armImpression();
+              return detach(null);
             }
           });
         } else {
@@ -143,13 +163,13 @@ module.exports = Preroller = (function() {
       };
     })(this));
     detach = _.once((function(_this) {
-      return function(err, impcb) {
+      return function(err) {
         pdebug("In detach");
         if (prerollTimeout) {
           clearTimeout(prerollTimeout);
         }
         output.removeListener("disconnect", conn_pre_abort);
-        return cb(err, impcb);
+        return cb(err);
       };
     })(this));
     conn_pre_abort = (function(_this) {

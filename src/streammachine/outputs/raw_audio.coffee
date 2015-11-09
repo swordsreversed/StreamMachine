@@ -40,7 +40,7 @@ module.exports = class RawAudio extends BaseOutput
                     if @stream.preroll && !@opts.req.param("preskip")
                         debug "making preroll request on stream #{@stream.key}"
                         @stream.preroll.pump @, @socket,
-                            (err,impression_cb) => @connectToStream impression_cb
+                            (err) => @connectToStream()
                     else
                         @connectToStream()
 
@@ -78,7 +78,7 @@ module.exports = class RawAudio extends BaseOutput
 
     #----------
 
-    connectToStream: (impression_cb) ->
+    connectToStream: ->
         unless @disconnected
             debug "Connecting to stream #{@stream.key}"
             @stream.listen @,
@@ -99,5 +99,3 @@ module.exports = class RawAudio extends BaseOutput
                     @client.offset = @source.offset()
 
                     @source.pipe @socket
-
-                    @_handleImpression(impression_cb) if impression_cb

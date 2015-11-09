@@ -40,22 +40,6 @@ module.exports = BaseOutput = (function(_super) {
     }
   };
 
-  BaseOutput.prototype._handleImpression = function(cb) {
-    var iF, targetSecs, totalSecs;
-    totalSecs = 0;
-    targetSecs = 60;
-    iF = (function(_this) {
-      return function(listen) {
-        if ((totalSecs += listen.seconds) > targetSecs) {
-          debug("Triggering impression callback after " + totalSecs + " delivered.");
-          cb();
-          return _this.source.removeListener("listen", iF);
-        }
-      };
-    })(this);
-    return this.source.on("listen", iF);
-  };
-
   return BaseOutput;
 
 })(require("events").EventEmitter);

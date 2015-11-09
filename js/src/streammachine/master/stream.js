@@ -46,7 +46,8 @@ module.exports = Stream = (function(_super) {
     bandwidth: 0,
     codec: null,
     ffmpeg_args: null,
-    stream_key: null
+    stream_key: null,
+    impression_delay: 5000
   };
 
   function Stream(key, log, mount, opts) {

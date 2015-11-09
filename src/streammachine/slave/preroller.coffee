@@ -8,7 +8,7 @@ xpath   = require "xpath"
 debug = require("debug")("sm:slave:preroller")
 
 module.exports = class Preroller
-    constructor: (@stream,@key,@uri,@transcode_uri,cb) ->
+    constructor: (@stream,@key,@uri,@transcode_uri,@impressionDelay,cb) ->
         @_counter = 1
 
         # -- need to look at the stream to get characteristics -- #
@@ -81,17 +81,39 @@ module.exports = class Preroller
                         pdebug perr
                         return detach err
 
-                    impressionCB = =>
-                        if obj.impressionURL
-                           request.get obj.impressionURL, (err,resp,body) =>
-                               if err
-                                   @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
-                               else
-                                   pdebug "Impression URL hit successfully for #{output.client.session_id}."
-                                   @stream.log.debug "Impression URL hit successfully for #{output.client.session_id}"
-                        else
-                           @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
-                           pdebug "No impression URL found."
+                    # create our impression callback. once we've delivered our
+                    # ad, we'll set a timer. If the output session does not
+                    # disconnect first, the timer will fire this callback to
+                    # record the impression
+                    _armImpression = =>
+                        imp_t = setTimeout =>
+                            output.removeListener "disconnect", disarm
+
+                            process.nextTick ->
+                                disarm = null
+                                imp_t = null
+
+                            if obj.impressionURL
+                               request.get obj.impressionURL, (err,resp,body) =>
+                                   if err
+                                       @stream.log.error "Failed to hit impression URL #{obj.impressionURL}: #{err}"
+                                   else
+                                       pdebug "Impression URL hit successfully for #{output.client.session_id}."
+                                       @stream.log.debug "Impression URL hit successfully for #{output.client.session_id}"
+                            else
+                               @stream.log.debug "Session reached preroll impression criteria, but no impression URL present."
+                               pdebug "No impression URL found."
+                        , @impressionDelay
+
+                        pdebug "Arming impression for #{@impressionDelay}ms"
+
+                        # -- impression abort -- #
+
+                        disarm = ->
+                            pdebug "Disarming impression after early abort."
+                            clearTimeout imp_t if imp_t
+
+                        output.once "disconnect", disarm
 
                     if obj.creativeURL
                         # we need to take the creative URL and pass it off
@@ -109,7 +131,8 @@ module.exports = class Preroller
 
                                         # we return by giving a function that should be called when the
                                         # impression criteria have been met
-                                        detach null, impressionCB
+                                        _armImpression()
+                                        detach null
                                 else
                                     err = new Error "Non-200 response from transcoder."
                                     pdebug err
@@ -120,7 +143,8 @@ module.exports = class Preroller
 
                     else
                         # no creative means just send the client on their way
-                        detach null, impressionCB
+                        _armImpression()
+                        detach null
 
             else
                 perr = new Error "Ad request returned non-200 response: #{body}"
@@ -128,11 +152,11 @@ module.exports = class Preroller
                 pdebug perr
                 return detach perr
 
-        detach = _.once (err,impcb) =>
+        detach = _.once (err) =>
             pdebug "In detach"
             clearTimeout(prerollTimeout) if prerollTimeout
             output.removeListener "disconnect", conn_pre_abort
-            cb err, impcb
+            cb err
 
         # attach a close listener to the response, to be fired if it gets
         # shut down and we should abort the request

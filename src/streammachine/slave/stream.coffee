@@ -148,7 +148,7 @@ module.exports = class Stream extends require('../rewind_buffer')
             # create a Preroller connection
             key = if (@opts.preroll_key && @opts.preroll_key != "") then @opts.preroll_key else @key
 
-            new Preroller @, key, @opts.preroll, @opts.transcoder, (err,pre) =>
+            new Preroller @, key, @opts.preroll, @opts.transcoder, @opts.impression_delay, (err,pre) =>
                 if err
                     @log.error "Failed to create preroller: #{err}"
                     return false

@@ -50,22 +50,3 @@ module.exports = class BaseOutput extends require("events").EventEmitter
             @disconnected = true
             @emit "disconnect"
             cb?()
-
-    #----------
-
-    _handleImpression: (cb) ->
-        totalSecs = 0
-
-        # FIXME: This needs to be configurable
-        targetSecs = 60
-
-        iF = (listen) =>
-            if (totalSecs += listen.seconds) > targetSecs
-                debug "Triggering impression callback after #{totalSecs} delivered."
-                cb()
-                @source.removeListener "listen", iF
-
-        # watch for listen events. we don't need to also watch for disconnects,
-        # since Rewinder removes all its event listeners during its own
-        # cleanup process
-        @source.on "listen", iF

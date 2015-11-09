@@ -77,9 +77,9 @@ module.exports = Shoutcast = (function(_super) {
     if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {
       debug("Pumping preroll");
       return this.stream.preroll.pump(this, this.ice, (function(_this) {
-        return function(err, impression_cb) {
+        return function(err) {
           debug("Back from preroll. Connecting to stream.");
-          return _this.connectToStream(impression_cb);
+          return _this.connectToStream();
         };
       })(this));
     } else {
@@ -110,7 +110,7 @@ module.exports = Shoutcast = (function(_super) {
     return typeof cb === "function" ? cb() : void 0;
   };
 
-  Shoutcast.prototype.connectToStream = function(impression_cb) {
+  Shoutcast.prototype.connectToStream = function() {
     if (!this.disconnected) {
       return this.stream.listen(this, {
         offsetSecs: this.client.offsetSecs,
@@ -145,10 +145,7 @@ module.exports = Shoutcast = (function(_super) {
           };
           _this.ice.pipe(_this.socket);
           _this.source.pipe(_this.ice);
-          _this.source.on("meta", _this.metaFunc);
-          if (impression_cb) {
-            return _this._handleImpression(impression_cb);
-          }
+          return _this.source.on("meta", _this.metaFunc);
         };
       })(this));
     }
