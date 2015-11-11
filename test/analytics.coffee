@@ -9,13 +9,15 @@ _               = require "underscore"
 request         = require "request"
 debug           = require("debug")("sm:tests:analytics")
 
+temp            = require("temp")
+
 user_id     = uuid.v4()
 session_id  = uuid.v4()
 
 # started an hour ago
 start_time = Number(new Date) - 60*60*1000
 
-config = es_uri:"http://localhost:9200/stream-test", finalize_secs:-1, request_timeout:1000
+config = es_uri:"http://localhost:9200/stream-test", finalize_secs:-1, request_timeout:2000
 
 START =
     type:           "session_start"
@@ -52,44 +54,48 @@ describe "Analytics", ->
             return done()
 
         start_ts = new Date()
-        es_args = "-D es.foreground=yes -D es.cluster.name=streammachine_test -D es.node.name=node-1 -D es.http.port=9250 -D es.gateway.type=none -D es.index.store.type=memory -D es.path.data=/tmp -D es.path.work=/tmp -D es.cluster.routing.allocation.disk.threshold_enabled=false -D es.network.host=0.0.0.0 -D es.discovery.zen.ping.multicast.enabled=false -D es.node.test=true -D es.node.bench=true -D es.logger.level=ERROR"
 
-        debug "Starting in-memory Elasticsearch instance with: #{es_args}"
-        es_server = (require "child_process").spawn "elasticsearch", es_args.split(" ")
+        temp.mkdir "streammachine-tests-es", (err,tmp_dir) ->
+            throw err if err
 
-        # for some reason ES won't work if its stdout isn't being read, so just
-        # create a null reader for it
-        devnull = new (
-            class extends (require "stream").Writable
-                _write: (chunk,encoding,cb) ->
-                    cb()
-        )
+            es_args = "-D es.foreground=yes -D es.cluster.name=streammachine_test -D es.node.name=node-1 -D es.http.port=9250 -D es.gateway.type=none -D es.path.data=#{tmp_dir} -D es.cluster.routing.allocation.disk.threshold_enabled=false -D es.network.host=0.0.0.0 -D es.discovery.zen.ping.multicast.enabled=false -D es.logger.level=ERROR"
 
-        es_server.stdout.pipe(devnull)
+            debug "Starting in-memory Elasticsearch instance with: #{es_args}"
+            es_server = (require "child_process").spawn "elasticsearch", es_args.split(" ")
 
-        process.on "exit", ->
-            debug "Shutting down Elasticsearch instance"
-            es_server?.kill()
+            # for some reason ES won't work if its stdout isn't being read, so just
+            # create a null reader for it
+            devnull = new (
+                class extends (require "stream").Writable
+                    _write: (chunk,encoding,cb) ->
+                        cb()
+            )
 
-        config.es_uri = "http://localhost:9250/stream-test"
+            es_server.stdout.pipe(devnull)
 
-        # don't return until we can make a request to our port
-        tryConnection = (retries,cb) ->
-            request "http://localhost:9250", (err,resp,body) ->
-                if err || resp.statusCode != 200
-                    throw new Error("Failed to connect to in-memory ES") if retries == 0
+            process.on "exit", ->
+                debug "Shutting down Elasticsearch instance"
+                es_server?.kill()
 
-                    setTimeout ->
-                        tryConnection retries-1, cb
-                    , 500
+            config.es_uri = "http://localhost:9250/stream-test"
 
-                else
-                    cb()
+            # don't return until we can make a request to our port
+            tryConnection = (retries,cb) ->
+                request "http://localhost:9250", (err,resp,body) ->
+                    if err || resp.statusCode != 200
+                        throw new Error("Failed to connect to in-memory ES") if retries == 0
 
-        tryConnection 20, ->
-            duration = Number(new Date()) - Number(start_ts)
-            debug "In-memory ES start took #{ duration }ms"
-            done()
+                        setTimeout ->
+                            tryConnection retries-1, cb
+                        , 500
+
+                    else
+                        cb()
+
+            tryConnection 20, ->
+                duration = Number(new Date()) - Number(start_ts)
+                debug "In-memory ES start took #{ duration }ms"
+                done()
 
     # -- Our test setup -- #
 
@@ -100,7 +106,7 @@ describe "Analytics", ->
         es = new elasticsearch.Client
             host:           "http://#{_uri.hostname}:#{_uri.port||9200}"
             apiVersion:     "1.4"
-            requestTimeout: 1000
+            requestTimeout: 2000
 
         idx_prefix = _uri.pathname.substr(1)
 
