@@ -29,7 +29,8 @@ module.exports = Analytics = (function() {
     this.log.debug("Connecting to Elasticsearch at " + es_uri + " with prefix of " + this.idx_prefix);
     this.es = new elasticsearch.Client({
       host: es_uri,
-      apiVersion: "1.4"
+      apiVersion: "1.4",
+      requestTimeout: this.opts.config.request_timeout || 30000
     });
     this.sessions = {};
     this.local = tz(require("timezone/zones"))(nconf.get("timezone") || "UTC");

@@ -32,8 +32,9 @@ module.exports = class Analytics
         @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
 
         @es = new elasticsearch.Client
-            host:       es_uri
-            apiVersion: "1.4"
+            host:           es_uri
+            apiVersion:     "1.4"
+            requestTimeout: @opts.config.request_timeout || 30000
             #log: "trace"
 
         # track open sessions

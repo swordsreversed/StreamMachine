@@ -15,7 +15,7 @@ session_id  = uuid.v4()
 # started an hour ago
 start_time = Number(new Date) - 60*60*1000
 
-config = es_uri:"http://localhost:9200/stream-test", finalize_secs:-1
+config = es_uri:"http://localhost:9200/stream-test", finalize_secs:-1, request_timeout:1000
 
 START =
     type:           "session_start"
@@ -98,8 +98,9 @@ describe "Analytics", ->
         _uri = URL.parse(config.es_uri)
 
         es = new elasticsearch.Client
-            host:       "http://#{_uri.hostname}:#{_uri.port||9200}"
-            apiVersion: "1.4"
+            host:           "http://#{_uri.hostname}:#{_uri.port||9200}"
+            apiVersion:     "1.4"
+            requestTimeout: 1000
 
         idx_prefix = _uri.pathname.substr(1)
 
