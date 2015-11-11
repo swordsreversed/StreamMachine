@@ -1,10 +1,10 @@
-var BaseOutput, Shoutcast, debug, icecast, _u,
+var BaseOutput, Icy, Shoutcast, debug, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require('underscore');
+_ = require('underscore');
 
-icecast = require("icecast");
+Icy = require("icy");
 
 BaseOutput = require("./base");
 
@@ -71,7 +71,7 @@ module.exports = Shoutcast = (function(_super) {
   }
 
   Shoutcast.prototype._startAudio = function(initial) {
-    this.ice = new icecast.Writer(this.client.bytesToNextMeta || this.client.meta_int);
+    this.ice = new Icy.Writer(this.client.bytesToNextMeta || this.client.meta_int);
     this.ice.metaint = this.client.meta_int;
     delete this.client.bytesToNextMeta;
     if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {

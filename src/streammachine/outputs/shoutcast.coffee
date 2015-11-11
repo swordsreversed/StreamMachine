@@ -1,5 +1,5 @@
-_u      = require 'underscore'
-icecast = require "icecast"
+_       = require 'underscore'
+Icy     = require "icy"
 
 BaseOutput = require "./base"
 
@@ -65,7 +65,7 @@ module.exports = class Shoutcast extends BaseOutput
         # the one we want to use later.  Since the initializer queues the
         # first read, we can set both in succession without having to worry
         # about timing
-        @ice = new icecast.Writer @client.bytesToNextMeta||@client.meta_int
+        @ice = new Icy.Writer @client.bytesToNextMeta||@client.meta_int
         @ice.metaint = @client.meta_int
         delete @client.bytesToNextMeta
 
