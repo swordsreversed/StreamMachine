@@ -1,4 +1,4 @@
-var CP, Logger, RPC, Slave, SlaveMode, nconf, net, path, _,
+var CP, Logger, RPC, Slave, SlaveMode, debug, nconf, net, path, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -18,6 +18,8 @@ Logger = require("../logger");
 
 Slave = require("../slave");
 
+debug = require("debug")("sm:modes:slave");
+
 module.exports = SlaveMode = (function(_super) {
   __extends(SlaveMode, _super);
 
@@ -30,6 +32,7 @@ module.exports = SlaveMode = (function(_super) {
       pid: process.pid
     });
     this.log.debug("Slave Instance initialized");
+    debug("Slave Mode init");
     process.title = "StreamM:slave";
     SlaveMode.__super__.constructor.apply(this, arguments);
     this._handle = null;
@@ -39,6 +42,7 @@ module.exports = SlaveMode = (function(_super) {
     this._lastAddress = null;
     this._initFull = false;
     if (process.send != null) {
+      debug("Setting up RPC");
       this._rpc = new RPC(process, {
         timeout: 5000,
         functions: {
@@ -86,7 +90,7 @@ module.exports = SlaveMode = (function(_super) {
       };
     })(this));
     if (nconf.get("handoff")) {
-      this._acceptHandoff();
+      this._acceptHandoff(cb);
     } else {
       this._openServer(null, cb);
     }
@@ -203,15 +207,15 @@ module.exports = SlaveMode = (function(_super) {
     })(this));
   };
 
-  SlaveMode.prototype._acceptHandoff = function() {
+  SlaveMode.prototype._acceptHandoff = function(cb) {
     this.log.info("Initializing handoff receptor.");
     if (!this._rpc) {
       this.log.error("Handoff called, but no RPC interface set up. Aborting.");
       return false;
     }
     this._rpc.once("HANDOFF_GO", (function(_this) {
-      return function(msg, handle, cb) {
-        _this._rpc.once("server_socket", function(msg, handle, cb) {
+      return function(msg, handle, hgcb) {
+        _this._rpc.once("server_socket", function(msg, handle, sscb) {
           var _go;
           _this.log.info("Incoming server handle.");
           _this._openServer(handle, function(err) {
@@ -222,7 +226,8 @@ module.exports = SlaveMode = (function(_super) {
             return _this.log.info("Server started with handle received during handoff.");
           });
           _go = function() {
-            return cb(null);
+            sscb(null);
+            return typeof cb === "function" ? cb(null) : void 0;
           };
           if (_this._initFull) {
             return _go();
@@ -232,7 +237,7 @@ module.exports = SlaveMode = (function(_super) {
             });
           }
         });
-        return cb(null, "GO");
+        return hgcb(null, "GO");
       };
     })(this));
     if (process.send == null) {
@@ -251,6 +256,7 @@ module.exports = SlaveMode = (function(_super) {
       this.config = config;
       this.workers = {};
       this._shutdown = false;
+      debug("Worker pool init with size of " + this.size + ".");
       this.log = this.s.log.child({
         component: "worker_pool"
       });
@@ -302,13 +308,16 @@ module.exports = SlaveMode = (function(_super) {
     WorkerPool.prototype._spawn = function() {
       var id, p, w;
       if (this.count() >= this.size) {
+        debug("Pool is now at " + (this.count()) + ". Full strength.");
         this.log.debug("Pool is at full strength");
         this.emit("full_strength");
         return false;
       }
-      p = CP.fork(path.resolve(__dirname, "./slave_worker.js"));
       id = this._nextId;
       this._nextId += 1;
+      debug("Spawning worker " + id + ".");
+      p = CP.fork(path.resolve(__dirname, "./slave_worker.js"));
+      debug("Worker " + id + " forked with pid of " + p.pid);
       this.log.debug("Spawning new worker.", {
         count: this.count(),
         target: this.size
@@ -337,6 +346,7 @@ module.exports = SlaveMode = (function(_super) {
               w._loaded = true;
               _this.emit("worker_loaded");
               cb(null);
+              debug("Worker " + w.id + " rewind loaded. Attempting new spawn.");
               return _this._spawn();
             };
           })(this),
@@ -362,11 +372,13 @@ module.exports = SlaveMode = (function(_super) {
             id: w.id,
             pid: w.pid
           });
+          debug("Worker " + w.id + " RPC is set up.");
           return _this.workers[w.id] = w;
         };
       })(this));
       p.once("exit", (function(_this) {
         return function() {
+          debug("Got exit from worker process " + w.id);
           _this.log.info("SlaveWorker exit: " + w.id);
           delete _this.workers[w.id];
           w.emit("exit");
@@ -378,6 +390,7 @@ module.exports = SlaveMode = (function(_super) {
       })(this));
       return p.on("error", (function(_this) {
         return function(err) {
+          debug("Error from worker process " + w.id + ": " + err);
           return _this.log.error("Error from SlaveWorker process: " + err);
         };
       })(this));

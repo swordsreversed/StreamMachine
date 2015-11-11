@@ -4,7 +4,7 @@ node_js:
 - '4.2'
 services:
 - elasticsearch
-env: SKIP_TRANSCODING=1
+env: SKIP_TRANSCODING=1 SM_TEST_JS=1
 sudo: false
 notifications:
   slack:

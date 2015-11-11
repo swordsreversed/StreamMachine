@@ -1,4 +1,4 @@
-var Logger, RPC, Slave, SlaveWorker, _;
+var Logger, RPC, Slave, SlaveWorker, debug, _;
 
 RPC = require("ipc-rpc");
 
@@ -8,11 +8,14 @@ Logger = require("../logger");
 
 Slave = require("./");
 
+debug = require("debug")("sm:slave:slave_worker");
+
 module.exports = SlaveWorker = (function() {
   function SlaveWorker() {
     this._config = null;
     this._configured = false;
     this._loaded = false;
+    debug("Init for SlaveWorker");
     new RPC(process, {
       functions: {
         status: (function(_this) {
@@ -61,12 +64,14 @@ module.exports = SlaveWorker = (function() {
     }, (function(_this) {
       return function(err, rpc) {
         _this._rpc = rpc;
+        debug("Requesting slave config over RPC");
         return _this._rpc.request("config", function(err, obj) {
           var agent;
           if (err) {
             console.error("Error loading config: " + err);
             process.exit(1);
           }
+          debug("Slave config received");
           _this._config = obj;
           if (_this._config["enable-webkit-devtools-slaveworker"]) {
             console.log("ENABLING WEBKIT DEVTOOLS IN SLAVE WORKER");
@@ -78,26 +83,31 @@ module.exports = SlaveWorker = (function() {
             pid: process.pid
           });
           _this.log.debug("SlaveWorker initialized");
+          debug("Creating slave instance");
           _this.slave = new Slave(_.extend(_this._config, {
             logger: _this.log
           }), _this);
           _this.slave.once_configured(function() {
+            debug("Slave instance says it is configured");
             _this._configured = true;
             return _this._rpc.request("worker_configured", function(err) {
               if (err) {
                 return _this.log.error("Error sending worker_configured: " + err);
               } else {
-                return _this.log.debug("Controller ACKed that we're configured.");
+                _this.log.debug("Controller ACKed that we're configured.");
+                return debug("Slave controller ACKed our config");
               }
             });
           });
           return _this.slave.once_rewinds_loaded(function() {
+            debug("Slave instance says rewinds are loaded");
             _this._loaded = true;
             return _this._rpc.request("rewinds_loaded", function(err) {
               if (err) {
                 return _this.log.error("Error sending rewinds_loaded: " + err);
               } else {
-                return _this.log.debug("Controller ACKed that our rewinds are loaded.");
+                _this.log.debug("Controller ACKed that our rewinds are loaded.");
+                return debug("Slave controller ACKed that our rewinds are loaded");
               }
             });
           });

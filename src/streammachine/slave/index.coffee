@@ -10,6 +10,8 @@ URL     = require "url"
 HTTP    = require "http"
 tz      = require 'timezone'
 
+debug = require("debug")("sm:slave:slave")
+
 module.exports = class Slave extends require("events").EventEmitter
     Outputs:
         pumper:         require "../outputs/pumper"
@@ -19,6 +21,8 @@ module.exports = class Slave extends require("events").EventEmitter
 
     constructor: (@options,@_worker) ->
         @_configured = false
+
+        debug "Init for Slave"
 
         @master = null
 
@@ -48,17 +52,21 @@ module.exports = class Slave extends require("events").EventEmitter
         # -- Make sure we have the proper slave config options -- #
 
         if @options.slave?.master
+            debug "Connecting IO to master"
             @io = new IO @, @log.child(module:"slave_io"), @options.slave
 
             @io.on "connected", =>
+                debug "IO is connected"
                 @alerts.update "slave_disconnected", @io.id, false
                 @log.proxyToMaster(@io)
 
             @io.on "disconnected", =>
+                debug "IO is disconnected"
                 @alerts.update "slave_disconnected", @io.id, true
                 @log.proxyToMaster()
 
         @once "streams", =>
+            debug "Streams event received"
             @_configured = true
 
         # -- set up our stream server -- #
@@ -109,19 +117,24 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
 
     configureStreams: (options) ->
+        debug "In configureStreams"
         @log.debug "In slave configureStreams with ", options:options
 
         # are any of our current streams missing from the new options? if so,
         # disconnect them
         for k,obj of @streams
             if !options?[k]
+                debug "configureStreams: Disconnecting stream #{k}"
                 @log.info "configureStreams: Calling disconnect on #{k}"
                 obj.disconnect()
                 delete @streams[k]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
+
+        debug "configureStreams: New options start"
         for key,opts of options
+            debug "configureStreams: Configuring #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
                 @log.debug "Passing updated config to stream: #{key}", opts:opts
@@ -156,6 +169,7 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # emit a streams event for any components under us that might
         # need to know
+        debug "Done with configureStreams"
         @emit "streams", @streams
 
     #----------

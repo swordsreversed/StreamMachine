@@ -1,4 +1,4 @@
-var Alerts, HTTP, IO, Server, Slave, SocketSource, Stream, URL, tz, _,
+var Alerts, HTTP, IO, Server, Slave, SocketSource, Stream, URL, debug, tz, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -20,6 +20,8 @@ HTTP = require("http");
 
 tz = require('timezone');
 
+debug = require("debug")("sm:slave:slave");
+
 module.exports = Slave = (function(_super) {
   __extends(Slave, _super);
 
@@ -35,6 +37,7 @@ module.exports = Slave = (function(_super) {
     this.options = options;
     this._worker = _worker;
     this._configured = false;
+    debug("Init for Slave");
     this.master = null;
     this.streams = {};
     this.stream_groups = {};
@@ -51,17 +54,20 @@ module.exports = Slave = (function(_super) {
       })
     });
     if ((_ref = this.options.slave) != null ? _ref.master : void 0) {
+      debug("Connecting IO to master");
       this.io = new IO(this, this.log.child({
         module: "slave_io"
       }), this.options.slave);
       this.io.on("connected", (function(_this) {
         return function() {
+          debug("IO is connected");
           _this.alerts.update("slave_disconnected", _this.io.id, false);
           return _this.log.proxyToMaster(_this.io);
         };
       })(this));
       this.io.on("disconnected", (function(_this) {
         return function() {
+          debug("IO is disconnected");
           _this.alerts.update("slave_disconnected", _this.io.id, true);
           return _this.log.proxyToMaster();
         };
@@ -69,6 +75,7 @@ module.exports = Slave = (function(_super) {
     }
     this.once("streams", (function(_this) {
       return function() {
+        debug("Streams event received");
         return _this._configured = true;
       };
     })(this));
@@ -129,6 +136,7 @@ module.exports = Slave = (function(_super) {
 
   Slave.prototype.configureStreams = function(options) {
     var g, k, key, obj, opts, sg, source, stream, _base, _ref;
+    debug("In configureStreams");
     this.log.debug("In slave configureStreams with ", {
       options: options
     });
@@ -136,13 +144,16 @@ module.exports = Slave = (function(_super) {
     for (k in _ref) {
       obj = _ref[k];
       if (!(options != null ? options[k] : void 0)) {
+        debug("configureStreams: Disconnecting stream " + k);
         this.log.info("configureStreams: Calling disconnect on " + k);
         obj.disconnect();
         delete this.streams[k];
       }
     }
+    debug("configureStreams: New options start");
     for (key in options) {
       opts = options[key];
+      debug("configureStreams: Configuring " + key);
       if (this.streams[key]) {
         this.log.debug("Passing updated config to stream: " + key, {
           opts: opts
@@ -174,6 +185,7 @@ module.exports = Slave = (function(_super) {
         this.root_route = key;
       }
     }
+    debug("Done with configureStreams");
     return this.emit("streams", this.streams);
   };
 

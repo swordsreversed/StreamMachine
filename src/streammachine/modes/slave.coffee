@@ -8,6 +8,8 @@ CP      = require "child_process"
 Logger  = require "../logger"
 Slave   = require "../slave"
 
+debug = require("debug")("sm:modes:slave")
+
 #----------
 
 module.exports = class SlaveMode extends require("./base")
@@ -16,6 +18,8 @@ module.exports = class SlaveMode extends require("./base")
     constructor: (@opts,cb) ->
         @log = (new Logger @opts.log).child({mode:'slave',pid:process.pid})
         @log.debug "Slave Instance initialized"
+
+        debug "Slave Mode init"
 
         process.title = "StreamM:slave"
 
@@ -32,6 +36,7 @@ module.exports = class SlaveMode extends require("./base")
         # -- Set up Internal RPC -- #
 
         if process.send?
+            debug "Setting up RPC"
             @_rpc = new RPC process, timeout:5000, functions:
                 OK: (msg,handle,cb) ->
                     cb null, "OK"
@@ -79,7 +84,7 @@ module.exports = class SlaveMode extends require("./base")
         # ourself.
 
         if nconf.get("handoff")
-            @_acceptHandoff()
+            @_acceptHandoff cb
         else
             # we'll listen via our configured port
             @_openServer null, cb
@@ -198,15 +203,15 @@ module.exports = class SlaveMode extends require("./base")
 
     #----------
 
-    _acceptHandoff: ->
+    _acceptHandoff: (cb) ->
         @log.info "Initializing handoff receptor."
 
         if !@_rpc
             @log.error "Handoff called, but no RPC interface set up. Aborting."
             return false
 
-        @_rpc.once "HANDOFF_GO", (msg,handle,cb) =>
-            @_rpc.once "server_socket", (msg,handle,cb) =>
+        @_rpc.once "HANDOFF_GO", (msg,handle,hgcb) =>
+            @_rpc.once "server_socket", (msg,handle,sscb) =>
                 @log.info "Incoming server handle."
                 @_openServer handle, (err) =>
                     if err
@@ -220,7 +225,8 @@ module.exports = class SlaveMode extends require("./base")
                     # let our sender know we're ready... we're already listening for
                     # the stream_listener requests on our rpc, so our job in here is
                     # done. The rest is on the sender.
-                    cb null
+                    sscb null
+                    cb? null
 
                 # wait until we're at full strength to start transferring listeners
                 if @_initFull
@@ -229,7 +235,7 @@ module.exports = class SlaveMode extends require("./base")
                     @once "full_strength", => _go()
 
 
-            cb null, "GO"
+            hgcb null, "GO"
 
         if !process.send?
             @log.error "Handoff called, but process has no send function. Aborting."
@@ -243,6 +249,8 @@ module.exports = class SlaveMode extends require("./base")
         constructor: (@s,@size,@config) ->
             @workers    = {}
             @_shutdown  = false
+
+            debug "Worker pool init with size of #{@size}."
 
             @log = @s.log.child component:"worker_pool"
 
@@ -268,14 +276,17 @@ module.exports = class SlaveMode extends require("./base")
 
         _spawn: ->
             if @count() >= @size
+                debug "Pool is now at #{ @count() }. Full strength."
                 @log.debug "Pool is at full strength"
                 @emit "full_strength"
                 return false
 
-            p = CP.fork path.resolve(__dirname,"./slave_worker.js")
-
             id = @_nextId
             @_nextId += 1
+
+            debug "Spawning worker #{id}."
+            p = CP.fork path.resolve(__dirname,"./slave_worker.js")
+            debug "Worker #{id} forked with pid of #{p.pid}"
 
             @log.debug "Spawning new worker.", count:@count(), target:@size
 
@@ -310,6 +321,7 @@ module.exports = class SlaveMode extends require("./base")
                     cb null
 
                     # now that we're done, see if any more workers need to start
+                    debug "Worker #{w.id} rewind loaded. Attempting new spawn."
                     @_spawn()
 
                 #---
@@ -334,12 +346,14 @@ module.exports = class SlaveMode extends require("./base")
                     return false
 
                 @log.debug "Worker #{w.id} is set up.", id:w.id, pid:w.pid
+                debug "Worker #{w.id} RPC is set up."
 
                 @workers[ w.id ] = w
 
             # -- Handle disconnects and exits -- #
 
             p.once "exit", =>
+                debug "Got exit from worker process #{w.id}"
                 @log.info "SlaveWorker exit: #{w.id}"
                 delete @workers[ w.id ]
 
@@ -350,6 +364,7 @@ module.exports = class SlaveMode extends require("./base")
 
             # error seems to be thrown for issues sending IPC
             p.on "error", (err) =>
+                debug "Error from worker process #{w.id}: #{err}"
                 @log.error "Error from SlaveWorker process: #{err}"
                 # FIXME: What else should we do?
 

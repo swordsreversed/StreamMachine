@@ -4,12 +4,16 @@ _ = require "underscore"
 Logger  = require "../logger"
 Slave   = require "./"
 
+debug = require("debug")("sm:slave:slave_worker")
+
 module.exports = class SlaveWorker
     constructor: ->
         @_config = null
 
         @_configured    = false
         @_loaded        = false
+
+        debug "Init for SlaveWorker"
 
         # -- Set up RPC -- #
 
@@ -63,10 +67,13 @@ module.exports = class SlaveWorker
 
             # We're initially loaded via no config. At this point, we need
             # to request config from the main slave process.
+            debug "Requesting slave config over RPC"
             @_rpc.request "config", (err,obj) =>
                 if err
                     console.error "Error loading config: #{err}"
                     process.exit(1)
+
+                debug "Slave config received"
 
                 @_config = obj
 
@@ -80,6 +87,7 @@ module.exports = class SlaveWorker
 
                 # -- Create our Slave Instance -- #
 
+                debug "Creating slave instance"
                 @slave = new Slave _.extend(@_config, logger:@log), @
 
                 # -- Communicate Config Back to Slave -- #
@@ -88,24 +96,28 @@ module.exports = class SlaveWorker
                 # to the main slave
 
                 @slave.once_configured =>
+                    debug "Slave instance says it is configured"
                     @_configured = true
                     @_rpc.request "worker_configured", (err) =>
                         if err
                             @log.error "Error sending worker_configured: #{err}"
                         else
                             @log.debug "Controller ACKed that we're configured."
+                            debug "Slave controller ACKed our config"
 
                 # -- Communicate Rewinds Back to Slave -- #
 
                 # when all rewinds are loaded, pass that word on to our main slave
 
                 @slave.once_rewinds_loaded =>
+                    debug "Slave instance says rewinds are loaded"
                     @_loaded = true
                     @_rpc.request "rewinds_loaded", (err) =>
                         if err
                             @log.error "Error sending rewinds_loaded: #{err}"
                         else
                             @log.debug "Controller ACKed that our rewinds are loaded."
+                            debug "Slave controller ACKed that our rewinds are loaded"
 
     #----------
 
