@@ -1,4 +1,4 @@
-Icecast = require "icecast"
+Icy = require "icy"
 http = require "http"
 
 debug = require("debug")("sm:util:stream_listener")
@@ -48,7 +48,7 @@ module.exports = class StreamListener extends require("events").EventEmitter
             # -- listen for data -- #
 
             @res.on "metadata", (meta) =>
-                @emit "metadata", Icecast.parse(meta)
+                @emit "metadata", Icy.parse(meta)
 
             @res.on "readable", =>
                 while data = @res.read()
@@ -66,7 +66,7 @@ module.exports = class StreamListener extends require("events").EventEmitter
 
                 @emit "close" if !@disconnected
 
-        connect_func = if @shoutcast then Icecast.get else http.get
+        connect_func = if @shoutcast then Icy.get else http.get
 
         cLoop = =>
             @req = connect_func @url, _connected

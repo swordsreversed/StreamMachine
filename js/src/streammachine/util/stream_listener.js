@@ -1,8 +1,8 @@
-var Icecast, StreamListener, debug, http, _,
+var Icy, StreamListener, debug, http, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-Icecast = require("icecast");
+Icy = require("icy");
 
 http = require("http");
 
@@ -57,7 +57,7 @@ module.exports = StreamListener = (function(_super) {
         }
         _this.emit("connected");
         _this.res.on("metadata", function(meta) {
-          return _this.emit("metadata", Icecast.parse(meta));
+          return _this.emit("metadata", Icy.parse(meta));
         });
         _this.res.on("readable", function() {
           var data, _results;
@@ -82,7 +82,7 @@ module.exports = StreamListener = (function(_super) {
         });
       };
     })(this);
-    connect_func = this.shoutcast ? Icecast.get : http.get;
+    connect_func = this.shoutcast ? Icy.get : http.get;
     cLoop = (function(_this) {
       return function() {
         _this.req = connect_func(_this.url, _connected);

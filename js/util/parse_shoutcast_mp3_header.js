@@ -1,4 +1,4 @@
-var Icecast, MP3, firstHeader, headerCount, icyreader, mp3, _,
+var Icy, MP3, firstHeader, headerCount, icyreader, mp3, _,
   __slice = [].slice;
 
 MP3 = require("../src/streammachine/parsers/mp3");
@@ -7,7 +7,7 @@ _ = require("underscore");
 
 mp3 = new MP3;
 
-Icecast = require('icecast');
+Icy = require('icy');
 
 firstHeader = null;
 
@@ -49,7 +49,7 @@ mp3.on("frame", (function(_this) {
   };
 })(this));
 
-icyreader = new Icecast.Reader(32768);
+icyreader = new Icy.Reader(32768);
 
 process.stdin.pipe(icyreader).pipe(mp3);
 

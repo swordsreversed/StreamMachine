@@ -1,10 +1,8 @@
-var Icecast, ProxyRoom, domain, url, util, _u,
+var Icy, ProxyRoom, domain, url, util,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-Icecast = require('icecast');
-
-_u = require('underscore');
+Icy = require('icy');
 
 util = require('util');
 
@@ -86,7 +84,7 @@ module.exports = ProxyRoom = (function(_super) {
     url_opts.headers = {
       "user-agent": "StreamMachine 0.1.0"
     };
-    Icecast.get(url_opts, (function(_this) {
+    Icy.get(url_opts, (function(_this) {
       return function(ice) {
         _this.icecast = ice;
         _this.icecast.on("close", function() {
@@ -106,7 +104,7 @@ module.exports = ProxyRoom = (function(_super) {
         _this.icecast.on("metadata", function(data) {
           var meta;
           if (!_this._in_disconnect) {
-            meta = Icecast.parse(data);
+            meta = Icy.parse(data);
             if (meta.StreamTitle) {
               _this.StreamTitle = meta.StreamTitle;
             }

@@ -1,5 +1,4 @@
-Icecast = require 'icecast'
-_u      = require 'underscore'
+Icy     = require 'icy'
 
 util    = require 'util'
 url     = require 'url'
@@ -77,7 +76,7 @@ module.exports = class ProxyRoom extends require("./base")
         url_opts = url.parse @url
         url_opts.headers = "user-agent":"StreamMachine 0.1.0"
 
-        Icecast.get url_opts, (ice) =>
+        Icy.get url_opts, (ice) =>
             @icecast = ice
 
             @icecast.on "close", =>
@@ -93,7 +92,7 @@ module.exports = class ProxyRoom extends require("./base")
 
             @icecast.on "metadata", (data) =>
                 unless @_in_disconnect
-                    meta = Icecast.parse(data)
+                    meta = Icy.parse(data)
 
                     if meta.StreamTitle
                         @StreamTitle = meta.StreamTitle
