@@ -25,7 +25,7 @@ describe "Rewinder", ->
         done()
 
     before (done) ->
-        source = new FileSource format:"mp3", filePath:mp3, do_not_emit:true
+        source = new FileSource format:"mp3", filePath:mp3, do_not_emit:true, chunkDuration:0.1
         source.once "_loaded", ->
             rewind._rConnectSource source, ->
                 # dump in 30 secs

@@ -5,7 +5,10 @@ MasterStream    = $src "master/stream"
 SlaveIO         = $src "slave/slave_io"
 Logger          = $src "logger"
 
-nconf   = require "nconf"
+MasterHelper    = require "./helpers/master"
+
+debug = require("debug")("sm:tests:master")
+
 _       = require "underscore"
 
 STREAM1 =
@@ -38,37 +41,32 @@ describe "StreamMachine Master Mode", ->
     # -- Initialize our master -- #
 
     before (done) ->
-        settings = nconf.get()
-        delete settings.redis
-        delete settings.analytics
+        MasterHelper.startMaster "mp3", (err,info) ->
+            throw err if err
+            mm = info
 
-        new MasterMode settings, (err,m) =>
-            return throw err if err
-
-            mm = m
-
-            port_master = mm.handle?.address().port
-            port_source = mm.master.sourcein?.server?.address().port
+            debug "started master. Connect at: #{mm.slave_uri}"
+            debug "Stream Key is #{mm.stream_key}"
 
             done()
 
     after (done) ->
-        mm.master.monitoring.shutdown()
+        mm.master.master.monitoring.shutdown()
         done()
 
     # -- Test our startup state -- #
 
     describe "Startup", ->
         it "should have started a Master instance", (done) ->
-            expect(mm.master).to.be.a.instanceof(Master)
+            expect(mm.master).to.be.a.instanceof(MasterMode)
             done()
 
         it "should be listening on a source port", (done) ->
-            expect(port_source).not.to.be.undefined
+            expect(mm.source_port).not.to.be.undefined
             done()
 
         it "should be listening on an admin port", (done) ->
-            expect(port_master).not.to.be.undefined
+            expect(mm.master_port).not.to.be.undefined
             done()
 
         it "should have no streams configured", (done) ->
@@ -76,7 +74,7 @@ describe "StreamMachine Master Mode", ->
             done()
 
         it "should have no slaves", (done) ->
-            expect(mm.master.slaves.slaves).to.be.empty
+            expect(mm.master.master.slaves.slaves).to.be.empty
             done()
 
         it "should be listening for slaves"
@@ -86,14 +84,14 @@ describe "StreamMachine Master Mode", ->
     describe "Stream Configuration", ->
         streams_emitted = false
         before (done) ->
-            mm.master.once "streams", -> streams_emitted = true
+            mm.master.master.once "streams", -> streams_emitted = true
             done()
 
         it "should accept a new stream", (done) ->
             c = streams:{}, sources:{}
             c.streams[ STREAM1.key ] = STREAM1
 
-            mm.master.configure c, (err,config) ->
+            mm.master.master.configure c, (err,config) ->
                 expect(err).to.be.null
                 expect(config).to.have.property 'streams'
                 expect(config.streams).to.have.property STREAM1.key
@@ -113,7 +111,7 @@ describe "StreamMachine Master Mode", ->
 
         it "should allow a slave connection", (done) ->
             slave   = new FakeSlave
-            s_io    = new SlaveIO slave, s_log, master:"ws://localhost:#{port_master}?password=#{nconf.get("master:password")}"
+            s_io    = new SlaveIO slave, s_log, master:"ws://localhost:#{mm.master_port}?password=#{mm.config.master.password}"
 
             err_f = (err) -> throw err
 
@@ -137,23 +135,3 @@ describe "StreamMachine Master Mode", ->
                 done()
 
         it "should deny a slave that provides the wrong password"
-
-
-    # -- Sources -- #
-
-    describe "Source Connections", ->
-
-        it "should accept a source connection"
-
-        it "should deny a source connection with the wrong password"
-
-    # -- Source -> Stream -- #
-
-    describe "Source -> Stream", ->
-        # TODO: before to connect a source and pipe in an mp3 file
-
-        it "should add the new source to our stream"
-
-        it "should have set the stream's stream key"
-
-        it "should start emitting data"

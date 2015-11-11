@@ -5,8 +5,6 @@ chai            = require "chai"
 global.expect   = chai.expect
 
 nconf.env().argv()
-nconf.file( { file: nconf.get("config") || nconf.get("CONFIG") || "config/test.json" } )
-
 nconf.defaults StreamMachine.Defaults
 
 path = require "path"
