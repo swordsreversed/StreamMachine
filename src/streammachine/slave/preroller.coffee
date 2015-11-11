@@ -11,6 +11,9 @@ module.exports = class Preroller
     constructor: (@stream,@key,@uri,@transcode_uri,@impressionDelay,cb) ->
         @_counter = 1
 
+        if !@uri || !@transcode_uri
+            return cb new Error("Preroller requires Ad URI and Transcoder URI")
+
         # -- need to look at the stream to get characteristics -- #
 
         @stream.log.debug "Preroller calling getStreamKey"

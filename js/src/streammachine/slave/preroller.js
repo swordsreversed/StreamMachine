@@ -23,6 +23,9 @@ module.exports = Preroller = (function() {
     this.transcode_uri = transcode_uri;
     this.impressionDelay = impressionDelay;
     this._counter = 1;
+    if (!this.uri || !this.transcode_uri) {
+      return cb(new Error("Preroller requires Ad URI and Transcoder URI"));
+    }
     this.stream.log.debug("Preroller calling getStreamKey");
     this.stream.getStreamKey((function(_this) {
       return function(streamKey) {
