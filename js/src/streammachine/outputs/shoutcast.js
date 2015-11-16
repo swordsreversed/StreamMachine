@@ -138,7 +138,7 @@ module.exports = Shoutcast = (function(_super) {
             }
           });
           _this.metaFunc = function(data) {
-            if (!(_this._lastMeta && _u(data).isEqual(_this._lastMeta))) {
+            if (!(_this._lastMeta && _(data).isEqual(_this._lastMeta))) {
               _this.ice.queue(data);
               return _this._lastMeta = data;
             }

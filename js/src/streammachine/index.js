@@ -1,12 +1,4 @@
-var StreamMachine, http, nconf, url, _u;
-
-_u = require("underscore");
-
-url = require('url');
-
-http = require("http");
-
-nconf = require("nconf");
+var StreamMachine;
 
 module.exports = StreamMachine = (function() {
   function StreamMachine() {}

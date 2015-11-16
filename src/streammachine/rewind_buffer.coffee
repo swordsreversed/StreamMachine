@@ -1,4 +1,4 @@
-_u          = require 'underscore'
+_           = require 'underscore'
 Concentrate = require "concentrate"
 Dissolve    = require "dissolve"
 nconf       = require "nconf"
@@ -134,7 +134,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             last_buffer_ts:     @_rbuffer.last()?.ts
 
         if @hls_segmenter
-            _u.extend status, @hls_segmenter.status()
+            _.extend status, @hls_segmenter.status()
 
         status
 
@@ -397,7 +397,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     _rremoveListener: (obj) ->
-        @_rlisteners = _u(@_rlisteners).without obj
+        @_rlisteners = _(@_rlisteners).without obj
         return true
 
     #----------

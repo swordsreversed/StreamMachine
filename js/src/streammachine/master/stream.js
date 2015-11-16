@@ -1,8 +1,8 @@
-var FileSource, HLSSegmenter, ProxySource, Rewind, SourceMount, Stream, TranscodingSource, URL, uuid, _u,
+var FileSource, HLSSegmenter, ProxySource, Rewind, SourceMount, Stream, TranscodingSource, URL, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require("underscore");
+_ = require("underscore");
 
 uuid = require("node-uuid");
 
@@ -54,7 +54,7 @@ module.exports = Stream = (function(_super) {
     var newsource, tsource, uri, _ref;
     this.key = key;
     this.log = log;
-    this.opts = _u.defaults(opts || {}, this.DefaultOptions);
+    this.opts = _.defaults(opts || {}, this.DefaultOptions);
     this.source = null;
     if (opts.ffmpeg_args) {
       this.log.debug("Setting up transcoding source for " + this.key);
@@ -113,7 +113,7 @@ module.exports = Stream = (function(_super) {
     })(this);
     this.source.on("data", (function(_this) {
       return function(data) {
-        return _this.emit("data", _u.extend({}, data, {
+        return _this.emit("data", _.extend({}, data, {
           meta: _this._meta
         }));
       };
@@ -241,7 +241,7 @@ module.exports = Stream = (function(_super) {
       if (new_opts[k] != null) {
         this.opts[k] = new_opts[k];
       }
-      if (_u.isNumber(this.DefaultOptions[k])) {
+      if (_.isNumber(this.DefaultOptions[k])) {
         this.opts[k] = Number(this.opts[k]);
       }
     }

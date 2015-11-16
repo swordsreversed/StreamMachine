@@ -1,8 +1,8 @@
-var Redis, RedisManager, Url, debug, nconf, _u,
+var Redis, RedisManager, Url, debug, nconf, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require('underscore');
+_ = require('underscore');
 
 Redis = require('redis');
 
@@ -22,7 +22,7 @@ module.exports = RedisManager = (function(_super) {
 
   function RedisManager(opts) {
     var info;
-    this.options = _u.defaults(nconf.get("redis"), this.DefaultOptions);
+    this.options = _.defaults(nconf.get("redis"), this.DefaultOptions);
     console.log("init redis with ", this.options.server);
     info = Url.parse(this.options.server);
     this.client = Redis.createClient(info.port, info.hostname);

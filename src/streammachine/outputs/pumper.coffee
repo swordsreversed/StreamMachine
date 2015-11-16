@@ -1,5 +1,3 @@
-_u = require 'underscore'
-
 module.exports = class Pumper
     constructor: (@stream,@opts) ->
         super "pumper"

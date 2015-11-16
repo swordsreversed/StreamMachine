@@ -1,4 +1,4 @@
-_u      = require "underscore"
+_       = require "underscore"
 uuid    = require "node-uuid"
 URL     = require "url"
 
@@ -37,7 +37,7 @@ module.exports = class Stream extends require('events').EventEmitter
         impression_delay:   5000
 
     constructor: (@key,@log,mount,opts)->
-        @opts = _u.defaults opts||{}, @DefaultOptions
+        @opts = _.defaults opts||{}, @DefaultOptions
 
         # We have three options for what source we're going to use:
         # a) Internal: Create our own source mount and manage our own sources.
@@ -116,7 +116,7 @@ module.exports = class Stream extends require('events').EventEmitter
 
         @source.on "data", (data) =>
             # inject our metadata into the data object
-            @emit "data", _u.extend {}, data, meta:@_meta
+            @emit "data", _.extend {}, data, meta:@_meta
 
         @source.on "vitals", (vitals) =>
             @_vitals = vitals
@@ -232,7 +232,7 @@ module.exports = class Stream extends require('events').EventEmitter
             @opts[k] = new_opts[k] if new_opts[k]?
 
             # convert to a number if necessary
-            @opts[k] = Number(@opts[k]) if _u.isNumber(@DefaultOptions[k])
+            @opts[k] = Number(@opts[k]) if _.isNumber(@DefaultOptions[k])
 
         if @key != @opts.key
             @key = @opts.key

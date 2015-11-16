@@ -1,10 +1,10 @@
-var Server, compression, express, fs, http, path, util, uuid, _u,
+var Server, compression, express, fs, http, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 express = require('express');
 
-_u = require('underscore');
+_ = require('underscore');
 
 util = require('util');
 
@@ -98,7 +98,7 @@ module.exports = Server = (function(_super) {
       this.app.use((function(_this) {
         return function(req, res, next) {
           var ua, _ref5;
-          ua = _u.compact([req.param("ua"), (_ref5 = req.headers) != null ? _ref5['user-agent'] : void 0]).join(" | ");
+          ua = _.compact([req.param("ua"), (_ref5 = req.headers) != null ? _ref5['user-agent'] : void 0]).join(" | ");
           if (idx_match.test(ua)) {
 
           } else {

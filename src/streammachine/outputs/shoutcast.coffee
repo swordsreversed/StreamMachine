@@ -124,7 +124,7 @@ module.exports = class Shoutcast extends BaseOutput
                         @ice.queue meta if meta
 
                     @metaFunc = (data) =>
-                        unless @_lastMeta && _u(data).isEqual(@_lastMeta)
+                        unless @_lastMeta && _(data).isEqual(@_lastMeta)
                             @ice.queue data
                             @_lastMeta = data
 

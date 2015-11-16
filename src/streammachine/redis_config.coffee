@@ -1,4 +1,3 @@
-_u = require 'underscore'
 Redis = require 'redis'
 Url = require "url"
 EventEmitter = require('events').EventEmitter

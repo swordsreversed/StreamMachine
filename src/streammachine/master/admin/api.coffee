@@ -1,4 +1,3 @@
-_u              = require("underscore")
 express         = require "express"
 api             = require "express-api-helper"
 path            = require "path"

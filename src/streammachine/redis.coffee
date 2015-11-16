@@ -1,4 +1,4 @@
-_u      = require 'underscore'
+_       = require 'underscore'
 Redis   = require 'redis'
 Url     = require "url"
 nconf   = require "nconf"
@@ -10,8 +10,7 @@ module.exports = class RedisManager extends require('events').EventEmitter
         key:    "StreamMachine"
 
     constructor: (opts) ->
-        @options = _u.defaults nconf.get("redis"), @DefaultOptions
-        #@options = _u.defaults opts||{}, @DefaultOptions
+        @options = _.defaults nconf.get("redis"), @DefaultOptions
 
         console.log "init redis with ", @options.server
         info = Url.parse @options.server

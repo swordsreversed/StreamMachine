@@ -1,5 +1,3 @@
-_u = require 'underscore'
-
 BaseOutput = require "./base"
 
 debug = require("debug")("sm:outputs:raw_audio")

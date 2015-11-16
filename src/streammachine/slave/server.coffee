@@ -1,5 +1,5 @@
 express = require 'express'
-_u      = require 'underscore'
+_       = require 'underscore'
 util    = require 'util'
 fs      = require 'fs'
 path    = require 'path'
@@ -91,7 +91,7 @@ module.exports = class Server extends require('events').EventEmitter
         if @config.hls?.limit_full_index
             idx_match = ///#{@config.hls.limit_full_index}///
             @app.use (req,res,next) =>
-                ua = _u.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
+                ua = _.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
 
                 if idx_match.test(ua)
                     # do nothing...

@@ -1,6 +1,4 @@
-var Pumper, _u;
-
-_u = require('underscore');
+var Pumper;
 
 module.exports = Pumper = (function() {
   function Pumper(stream, opts) {

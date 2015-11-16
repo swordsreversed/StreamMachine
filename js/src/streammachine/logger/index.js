@@ -1,9 +1,9 @@
-var LogController, WinstonCommon, fs, path, strftime, winston, _u,
+var LogController, WinstonCommon, fs, path, strftime, winston, _,
   __slice = [].slice,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require("underscore");
+_ = require("underscore");
 
 winston = require("winston");
 
@@ -91,15 +91,15 @@ module.exports = LogController = (function() {
     function Child(parent, opts) {
       this.parent = parent;
       this.opts = opts;
-      _u(['log', 'profile', 'startTimer'].concat(Object.keys(this.parent.logger.levels))).each((function(_this) {
+      _(['log', 'profile', 'startTimer'].concat(Object.keys(this.parent.logger.levels))).each((function(_this) {
         return function(k) {
           return _this[k] = function() {
             var args;
             args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-            if (_u.isObject(args[args.length - 1])) {
-              args[args.length - 1] = _u.extend({}, args[args.length - 1], _this.opts);
+            if (_.isObject(args[args.length - 1])) {
+              args[args.length - 1] = _.extend({}, args[args.length - 1], _this.opts);
             } else {
-              args.push(_u.clone(_this.opts));
+              args.push(_.clone(_this.opts));
             }
             return _this.parent[k].apply(_this, args);
           };
@@ -110,7 +110,7 @@ module.exports = LogController = (function() {
         if (opts == null) {
           opts = {};
         }
-        return new LogController.Child(this.parent, _u.extend({}, this.opts, opts));
+        return new LogController.Child(this.parent, _.extend({}, this.opts, opts));
       };
     }
 

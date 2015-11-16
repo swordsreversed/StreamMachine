@@ -1,8 +1,8 @@
-var Concentrate, Dissolve, HLSSegmenter, MemoryStore, RewindBuffer, Rewinder, nconf, _u,
+var Concentrate, Dissolve, HLSSegmenter, MemoryStore, RewindBuffer, Rewinder, nconf, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
-_u = require('underscore');
+_ = require('underscore');
 
 Concentrate = require("concentrate");
 
@@ -121,7 +121,7 @@ module.exports = RewindBuffer = (function(_super) {
       last_buffer_ts: (_ref1 = this._rbuffer.last()) != null ? _ref1.ts : void 0
     };
     if (this.hls_segmenter) {
-      _u.extend(status, this.hls_segmenter.status());
+      _.extend(status, this.hls_segmenter.status());
     }
     return status;
   };
@@ -405,7 +405,7 @@ module.exports = RewindBuffer = (function(_super) {
   };
 
   RewindBuffer.prototype._rremoveListener = function(obj) {
-    this._rlisteners = _u(this._rlisteners).without(obj);
+    this._rlisteners = _(this._rlisteners).without(obj);
     return true;
   };
 

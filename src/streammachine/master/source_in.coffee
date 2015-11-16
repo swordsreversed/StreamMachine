@@ -1,4 +1,3 @@
-_u      = require "underscore"
 net     = require "net"
 express = require "express"
 

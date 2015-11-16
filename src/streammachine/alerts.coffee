@@ -1,5 +1,5 @@
 nconf       = require "nconf"
-_u          = require "underscore"
+_           = require "underscore"
 nodemailer  = require "nodemailer"
 pagerduty   = require "pagerduty"
 
@@ -138,7 +138,7 @@ module.exports = class Alerts extends require("events").EventEmitter
         #----------
 
         _sendAlert: (msg) ->
-            email = _u.extend {}, @opts.email_options,
+            email = _.extend {}, @opts.email_options,
                 subject: "[StreamMachine/#{msg.key}] #{msg.code} Alert"
                 generateTextFromHTML: true
                 html:   """
@@ -159,7 +159,7 @@ module.exports = class Alerts extends require("events").EventEmitter
         #----------
 
         _sendAllClear: (msg) ->
-            email = _u.extend {}, @opts.email_options,
+            email = _.extend {}, @opts.email_options,
                 subject: "[StreamMachine/#{msg.key}] #{msg.code} Cleared"
                 generateTextFromHTML: true
                 html:   """

@@ -1,10 +1,10 @@
-var ALERT_TYPES, Alerts, nconf, nodemailer, pagerduty, _u,
+var ALERT_TYPES, Alerts, nconf, nodemailer, pagerduty, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 nconf = require("nconf");
 
-_u = require("underscore");
+_ = require("underscore");
 
 nodemailer = require("nodemailer");
 
@@ -145,7 +145,7 @@ module.exports = Alerts = (function(_super) {
 
     Email.prototype._sendAlert = function(msg) {
       var email;
-      email = _u.extend({}, this.opts.email_options, {
+      email = _.extend({}, this.opts.email_options, {
         subject: "[StreamMachine/" + msg.key + "] " + msg.code + " Alert",
         generateTextFromHTML: true,
         html: "<p>StreamMachine has detected an alert condition of <b>" + msg.code + "</b> for <b>" + msg.key + "</b>.</p>\n\n<p>" + msg.description + "</p>\n\n<p>Condition was first detected at <b>" + msg.triggered_at + "</b>.</p>"
@@ -168,7 +168,7 @@ module.exports = Alerts = (function(_super) {
 
     Email.prototype._sendAllClear = function(msg) {
       var email;
-      email = _u.extend({}, this.opts.email_options, {
+      email = _.extend({}, this.opts.email_options, {
         subject: "[StreamMachine/" + msg.key + "] " + msg.code + " Cleared",
         generateTextFromHTML: true,
         html: "<p>StreamMachine has cleared an alert condition of <b>" + msg.code + "</b> for <b>" + msg.key + "</b>.</p>\n\n<p>" + msg.description + "</p>\n\n<p>Condition was first detected at <b>" + msg.triggered_at + "</b>.</p>\n\n<p>Condition was last seen at <b>" + msg.last_seen_at + "</b>.</p>"

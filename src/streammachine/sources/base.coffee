@@ -1,4 +1,3 @@
-_u = require "underscore"
 uuid = require "node-uuid"
 nconf = require "nconf"
 

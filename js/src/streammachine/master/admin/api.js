@@ -1,6 +1,4 @@
-var API, BasicStrategy, Throttle, Users, api, express, passport, path, _u;
-
-_u = require("underscore");
+var API, BasicStrategy, Throttle, Users, api, express, passport, path;
 
 express = require("express");
 

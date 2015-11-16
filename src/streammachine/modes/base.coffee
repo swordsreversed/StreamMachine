@@ -1,7 +1,3 @@
-_u = require "underscore"
-
-#----------
-
 module.exports = class Core extends require("events").EventEmitter
     constructor: ->
         @log.debug "Attaching listener for SIGUSR2 restarts."

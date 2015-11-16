@@ -1,4 +1,4 @@
-_u = require "underscore"
+_ = require "underscore"
 
 winston = require "winston"
 WinstonCommon = require "winston/lib/winston/common"
@@ -83,17 +83,17 @@ module.exports = class LogController
 
     class @Child
         constructor: (@parent,@opts) ->
-            _u(['log', 'profile', 'startTimer'].concat(Object.keys(@parent.logger.levels))).each (k) =>
+            _(['log', 'profile', 'startTimer'].concat(Object.keys(@parent.logger.levels))).each (k) =>
                 @[k] = (args...) =>
-                    if _u.isObject(args[args.length-1])
-                        args[args.length-1] = _u.extend {}, args[args.length-1], @opts
+                    if _.isObject(args[args.length-1])
+                        args[args.length-1] = _.extend {}, args[args.length-1], @opts
                     else
-                        args.push _u.clone(@opts)
+                        args.push _.clone(@opts)
 
                     @parent[k].apply @, args
 
             @logger = @parent.logger
-            @child = (opts={}) -> new LogController.Child(@parent,_u.extend({},@opts,opts))
+            @child = (opts={}) -> new LogController.Child(@parent,_.extend({},@opts,opts))
 
         proxyToMaster: (sock) ->
             @parent.proxyToMaster(sock)
