@@ -28,7 +28,7 @@ SourceIn = require("./source_in");
 
 Alerts = require("../alerts");
 
-Analytics = require("./analytics");
+Analytics = require("../analytics");
 
 Monitoring = require("./monitoring");
 

@@ -44,7 +44,10 @@ module.exports = class Analytics
             requestTimeout: @opts.config.request_timeout || 30000
             #log: "trace"
 
-        @idx_batch  = new BatchedQueue()
+        @idx_batch  = new BatchedQueue
+            batch:      @opts.config.index_batch
+            latency:    @opts.config.index_latency
+
         @idx_writer = new IdxWriter @es, @log.child(submodule:"idx_writer")
         @idx_batch.pipe(@idx_writer)
 

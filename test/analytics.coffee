@@ -17,7 +17,12 @@ session_id  = uuid.v4()
 # started an hour ago
 start_time = Number(new Date) - 60*60*1000
 
-config = es_uri:"http://localhost:9200/stream-test", finalize_secs:-1, request_timeout:2000
+config =
+    es_uri:             "TBD"
+    finalize_secs:      -1
+    request_timeout:    2000
+    index_batch:        100
+    index_latency:      100
 
 START =
     type:           "session_start"

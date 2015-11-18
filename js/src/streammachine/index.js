@@ -23,7 +23,9 @@ module.exports = StreamMachine = (function() {
       limit_full_index: false
     },
     analytics: {
-      finalize_secs: 300
+      finalize_secs: 300,
+      index_batch: 1000,
+      index_latency: 500
     },
     chunk_duration: 2,
     behind_proxy: false,
