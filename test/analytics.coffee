@@ -1,4 +1,4 @@
-Analytics = $src "master/analytics"
+Analytics = $src "analytics"
 Logger    = $src "logger"
 
 nconf           = require "nconf"
@@ -199,7 +199,8 @@ describe "Analytics", ->
         it "stores a session start", (done) ->
             analytics._log START, (err) ->
                 expect(err).to.be.null
-                done()
+                analytics.idx_writer.once "bulk", ->
+                    done()
 
         it "can retrieve the session start", (done) ->
             analytics._selectSessionStart START.client.session_id, (err,start) ->
@@ -241,7 +242,8 @@ describe "Analytics", ->
                     lFunc cb
 
             lFunc ->
-                done()
+                analytics.idx_writer.once "bulk", ->
+                    done()
 
         describe "Totals", ->
             totals = null

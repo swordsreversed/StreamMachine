@@ -5,6 +5,12 @@ tz      = require "timezone"
 nconf   = require "nconf"
 elasticsearch = require "elasticsearch"
 
+BatchedQueue    = require "../util/batched_queue"
+IdxWriter       = require "./idx_writer"
+ESTemplates     = require "./es_templates"
+
+debug = require("debug")("sm:analytics")
+
 # This module is responsible for:
 
 # * Listen for session_start and listen interactions
@@ -30,12 +36,17 @@ module.exports = class Analytics
         @idx_prefix = @_uri.pathname.substr(1)
 
         @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
+        debug "Connecting to ES at #{es_uri}, prefix #{@idx_prefix}"
 
         @es = new elasticsearch.Client
             host:           es_uri
             apiVersion:     "1.4"
             requestTimeout: @opts.config.request_timeout || 30000
             #log: "trace"
+
+        @idx_batch  = new BatchedQueue()
+        @idx_writer = new IdxWriter @es, @log.child(submodule:"idx_writer")
+        @idx_batch.pipe(@idx_writer)
 
         # track open sessions
         @sessions = {}
@@ -50,6 +61,7 @@ module.exports = class Analytics
                 cb? err
             else
                 # do something...
+                debug "Hitting cb after loading templates"
                 cb? null, @
 
         # -- are there any sessions that should be finalized? -- #
@@ -84,18 +96,25 @@ module.exports = class Analytics
     _loadTemplates: (cb) ->
         errors = []
 
-        _loaded = _.after Object.keys(Analytics.EStemplates).length, =>
+        debug "Loading #{Object.keys(ESTemplates).length} ES templates"
+
+        _loaded = _.after Object.keys(ESTemplates).length, =>
             if errors.length > 0
+                debug "Failed to load one or more ES templates: #{errors.join(" | ")}"
                 cb new Error "Failed to load index templates: #{ errors.join(" | ") }"
             else
+                debug "ES templates loaded successfully."
                 cb null
 
-        for t,obj of Analytics.EStemplates
+        for t,obj of ESTemplates
+            debug "Loading ES mapping for #{@idx_prefix}-#{t}"
             @log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
             tmplt = _.extend {}, obj, template:"#{@idx_prefix}-#{t}-*"
             @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
                 _loaded()
+
+    #----------
 
     #----------
 
@@ -118,24 +137,20 @@ module.exports = class Analytics
         @_indicesForTimeRange "listens", time, (err,idx) =>
             switch obj.type
                 when "session_start"
-                    @es.index index:idx[0], type:"start", body:
+                    @idx_batch.write index:idx[0], type:"start", body:
                         time:       new Date(obj.time)
                         session_id: obj.client.session_id
                         stream:     obj.stream_group || obj.stream
                         client:     obj.client
-                    , (err) =>
-                        if err
-                            @log.error "ES write error: #{err}"
-                            return cb? err
 
-                        cb? null
+                    cb? null
 
                     # -- start tracking the session -- #
 
                 when "listen"
                     # do we know of other duration for this session?
                     @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
-                        @es.index index:idx[0], type:"listen", body:
+                        @idx_batch.write index:idx[0], type:"listen", body:
                             session_id:         obj.client.session_id
                             time:               new Date(obj.time)
                             kbytes:             obj.kbytes
@@ -145,17 +160,12 @@ module.exports = class Analytics
                             client:             obj.client
                             offsetSeconds:      obj.offsetSeconds
                             contentTime:        obj.contentTime
-                        , (err) =>
-                            if err
-                                @log.error "ES write error: #{err}"
-                                return cb? err
 
-                            cb? null
+                        cb? null
 
             # -- update our timer -- #
 
             @_updateSessionTimerFor obj.client.session_id, (err) =>
-
 
     #----------
 
@@ -479,89 +489,3 @@ module.exports = class Analytics
                 cb?()
 
     #----------
-
-    @ESobjcore:
-        time:
-            type:   "date"
-            format: "date_time"
-            doc_values: true
-        stream:
-            type:   "string"
-            index:  "not_analyzed"
-            doc_values: true
-        session_id:
-            type:   "string"
-            index:  "not_analyzed"
-            doc_values: true
-        client:
-            type:   "object"
-            properties:
-                session_id:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-                user_id:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-                output:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-                ip:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-                ua:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-                path:
-                    type:   "string"
-                    index:  "not_analyzed"
-                    doc_values: true
-
-    @EStemplates:
-        sessions:
-            settings:
-                index:
-                    number_of_shards:   3
-                    number_of_replicas: 1
-            mappings:
-                session:
-                    "_all": { enabled: false }
-                    properties: _.extend {}, @ESobjcore,
-                        duration:
-                            type:   "float"
-                        kbytes:
-                            type:   "long"
-                        ips:
-                            type:   "string"
-                            index:  "not_analyzed"
-                            index_name: "ip"
-                            doc_values: true
-        listens:
-            settings:
-                index:
-                    number_of_shards:   3
-                    number_of_replicas: 1
-            mappings:
-                start:
-                    "_all": { enabled: false }
-                    properties: _.extend {}, @ESobjcore
-
-                listen:
-                    "_all": { enabled: false }
-                    properties:
-                        _.extend {}, @ESobjcore,
-                            duration:
-                                type:   "float"
-                            kbytes:
-                                type:   "long"
-                            offsetSeconds:
-                                type:   "integer"
-                                doc_values: true
-                            contentTime:
-                                type:   "date"
-                                format: "date_time"
-                                doc_values: true
