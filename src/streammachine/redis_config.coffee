@@ -2,29 +2,36 @@ Redis = require 'redis'
 Url = require "url"
 EventEmitter = require('events').EventEmitter
 
+debug = require("debug")("sm:redis_config")
+
 module.exports = class RedisConfig extends EventEmitter
     constructor: (@redis) ->
-        @_config()
+        process.nextTick =>
+            @_config()
 
     #----------
 
     _config: ->
         @redis.once_connected (client) =>
-            console.log "Querying config from Redis"
+            debug "Querying config from Redis"
             client.get @redis.prefixedKey("config"), (err, reply) =>
                 if reply
                     config = JSON.parse(reply.toString())
-                    console.log "Got redis config of ", config
+                    debug "Got redis config of ", config
                     @emit "config", config
+                else
+                    @emit "config", null
 
      #----------
 
-     _update: (config) ->
+     _update: (config,cb) ->
          @redis.once_connected (client) =>
-             console.log "Saving configuration to Redis"
+             debug "Saving configuration to Redis"
 
              client.set @redis.prefixedKey("config"), JSON.stringify(config), (err,reply) =>
                 if err
-                    console.log "Redis: Failed to save updated config: #{err}"
+                    debug "Redis: Failed to save updated config: #{err}"
+                    cb? err
                 else
-                    console.log "Set config to ", config, reply
+                    debug "Set config to ", config, reply
+                    cb null

@@ -56,8 +56,10 @@ module.exports = Master = (function(_super) {
       this.redis_config = new RedisConfig(this.redis);
       this.redis_config.on("config", (function(_this) {
         return function(config) {
-          _this.options = _.defaults(config || {}, _this.options);
-          return _this.configure(_this.options);
+          if (config) {
+            _this.options = _.defaults(config, _this.options);
+            return _this.configure(_this.options);
+          }
         };
       })(this));
       this.log.debug("Registering config_update listener");

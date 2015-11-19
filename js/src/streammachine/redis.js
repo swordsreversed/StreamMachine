@@ -22,8 +22,8 @@ module.exports = RedisManager = (function(_super) {
 
   function RedisManager(opts) {
     var info;
-    this.options = _.defaults(nconf.get("redis"), this.DefaultOptions);
-    console.log("init redis with ", this.options.server);
+    this.options = _.defaults(opts, this.DefaultOptions);
+    debug("init redis with " + this.options.server);
     info = Url.parse(this.options.server);
     this.client = Redis.createClient(info.port, info.hostname);
     this.client.once("ready", (function(_this) {

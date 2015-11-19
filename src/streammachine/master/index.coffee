@@ -38,15 +38,19 @@ module.exports = class Master extends require("events").EventEmitter
         if @options.redis?
             # -- load our streams configuration from redis -- #
 
+            # we store streams and sources into Redis, but not our full
+            # config object. Other stuff still loads from the config file
+
             @log.debug "Initializing Redis connection"
             @redis = new Redis @options.redis
             @redis_config = new RedisConfig @redis
             @redis_config.on "config", (config) =>
-                # stash the configuration
-                @options = _.defaults config||{}, @options
+                if config
+                    # stash the configuration
+                    @options = _.defaults config, @options
 
-                # (re-)configure our master stream objects
-                @configure @options
+                    # (re-)configure our master stream objects
+                    @configure @options
 
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
