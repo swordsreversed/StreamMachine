@@ -25,7 +25,7 @@ module.exports = RedisManager = (function(_super) {
     this.options = _.defaults(opts, this.DefaultOptions);
     debug("init redis with " + this.options.server);
     info = Url.parse(this.options.server);
-    this.client = Redis.createClient(info.port, info.hostname);
+    this.client = Redis.createClient(info.port || 6379, info.hostname);
     this.client.once("ready", (function(_this) {
       return function() {
         var db, rFunc;

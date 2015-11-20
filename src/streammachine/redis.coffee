@@ -14,7 +14,7 @@ module.exports = class RedisManager extends require('events').EventEmitter
 
         debug "init redis with #{@options.server}"
         info = Url.parse @options.server
-        @client = Redis.createClient info.port, info.hostname
+        @client = Redis.createClient info.port||6379, info.hostname
 
         @client.once "ready", =>
             rFunc = =>
