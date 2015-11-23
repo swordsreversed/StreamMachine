@@ -15,8 +15,11 @@ args = require("yargs")
         title:      "Process title suffix"
         restart:    "Trigger handoff if watched path changes"
         config:     "Config file to pass to StreamMachine"
+        dir:        "Directory path for StreamMachine"
+        coffee:     "Run via coffeescript"
     .default
         restart:    true
+        coffee:     false
     .demand(['config'])
     .argv
 
@@ -226,11 +229,17 @@ class StreamMachineRunner extends require("events").EventEmitter
 #----------
 
 # This is to enable running in dev via coffee. Is it foolproof? Probably not.
+
 streamer_path =
-    if process.argv[0] == "coffee"
-        path.resolve(__dirname,"./index.js")
+    if args.coffee
+        path.resolve(args.dir||__dirname,"./coffee.js")
     else
-        path.resolve(__dirname,"./streamer.js")
+        if args.dir
+            path.resolve(args.dir,"js/streamer.js")
+        else
+            path.resolve(__dirname,"./streamer.js")
+
+debug "Streamer path is #{streamer_path}"
 
 runner = new StreamMachineRunner streamer_path, args
 

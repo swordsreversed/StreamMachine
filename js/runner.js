@@ -16,9 +16,12 @@ args = require("yargs").usage("Usage: $0 --watch [watch file] --title [title] --
   watch: "File to watch for restarts",
   title: "Process title suffix",
   restart: "Trigger handoff if watched path changes",
-  config: "Config file to pass to StreamMachine"
+  config: "Config file to pass to StreamMachine",
+  dir: "Directory path for StreamMachine",
+  coffee: "Run via coffeescript"
 })["default"]({
-  restart: true
+  restart: true,
+  coffee: false
 }).demand(['config']).argv;
 
 StreamMachineRunner = (function(_super) {
@@ -229,7 +232,9 @@ StreamMachineRunner = (function(_super) {
 
 })(require("events").EventEmitter);
 
-streamer_path = process.argv[0] === "coffee" ? path.resolve(__dirname, "./index.js") : path.resolve(__dirname, "./streamer.js");
+streamer_path = args.coffee ? path.resolve(args.dir || __dirname, "./coffee.js") : args.dir ? path.resolve(args.dir, "js/streamer.js") : path.resolve(__dirname, "./streamer.js");
+
+debug("Streamer path is " + streamer_path);
 
 runner = new StreamMachineRunner(streamer_path, args);
 
