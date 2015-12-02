@@ -1,4 +1,4 @@
-var Debounce, FFmpeg, PassThrough, TranscodingSource, _,
+var Debounce, FFmpeg, PassThrough, TranscodingSource, debug, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -9,6 +9,8 @@ FFmpeg = require("fluent-ffmpeg");
 PassThrough = require("stream").PassThrough;
 
 Debounce = require("../util/debounce");
+
+debug = require("debug")("sm:sources:transcoding");
 
 module.exports = TranscodingSource = (function(_super) {
   __extends(TranscodingSource, _super);
@@ -28,8 +30,9 @@ module.exports = TranscodingSource = (function(_super) {
       return function(err) {
         var _ref;
         if ((_ref = _this.log) != null) {
-          _ref.error(err);
+          _ref.error("TranscodingSource domain error:" + err);
         }
+        debug("Domain error: " + err, err);
         return _this.disconnect();
       };
     })(this));

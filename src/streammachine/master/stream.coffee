@@ -52,21 +52,25 @@ module.exports = class Stream extends require('events').EventEmitter
 
         if opts.ffmpeg_args
             # Source Mount w/ transcoding
-            @log.debug "Setting up transcoding source for #{ @key }"
+            initTSource = =>
+                @log.debug "Setting up transcoding source for #{ @key }"
 
-            # -- create a transcoding source -- #
+                # -- create a transcoding source -- #
 
-            tsource = new TranscodingSource
-                stream:         mount
-                ffmpeg_args:    opts.ffmpeg_args
-                format:         opts.format
-                logger:         @log
+                tsource = new TranscodingSource
+                    stream:         mount
+                    ffmpeg_args:    opts.ffmpeg_args
+                    format:         opts.format
+                    logger:         @log
 
-            @source = tsource
+                @source = tsource
 
-            # if our transcoder goes down, restart it
-            tsource.once "disconnect", =>
-                @log.error "Transcoder disconnected for #{ @key}."
+                # if our transcoder goes down, restart it
+                tsource.once "disconnect", =>
+                    @log.error "Transcoder disconnected for #{ @key }."
+                    process.nextTick => initTSource()
+
+            initTSource()
 
         else
             # Source Mount directly

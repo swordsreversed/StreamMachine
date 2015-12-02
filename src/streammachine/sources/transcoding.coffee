@@ -4,6 +4,8 @@ PassThrough     = require("stream").PassThrough
 
 Debounce        = require "../util/debounce"
 
+debug = require("debug")("sm:sources:transcoding")
+
 module.exports = class TranscodingSource extends require("./base")
     TYPE: -> "Transcoding (#{if @connected then "Connected" else "Waiting"})"
 
@@ -14,7 +16,9 @@ module.exports = class TranscodingSource extends require("./base")
 
         @d = require("domain").create()
         @d.on "error", (err) =>
-            @log?.error err
+            @log?.error "TranscodingSource domain error:" + err
+            debug "Domain error: #{err}", err
+
             @disconnect()
 
         @d.run =>

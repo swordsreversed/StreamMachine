@@ -69,6 +69,9 @@ module.exports = class Shoutcast extends BaseOutput
         @ice.metaint = @client.meta_int
         delete @client.bytesToNextMeta
 
+        # connect the icecast metadata injector to our output
+        @ice.pipe(@socket)
+
         if initial && @stream.preroll && !@opts.req.param("preskip")
             debug "Pumping preroll"
             @stream.preroll.pump @, @ice, (err) =>
@@ -127,8 +130,6 @@ module.exports = class Shoutcast extends BaseOutput
                         unless @_lastMeta && _(data).isEqual(@_lastMeta)
                             @ice.queue data
                             @_lastMeta = data
-
-                    @ice.pipe(@socket)
 
                     # -- pipe source audio to icecast -- #
 

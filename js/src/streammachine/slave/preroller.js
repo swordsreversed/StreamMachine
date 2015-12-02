@@ -1,4 +1,6 @@
 var Preroller, debug, http, request, url, xmldom, xpath, _,
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   __slice = [].slice;
 
 _ = require("underscore");
@@ -13,6 +15,8 @@ xmldom = require("xmldom");
 
 xpath = require("xpath");
 
+http = require("http");
+
 debug = require("debug")("sm:slave:preroller");
 
 module.exports = Preroller = (function() {
@@ -23,14 +27,28 @@ module.exports = Preroller = (function() {
     this.transcode_uri = transcode_uri;
     this.impressionDelay = impressionDelay;
     this._counter = 1;
+    this._config = null;
     if (!this.uri || !this.transcode_uri) {
       return cb(new Error("Preroller requires Ad URI and Transcoder URI"));
     }
+    this.agent = new http.Agent({
+      keepAlive: true,
+      maxSockets: 100
+    });
     this.stream.log.debug("Preroller calling getStreamKey");
     this.stream.getStreamKey((function(_this) {
       return function(streamKey) {
         _this.streamKey = streamKey;
-        return _this.stream.log.debug("Preroller: Stream key is " + _this.streamKey + ". Ready to start serving.");
+        _this.stream.log.debug("Preroller: Stream key is " + _this.streamKey + ". Ready to start serving.");
+        return _this._config = {
+          key: _this.key,
+          streamKey: _this.streamKey,
+          adURI: _this.uri,
+          transcodeURI: _this.transcode_uri,
+          impressionDelay: _this.impressionDelay,
+          timeout: 2 * 1000,
+          agent: _this.agent
+        };
       };
     })(this));
     if (typeof cb === "function") {
@@ -39,11 +57,11 @@ module.exports = Preroller = (function() {
   }
 
   Preroller.prototype.pump = function(output, writer, cb) {
-    var aborted, adreq, conn_pre_abort, count, detach, pdebug, prerollTimeout, treq, uri;
+    var aborted, adreq, count;
     cb = _.once(cb);
     aborted = false;
-    if (!this.streamKey || !this.uri) {
-      cb(new Error("Preroll request before streamKey or missing URI."));
+    if (!this._config) {
+      cb(new Error("Preroll request without valid config."));
       return true;
     }
     if (output.disconnected) {
@@ -51,145 +69,197 @@ module.exports = Preroller = (function() {
       return true;
     }
     count = this._counter++;
-    pdebug = function() {
+    return adreq = new Preroller.AdRequest(output, writer, this._config, count, (function(_this) {
+      return function(err) {
+        if (err) {
+          _this.stream.log.error(err);
+        }
+        return cb();
+      };
+    })(this));
+  };
+
+  Preroller.AdRequest = (function(_super) {
+    __extends(AdRequest, _super);
+
+    function AdRequest(output, writer, config, count, _cb) {
+      this.output = output;
+      this.writer = writer;
+      this.config = config;
+      this.count = count;
+      this._cb = _cb;
+      this._cb = _.once(this._cb);
+      this._aborted = false;
+      this._pumping = false;
+      this._adreq = null;
+      this._treq = null;
+      this._tresp = null;
+      this._impressionTimeout = null;
+      this._abortL = (function(_this) {
+        return function() {
+          _this.debug("conn_pre_abort triggered");
+          return _this._abort(null);
+        };
+      })(this);
+      this.output.once("disconnect", this._abortL);
+      this.uri = this.config.adURI.replace("!KEY!", this.config.streamKey).replace("!IP!", this.output.client.ip).replace("!STREAM!", this.config.key).replace("!UA!", encodeURIComponent(this.output.client.ua)).replace("!UUID!", this.output.client.session_id);
+      this.debug("Ad request URI is " + this.uri);
+      this._timeout = setTimeout((function(_this) {
+        return function() {
+          _this.debug("Preroll request timed out.");
+          return _this._abort();
+        };
+      })(this), this.config.timeout);
+      this._requestAd((function(_this) {
+        return function(err, _ad) {
+          _this._ad = _ad;
+          if (err) {
+            return _this._cleanup(err);
+          }
+          return _this._requestCreative(_this._ad, function(err) {
+            if (err) {
+              return _this._cleanup(err);
+            }
+            _this._armImpression(_this._ad);
+            _this.debug("Ad request finished.");
+            return _this._cleanup(null);
+          });
+        };
+      })(this));
+    }
+
+    AdRequest.prototype._requestAd = function(cb) {
+      return this._adreq = request.get({
+        uri: this.uri,
+        agent: this.config.agent
+      }, (function(_this) {
+        return function(err, res, body) {
+          if (err) {
+            return cb(new Error("Ad request returned error: " + err));
+          }
+          if (res.statusCode === 200) {
+            return new Preroller.AdObject(body, function(err, obj) {
+              if (err) {
+                return cb(new Error("Ad request was unsuccessful: " + err));
+              } else {
+                return cb(null, obj);
+              }
+            });
+          } else {
+            return cb(new Error("Ad request returned non-200 response: " + body));
+          }
+        };
+      })(this));
+    };
+
+    AdRequest.prototype._requestCreative = function(ad, cb) {
+      if (!ad.creativeURL) {
+        return cb(null);
+      }
+      this.debug("Preparing transcoder request for " + ad.creativeURL + " with key " + this.config.streamKey + ".");
+      return this._treq = request.get({
+        uri: this.config.transcodeURI,
+        agent: this.config.agent,
+        qs: {
+          uri: ad.creativeURL,
+          key: this.config.streamKey
+        }
+      }).once("response", (function(_this) {
+        return function(_tresp) {
+          _this._tresp = _tresp;
+          _this.debug("Transcoder response received: " + _this._tresp.statusCode);
+          if (_this._tresp.statusCode === 200) {
+            _this.debug("Piping tresp to writer");
+            _this._tresp.pipe(_this.writer, {
+              end: false
+            });
+            return _this._tresp.once("end", function() {
+              var _ref, _ref1;
+              _this.debug("Transcoder sent " + (((_ref = _this._tresp) != null ? (_ref1 = _ref.socket) != null ? _ref1.bytesRead : void 0 : void 0) || "UNKNOWN") + " bytes");
+              if (!_this._aborted) {
+                _this.debug("Transcoder pipe completed successfully.");
+                return cb(null);
+              }
+            });
+          } else {
+            return cb(new Error("Non-200 response from transcoder."));
+          }
+        };
+      })(this)).once("error", (function(_this) {
+        return function(err) {
+          return cb(new Error("Transcoder request error: " + err));
+        };
+      })(this));
+    };
+
+    AdRequest.prototype._armImpression = function(ad) {
+      var disarm;
+      this._impressionTimeout = setTimeout((function(_this) {
+        return function() {
+          _this.output.removeListener("disconnect", disarm);
+          process.nextTick(function() {
+            var disarm;
+            disarm = null;
+            return this._impressionTimeout = null;
+          });
+          if (ad.impressionURL) {
+            return request.get(ad.impressionURL, function(err, resp, body) {
+              if (err) {
+                return _this.emit("error", new Error("Failed to hit impression URL " + ad.impressionURL + ": " + err));
+              } else {
+                return _this.debug("Impression URL hit successfully for " + _this.output.client.session_id + ".");
+              }
+            });
+          } else {
+            return _this.debug("No impression URL found.");
+          }
+        };
+      })(this), this.config.impressionDelay);
+      this.debug("Arming impression for " + this.config.impressionDelay + "ms");
+      disarm = (function(_this) {
+        return function() {
+          _this.debug("Disarming impression after early abort.");
+          if (_this._impressionTimeout) {
+            return clearTimeout(_this._impressionTimeout);
+          }
+        };
+      })(this);
+      return this.output.once("disconnect", disarm);
+    };
+
+    AdRequest.prototype.debug = function() {
       var args, msg;
       msg = arguments[0], args = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
-      return debug.apply(null, ["" + count + ": " + msg].concat(__slice.call(args)));
+      return debug.apply(null, [("" + this.count + ": ") + msg].concat(__slice.call(args)));
     };
-    prerollTimeout = setTimeout((function(_this) {
-      return function() {
-        _this.stream.log.debug("preroll request timeout. Aborting.", count);
-        pdebug("Hit timeout. Triggering abort.");
-        if (typeof adreq !== "undefined" && adreq !== null) {
-          adreq.abort();
-        }
-        if (typeof treq !== "undefined" && treq !== null) {
-          treq.abort();
-        }
-        aborted = true;
-        return detach(new Error("Preroll request timed out."));
-      };
-    })(this), 5 * 1000);
-    uri = this.uri.replace("!KEY!", this.streamKey).replace("!IP!", output.client.ip).replace("!STREAM!", this.key).replace("!UA!", encodeURIComponent(output.client.ua)).replace("!UUID!", output.client.session_id);
-    pdebug("Ad request URI is " + uri);
-    treq = null;
-    adreq = request.get(uri, (function(_this) {
-      return function(err, res, body) {
-        var perr;
-        if (err) {
-          perr = new Error("Ad request returned error: " + err);
-          _this.stream.log.error(perr, {
-            error: err
-          });
-          pdebug(perr);
-          return detach(perr);
-        }
-        if (res.statusCode === 200) {
-          return new Preroller.AdObject(body, function(err, obj) {
-            var _armImpression;
-            if (err) {
-              perr = "Ad request was unsuccessful: " + err;
-              _this.stream.log.debug(perr);
-              pdebug(perr);
-              return detach(err);
-            }
-            _armImpression = function() {
-              var disarm, imp_t;
-              imp_t = setTimeout(function() {
-                output.removeListener("disconnect", disarm);
-                process.nextTick(function() {
-                  var disarm;
-                  disarm = null;
-                  return imp_t = null;
-                });
-                if (obj.impressionURL) {
-                  return request.get(obj.impressionURL, function(err, resp, body) {
-                    if (err) {
-                      return _this.stream.log.error("Failed to hit impression URL " + obj.impressionURL + ": " + err);
-                    } else {
-                      pdebug("Impression URL hit successfully for " + output.client.session_id + ".");
-                      return _this.stream.log.debug("Impression URL hit successfully for " + output.client.session_id);
-                    }
-                  });
-                } else {
-                  _this.stream.log.debug("Session reached preroll impression criteria, but no impression URL present.");
-                  return pdebug("No impression URL found.");
-                }
-              }, _this.impressionDelay);
-              pdebug("Arming impression for " + _this.impressionDelay + "ms");
-              disarm = function() {
-                pdebug("Disarming impression after early abort.");
-                if (imp_t) {
-                  return clearTimeout(imp_t);
-                }
-              };
-              return output.once("disconnect", disarm);
-            };
-            if (obj.creativeURL) {
-              pdebug("Preparing transcoder request for " + obj.creativeURL + " with key " + _this.streamKey + ".");
-              return treq = request.get(_this.transcode_uri, {
-                qs: {
-                  uri: obj.creativeURL,
-                  key: _this.streamKey
-                }
-              }).once("response", function(resp) {
-                pdebug("Transcoder response received: " + resp.statusCode);
-                if (resp.statusCode === 200) {
-                  treq.pipe(writer, {
-                    end: false
-                  });
-                  return treq.once("end", function() {
-                    pdebug("Transcoder pipe complete.");
-                    _armImpression();
-                    return detach(null);
-                  });
-                } else {
-                  err = new Error("Non-200 response from transcoder.");
-                  pdebug(err);
-                  return detach(err);
-                }
-              }).once("error", function(err) {
-                pdebug("Transcoder request error: " + err);
-                return detach(err);
-              });
-            } else {
-              _armImpression();
-              return detach(null);
-            }
-          });
-        } else {
-          perr = new Error("Ad request returned non-200 response: " + body);
-          _this.stream.log.debug(perr);
-          pdebug(perr);
-          return detach(perr);
-        }
-      };
-    })(this));
-    detach = _.once((function(_this) {
-      return function(err) {
-        pdebug("In detach");
-        if (prerollTimeout) {
-          clearTimeout(prerollTimeout);
-        }
-        output.removeListener("disconnect", conn_pre_abort);
-        return cb(err);
-      };
-    })(this));
-    conn_pre_abort = (function(_this) {
-      return function() {
-        pdebug("conn_pre_abort triggered");
-        detach();
-        if (adreq != null) {
-          adreq.abort();
-        }
-        if (treq != null) {
-          treq.abort();
-        }
-        return aborted = true;
-      };
-    })(this);
-    return output.once("disconnect", conn_pre_abort);
-  };
+
+    AdRequest.prototype._abort = function(err) {
+      var _ref, _ref1, _ref2;
+      this._aborted = true;
+      if ((_ref = this._adreq) != null) {
+        _ref.abort();
+      }
+      if ((_ref1 = this._treq) != null) {
+        _ref1.abort();
+      }
+      if ((_ref2 = this._tresp) != null) {
+        _ref2.unpipe();
+      }
+      return this._cleanup(err);
+    };
+
+    AdRequest.prototype._cleanup = function(err) {
+      this.debug("In _cleanup: " + err);
+      if (this._timeout) {
+        clearTimeout(this._timeout);
+      }
+      this.output.removeListener("disconnect", this._abortL);
+      return this._cb(err);
+    };
+
+    return AdRequest;
+
+  })(require("events").EventEmitter);
 
   Preroller.AdObject = (function() {
     function AdObject(xmldoc, cb) {

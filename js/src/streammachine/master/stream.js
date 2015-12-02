@@ -51,25 +51,32 @@ module.exports = Stream = (function(_super) {
   };
 
   function Stream(key, log, mount, opts) {
-    var newsource, tsource, uri, _ref;
+    var initTSource, newsource, uri, _ref;
     this.key = key;
     this.log = log;
     this.opts = _.defaults(opts || {}, this.DefaultOptions);
     this.source = null;
     if (opts.ffmpeg_args) {
-      this.log.debug("Setting up transcoding source for " + this.key);
-      tsource = new TranscodingSource({
-        stream: mount,
-        ffmpeg_args: opts.ffmpeg_args,
-        format: opts.format,
-        logger: this.log
-      });
-      this.source = tsource;
-      tsource.once("disconnect", (function(_this) {
+      initTSource = (function(_this) {
         return function() {
-          return _this.log.error("Transcoder disconnected for " + _this.key + ".");
+          var tsource;
+          _this.log.debug("Setting up transcoding source for " + _this.key);
+          tsource = new TranscodingSource({
+            stream: mount,
+            ffmpeg_args: opts.ffmpeg_args,
+            format: opts.format,
+            logger: _this.log
+          });
+          _this.source = tsource;
+          return tsource.once("disconnect", function() {
+            _this.log.error("Transcoder disconnected for " + _this.key + ".");
+            return process.nextTick(function() {
+              return initTSource();
+            });
+          });
         };
-      })(this));
+      })(this);
+      initTSource();
     } else {
       this.source = mount;
     }

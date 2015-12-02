@@ -5,6 +5,8 @@ Logger      = $src "logger"
 AdServer    = $src "util/fake_ad_server"
 Transcoder  = $src "util/fake_transcoder"
 
+_ = require "underscore"
+
 fs = require "fs"
 debug = require("debug")("sm:tests:preroller")
 
@@ -171,6 +173,50 @@ describe "Preroller", ->
                 adserver.once "impression", (req_id) ->
                     debug "Got impression from req_id #{req_id}"
                     done()
+
+        describe "Many Requests", ->
+            stream      = null
+            output      = null
+            preroller   = null
+
+            before (done) ->
+                stream = new FakeStream "mp3-44100-128-s"
+                output = new FakeOutput
+
+                new Preroller stream,
+                    "test",
+                    "http://127.0.0.1:#{adserver.port}/ad",
+                    "http://127.0.0.1:#{transcoder.port}/encoding",
+                    100
+                    (err,p) =>
+                        preroller = p
+                        debug "Preroller init"
+                        done()
+
+            it "should return identical results to many requests", (done) ->
+                succeeded = 0
+                first_length = null
+
+                count = 25
+
+                aFunc = _.after count, ->
+                    expect(succeeded).to.eql count
+                    # this will disconnect all impressions
+                    output.emit "disconnect"
+                    done()
+
+                _(count).times (i) ->
+                    writer = new WriteCollector()
+                    preroller.pump output, writer, (err) ->
+                        throw err if err
+
+                        debug "Finished request #{i}"
+
+                        first_length ||= writer.length
+
+                        expect(writer.length).to.eql first_length
+                        succeeded += 1
+                        aFunc()
 
         describe "Abort", ->
             stream      = null

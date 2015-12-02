@@ -74,6 +74,7 @@ module.exports = Shoutcast = (function(_super) {
     this.ice = new Icy.Writer(this.client.bytesToNextMeta || this.client.meta_int);
     this.ice.metaint = this.client.meta_int;
     delete this.client.bytesToNextMeta;
+    this.ice.pipe(this.socket);
     if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {
       debug("Pumping preroll");
       return this.stream.preroll.pump(this, this.ice, (function(_this) {
@@ -143,7 +144,6 @@ module.exports = Shoutcast = (function(_super) {
               return _this._lastMeta = data;
             }
           };
-          _this.ice.pipe(_this.socket);
           _this.source.pipe(_this.ice);
           return _this.source.on("meta", _this.metaFunc);
         };
