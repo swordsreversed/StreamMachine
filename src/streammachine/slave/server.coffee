@@ -78,7 +78,6 @@ module.exports = class Server extends require('events').EventEmitter
                     req.url = "/#{@core.root_route}"
                     next()
                 else if req.url == "/listen.pls"
-                    console.log "Converting /listen.pls to /#{@core.root_route}.pls"
                     req.url = "/#{@core.root_route}.pls"
                     next()
                 else

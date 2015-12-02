@@ -82,7 +82,6 @@ module.exports = Server = (function(_super) {
             req.url = "/" + _this.core.root_route;
             return next();
           } else if (req.url === "/listen.pls") {
-            console.log("Converting /listen.pls to /" + _this.core.root_route + ".pls");
             req.url = "/" + _this.core.root_route + ".pls";
             return next();
           } else {
