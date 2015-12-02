@@ -178,12 +178,7 @@ module.exports = Server = (function(_super) {
           res.status(200).end("Invalid User Agent.");
           return false;
         }
-        if (req.param("socket")) {
-          return _this.sockets.registerListener(req.param("socket"), req.stream, {
-            req: req,
-            res: res
-          });
-        } else if (req.param("pump")) {
+        if (req.param("pump")) {
           return new _this.core.Outputs.pumper(req.stream, {
             req: req,
             res: res

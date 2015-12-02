@@ -1,13 +1,17 @@
-module.exports = class Pumper
+BaseOutput = require "./base"
+
+debug = require("debug")("sm:outputs:pumper")
+
+module.exports = class Pumper extends BaseOutput
     constructor: (@stream,@opts) ->
         super "pumper"
 
         # figure out what we're pulling
         @stream.listen @,
-            offsetSecs: @req.param("from") || @req.param("pump")
-            pump:       @req.param("pump")
+            offsetSecs: @opts.req.param("from") || @opts.req.param("pump")
+            pump:       @opts.req.param("pump")
             pumpOnly:   true
-        , (err,playHead) =>
+        , (err,@source,info) =>
             if err
                 @opts.res.status(500).end err
                 return false
@@ -21,13 +25,21 @@ module.exports = class Pumper
                 "Content-Length":       info.length
 
             # write out our headers
-            @res.writeHead 200, headers
+            @opts.res.writeHead 200, headers
 
             # send our pump buffer to the client
-            playHead.pipe(@res)
+            @source.pipe(@opts.res)
 
-            @opts.res.on "finish", =>
-                playHead.disconnect()
+            # register our various means of disconnection
+            @socket.on "end",   => @disconnect()
+            @socket.on "close", => @disconnect()
+            @socket.on "error", (err) =>
+                @stream.log.debug "Got client socket error: #{err}"
+                @disconnect()
 
-            @res.on "close",    => playHead.disconnect()
-            @res.on "end",      => playHead.disconnect()
+    #----------
+
+    disconnect: ->
+        super =>
+            @source?.disconnect()
+            @socket?.end() unless (@socket.destroyed)

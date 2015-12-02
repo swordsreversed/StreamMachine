@@ -174,11 +174,7 @@ module.exports = class Server extends require('events').EventEmitter
 
             # -- Stream match! -- #
 
-            if req.param("socket")
-                # socket listener
-                @sockets.registerListener req.param("socket"), req.stream, req:req, res:res
-
-            else if req.param("pump")
+            if req.param("pump")
                 # pump listener pushes from the buffer as fast as possible
                 new @core.Outputs.pumper req.stream, req:req, res:res
 
