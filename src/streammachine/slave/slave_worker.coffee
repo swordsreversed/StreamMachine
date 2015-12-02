@@ -6,6 +6,11 @@ Slave   = require "./"
 
 debug = require("debug")("sm:slave:slave_worker")
 
+# TEMP
+process.on "uncaughtException", (err) ->
+    console.error "err is: #{err}"
+    console.error "err stack is: ", err.stack
+
 module.exports = class SlaveWorker
     constructor: ->
         @_config = null

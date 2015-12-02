@@ -10,6 +10,11 @@ Slave = require("./");
 
 debug = require("debug")("sm:slave:slave_worker");
 
+process.on("uncaughtException", function(err) {
+  console.error("err is: " + err);
+  return console.error("err stack is: ", err.stack);
+});
+
 module.exports = SlaveWorker = (function() {
   function SlaveWorker() {
     this._config = null;
