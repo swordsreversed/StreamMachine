@@ -69,12 +69,17 @@ module.exports = Preroller = (function() {
       return true;
     }
     count = this._counter++;
-    return adreq = new Preroller.AdRequest(output, writer, this._config, count, (function(_this) {
+    adreq = new Preroller.AdRequest(output, writer, this._config, count, (function(_this) {
       return function(err) {
         if (err) {
           _this.stream.log.error(err);
         }
         return cb();
+      };
+    })(this));
+    return adreq.on("error", (function(_this) {
+      return function(err) {
+        return _this.stream.log.error(err);
       };
     })(this));
   };

@@ -60,6 +60,9 @@ module.exports = class Preroller
             @stream.log.error err if err
             cb()
 
+        adreq.on "error", (err) =>
+            @stream.log.error err
+
     #----------
 
     class @AdRequest extends require("events").EventEmitter
