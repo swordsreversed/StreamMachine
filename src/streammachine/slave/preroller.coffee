@@ -17,7 +17,7 @@ module.exports = class Preroller
             return cb new Error("Preroller requires Ad URI and Transcoder URI")
 
         # FIXME: Make these configurable
-        @agent = new http.Agent keepAlive:true, maxSockets:100
+        @agent = new http.Agent #keepAlive:true, maxSockets:100
 
         # -- need to look at the stream to get characteristics -- #
 

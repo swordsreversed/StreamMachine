@@ -31,10 +31,7 @@ module.exports = Preroller = (function() {
     if (!this.uri || !this.transcode_uri) {
       return cb(new Error("Preroller requires Ad URI and Transcoder URI"));
     }
-    this.agent = new http.Agent({
-      keepAlive: true,
-      maxSockets: 100
-    });
+    this.agent = new http.Agent;
     this.stream.log.debug("Preroller calling getStreamKey");
     this.stream.getStreamKey((function(_this) {
       return function(streamKey) {
