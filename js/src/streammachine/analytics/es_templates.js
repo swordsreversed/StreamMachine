@@ -78,7 +78,7 @@ module.exports = {
           ips: {
             type: "string",
             index: "not_analyzed",
-            index_name: "ip",
+            copy_to: "ip",
             doc_values: true
           }
         })
