@@ -74,12 +74,6 @@ module.exports = {
           },
           kbytes: {
             type: "long"
-          },
-          ips: {
-            type: "string",
-            index: "not_analyzed",
-            index_name: "ip",
-            doc_values: true
           }
         })
       }
