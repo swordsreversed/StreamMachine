@@ -1,10 +1,10 @@
-var debug,
+var IdxWriter, debug,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 debug = require("debug")("sm:analytics:idx_writer");
 
-module.exports = this.IdxWriter = (function(_super) {
+module.exports = IdxWriter = (function(_super) {
   __extends(IdxWriter, _super);
 
   function IdxWriter(es, log) {
@@ -39,7 +39,7 @@ module.exports = this.IdxWriter = (function(_super) {
           err_str = "Failed to bulk insert: " + err;
           _this.log.error(err_str);
           debug(err_str);
-          return cb(new Error(errstr));
+          return cb(new Error(err_str));
         }
         debug("Inserted " + batch.length + " rows.");
         _this.emit("bulk");
