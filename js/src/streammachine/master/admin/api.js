@@ -190,6 +190,17 @@ module.exports = API = (function() {
         });
       };
     })(this));
+    this.app.put("/streams/:stream/rewind", (function(_this) {
+      return function(req, res) {
+        return req.stream.rewind.loadBuffer(req, function(err, info) {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, info);
+          }
+        });
+      };
+    })(this));
     this.app.post("/sources", express.bodyParser(), (function(_this) {
       return function(req, res) {
         return _this.master.createMount(req.body, function(err, mount) {

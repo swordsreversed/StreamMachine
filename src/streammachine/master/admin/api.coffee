@@ -154,6 +154,14 @@ module.exports = class API
                 else
                     api.ok req, res, req.stream.status()
 
+        # Inject a Rewind Buffer
+        @app.put "/streams/:stream/rewind", (req,res) =>
+            req.stream.rewind.loadBuffer req, (err,info) =>
+                if err
+                    api.invalid req, res, err
+                else
+                    api.ok req, res, info
+
         # -- Source Mount API -- #
 
         @app.post "/sources", express.bodyParser(), (req,res) =>
