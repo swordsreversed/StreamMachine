@@ -168,7 +168,7 @@ module.exports = MasterIO = (function(_super) {
       this.last_err = null;
       this.connected_at = new Date();
       this.socklogger = this.sio.log.child({
-        slave: sock.id
+        slave: this.sock.id
       });
       this.sock.on("log", (function(_this) {
         return function(obj) {
@@ -188,7 +188,7 @@ module.exports = MasterIO = (function(_super) {
           return _this.sio.master.getHLSSnapshot(key, cb);
         };
       })(this));
-      sock.on("disconnect", (function(_this) {
+      this.sock.on("disconnect", (function(_this) {
         return function() {
           return _this._handleDisconnect();
         };

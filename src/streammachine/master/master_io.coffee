@@ -123,7 +123,7 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
             # -- wire up logging -- #
 
-            @socklogger = @sio.log.child slave:sock.id
+            @socklogger = @sio.log.child slave:@sock.id
             @sock.on "log", (obj = {}) =>
                 @socklogger[obj.level||'debug'].apply @socklogger, [obj.msg||"",obj.meta||{}]
 
@@ -138,7 +138,7 @@ module.exports = class MasterIO extends require("events").EventEmitter
                 @sio.master.getHLSSnapshot key, cb
 
             # attach disconnect handler
-            sock.on "disconnect", =>
+            @sock.on "disconnect", =>
                 @_handleDisconnect()
 
         #----------

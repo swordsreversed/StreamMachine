@@ -19,7 +19,7 @@ module.exports = class MasterMode extends require("./base")
 
     MODE: "Master"
     constructor: (@opts,cb) ->
-        @log = new Logger opts.log
+        @log = new Logger @opts.log
 
         debug "Master instance initialized."
 
