@@ -85,12 +85,13 @@ module.exports = StreamListener = (function(_super) {
     connect_func = this.shoutcast ? Icy.get : http.get;
     cLoop = (function(_this) {
       return function() {
+        debug("Attempting connect to " + _this.url);
         _this.req = connect_func(_this.url, _connected);
         _this.req.once("socket", function(sock) {
           return _this.emit("socket", sock);
         });
         return _this.req.once("error", function(err) {
-          if ((err.code != null) === "ECONNREFUSED") {
+          if (err.code === "ECONNREFUSED") {
             if (!aborted) {
               return setTimeout(cLoop, 50);
             }

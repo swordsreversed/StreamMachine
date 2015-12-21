@@ -69,10 +69,11 @@ module.exports = class StreamListener extends require("events").EventEmitter
         connect_func = if @shoutcast then Icy.get else http.get
 
         cLoop = =>
+            debug "Attempting connect to #{@url}"
             @req = connect_func @url, _connected
             @req.once "socket", (sock) => @emit "socket", sock
             @req.once "error", (err) =>
-                if err.code? == "ECONNREFUSED"
+                if err.code == "ECONNREFUSED"
                     setTimeout cLoop, 50 if !aborted
                 else
                     cb err
