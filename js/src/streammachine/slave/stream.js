@@ -221,6 +221,9 @@ module.exports = Stream = (function(_super) {
       startTime: opts.startTime || (new Date)
     };
     this._totalConnections += 1;
+    opts = _.extend({
+      logInterval: this.opts.log_interval
+    }, opts);
     return this._once_source_loaded((function(_this) {
       return function() {
         return _this.getRewinder(lmeta.id, opts, function() {

@@ -67,7 +67,7 @@ module.exports = class Rewinder extends require("stream").Readable
                     @_sentDuration  = 0
                     @_contentTime   = null
 
-                , 30*1000
+                , opts.logInterval || 30*1000
 
             cb null, @, args...
             finalizeFunc = null

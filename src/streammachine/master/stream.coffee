@@ -35,6 +35,7 @@ module.exports = class Stream extends require('events').EventEmitter
         ffmpeg_args:        null
         stream_key:         null
         impression_delay:   5000
+        log_interval:       30000
 
     constructor: (@key,@log,mount,opts)->
         @opts = _.defaults opts||{}, @DefaultOptions

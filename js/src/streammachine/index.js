@@ -30,6 +30,7 @@ module.exports = StreamMachine = (function() {
     chunk_duration: 2,
     behind_proxy: false,
     cluster: 2,
+    log_interval: 30000,
     admin: {
       require_auth: false
     }

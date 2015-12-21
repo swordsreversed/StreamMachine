@@ -247,7 +247,8 @@ module.exports = Master = (function(_super) {
     }), mount, _.extend(opts, {
       hls: this.options.hls,
       preroll: opts.preroll != null ? opts.preroll : this.options.preroll,
-      transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder
+      transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder,
+      log_interval: opts.log_interval != null ? opts.log_interval : this.options.log_interval
     }));
     if (stream) {
       stream.on("config", (function(_this) {

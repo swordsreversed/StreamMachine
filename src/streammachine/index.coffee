@@ -27,6 +27,7 @@ module.exports = class StreamMachine
 
         cluster: 2
 
+        log_interval:   30000
+
         admin:
             require_auth: false
-

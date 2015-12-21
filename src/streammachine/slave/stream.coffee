@@ -213,6 +213,9 @@ module.exports = class Stream extends require('../rewind_buffer')
         # each listen is a connection
         @_totalConnections += 1
 
+        # inject stream config into our options
+        opts = _.extend { logInterval: @opts.log_interval }, opts
+
         # don't ask for a rewinder while our source is going through init,
         # since we don't want to fail an offset request that should be
         # valid.

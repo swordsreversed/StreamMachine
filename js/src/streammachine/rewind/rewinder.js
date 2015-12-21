@@ -57,7 +57,7 @@ module.exports = Rewinder = (function(_super) {
             _this._sentBytes = 0;
             _this._sentDuration = 0;
             return _this._contentTime = null;
-          }, 30 * 1000);
+          }, opts.logInterval || 30 * 1000);
         }
         cb.apply(null, [null, _this].concat(__slice.call(args)));
         finalizeFunc = null;
