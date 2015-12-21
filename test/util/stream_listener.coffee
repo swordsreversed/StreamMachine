@@ -13,7 +13,10 @@ oneTimeServer = (port=0,delay=0,cb) ->
         setTimeout ->
             cb()
             res.writeHead 200, "Content-type": "text/plain"
-            res.flushHeaders()
+
+            # flushHeaders isn't in node 0.10. _send '' accomplishes the same thing
+            res.flushHeaders?()
+            res._send ''
         , delay
 
     server.listen port
