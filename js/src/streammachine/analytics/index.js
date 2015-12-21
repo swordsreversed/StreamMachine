@@ -48,6 +48,11 @@ module.exports = Analytics = (function() {
     this.idx_writer = new IdxWriter(this.es, this.log.child({
       submodule: "idx_writer"
     }));
+    this.idx_writer.on("error", (function(_this) {
+      return function(err) {
+        return _this.log.error(err);
+      };
+    })(this));
     this.idx_batch.pipe(this.idx_writer);
     this.sessions = {};
     this.local = tz(require("timezone/zones"))(nconf.get("timezone") || "UTC");

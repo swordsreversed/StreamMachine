@@ -49,6 +49,9 @@ module.exports = class Analytics
             latency:    @opts.config.index_latency
 
         @idx_writer = new IdxWriter @es, @log.child(submodule:"idx_writer")
+        @idx_writer.on "error", (err) =>
+            @log.error err
+
         @idx_batch.pipe(@idx_writer)
 
         # track open sessions
