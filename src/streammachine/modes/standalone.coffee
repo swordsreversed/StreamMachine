@@ -185,6 +185,7 @@ module.exports = class StandaloneMode extends require("./base")
                     @log.info "Hand off standalone socket."
                     rpc.request "standalone_handle", null, @handle, (err) =>
                         @log.error "Error sending standalone handle: #{err}" if err
+                        debug "Standalone socket sent: #{err}"
                         @handle.unref()
                         _afterSockets()
 
@@ -192,12 +193,14 @@ module.exports = class StandaloneMode extends require("./base")
                     @log.info "Hand off source socket."
                     rpc.request "source_socket", null, @master.sourcein.server, (err) =>
                         @log.error "Error sending source socket: #{err}" if err
+                        debug "Source socket sent: #{err}"
                         @master.sourcein.server.unref()
                         _afterSockets()
 
                     @log.info "Hand off API socket (if it exists)."
                     rpc.request "api_handle", null, @api_handle, (err) =>
-                        @log.error "Error sending source socket: #{err}" if err
+                        @log.error "Error sending API socket: #{err}" if err
+                        debug "API socket sent: #{err}"
                         @api_handle?.unref()
                         _afterSockets()
 

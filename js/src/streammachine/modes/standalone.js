@@ -218,6 +218,7 @@ module.exports = StandaloneMode = (function(_super) {
               if (err) {
                 _this.log.error("Error sending standalone handle: " + err);
               }
+              debug("Standalone socket sent: " + err);
               _this.handle.unref();
               return _afterSockets();
             });
@@ -226,6 +227,7 @@ module.exports = StandaloneMode = (function(_super) {
               if (err) {
                 _this.log.error("Error sending source socket: " + err);
               }
+              debug("Source socket sent: " + err);
               _this.master.sourcein.server.unref();
               return _afterSockets();
             });
@@ -233,8 +235,9 @@ module.exports = StandaloneMode = (function(_super) {
             return rpc.request("api_handle", null, _this.api_handle, function(err) {
               var _ref;
               if (err) {
-                _this.log.error("Error sending source socket: " + err);
+                _this.log.error("Error sending API socket: " + err);
               }
+              debug("API socket sent: " + err);
               if ((_ref = _this.api_handle) != null) {
                 _ref.unref();
               }
