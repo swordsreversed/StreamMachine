@@ -6,6 +6,8 @@ Preroller   = require "./preroller"
 Rewind      = require "../rewind_buffer"
 HLSIndex    = require "../rewind/hls_index"
 
+debug = require("debug")("sm:slave:stream")
+
 # Streams are the endpoints that listeners connect to.
 
 # On startup, a slave stream should connect to the master and start serving
@@ -73,9 +75,11 @@ module.exports = class Stream extends require('../rewind_buffer')
         @_sourceInitT = setTimeout =>
             @_sourceInitializing = false
             @emit "_source_init"
+            debug "Sending _source_init after source timeout"
         , 15*1000
 
         @once "source", (source) =>
+            debug "Stream source is incoming."
             clearTimeout @_sourceInitT
             @_sourceInitializing = true
             source.getRewind (err,stream,req) =>
@@ -83,6 +87,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                     @log.error "Source getRewind encountered an error: #{err}", error:err
                     @_sourceInitializing = false
                     @emit "_source_init"
+                    debug "Sending _source_init after load error"
                     #@emit "rewind_loaded"
 
                     return false
@@ -93,6 +98,7 @@ module.exports = class Stream extends require('../rewind_buffer')
 
                     @_sourceInitializing = false
                     @emit "_source_init"
+                    debug "Sending _source_init after load success"
                     #@emit "rewind_loaded"
 
     #----------
@@ -130,6 +136,7 @@ module.exports = class Stream extends require('../rewind_buffer')
     _once_source_loaded: (cb) ->
         if @_sourceInitializing
             # wait for a source_init event
+            debug "_once_source_loaded is waiting for _source_init"
             @once "_source_init", => cb?()
 
         else

@@ -4,7 +4,7 @@ node_js:
 - '4.2'
 services:
 - elasticsearch
-env: SKIP_TRANSCODING=1 SM_TEST_JS=1 DEBUG=sm:modes:standalone,sm:util:stream_listener
+env: SKIP_TRANSCODING=1 SM_TEST_JS=1 DEBUG=sm:modes:standalone,sm:util:stream_listener,sm:slave:stream
 sudo: false
 notifications:
   slack:

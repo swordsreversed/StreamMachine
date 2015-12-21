@@ -290,12 +290,14 @@ module.exports = StandaloneMode = (function(_super) {
             _this._rpc.once("source_socket", function(msg, handle, cb) {
               _this.log.info("Source socket is incoming.");
               _this.master.sourcein.listen(handle);
+              debug("Now listening on source socket.");
               cb(null);
               return aFunc();
             });
             _this._rpc.once("standalone_handle", function(msg, handle, cb) {
               _this.log.info("Standalone socket is incoming.");
               _this.handle = _this.server.listen(handle);
+              debug("Now listening on standalone socket.");
               cb(null);
               return aFunc();
             });
@@ -304,8 +306,10 @@ module.exports = StandaloneMode = (function(_super) {
                 debug("Handoff sent API socket and we have API server");
                 _this.log.info("API socket is incoming.");
                 _this.api_handle = _this.api_server.listen(handle);
+                debug("Now listening on API socket.");
               } else {
                 _this.log.info("Handoff sent no API socket");
+                debug("Handoff sent no API socket.");
                 if (_this.api_server) {
                   debug("Handoff sent no API socket, but we have API server. Listening.");
                   _this.api_handle = _this.api_server.listen(_this.opts.api_port);

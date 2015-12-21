@@ -1,4 +1,4 @@
-var HLSIndex, Preroller, Rewind, Stream, uuid, _,
+var HLSIndex, Preroller, Rewind, Stream, debug, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   __slice = [].slice;
@@ -12,6 +12,8 @@ Preroller = require("./preroller");
 Rewind = require("../rewind_buffer");
 
 HLSIndex = require("../rewind/hls_index");
+
+debug = require("debug")("sm:slave:stream");
 
 module.exports = Stream = (function(_super) {
   __extends(Stream, _super);
@@ -80,11 +82,13 @@ module.exports = Stream = (function(_super) {
     this._sourceInitT = setTimeout((function(_this) {
       return function() {
         _this._sourceInitializing = false;
-        return _this.emit("_source_init");
+        _this.emit("_source_init");
+        return debug("Sending _source_init after source timeout");
       };
     })(this), 15 * 1000);
     this.once("source", (function(_this) {
       return function(source) {
+        debug("Stream source is incoming.");
         clearTimeout(_this._sourceInitT);
         _this._sourceInitializing = true;
         return source.getRewind(function(err, stream, req) {
@@ -94,12 +98,14 @@ module.exports = Stream = (function(_super) {
             });
             _this._sourceInitializing = false;
             _this.emit("_source_init");
+            debug("Sending _source_init after load error");
             return false;
           }
           return _this.loadBuffer(stream, function(err) {
             _this.log.debug("Slave source loaded rewind buffer.");
             _this._sourceInitializing = false;
-            return _this.emit("_source_init");
+            _this.emit("_source_init");
+            return debug("Sending _source_init after load success");
           });
         });
       };
@@ -139,6 +145,7 @@ module.exports = Stream = (function(_super) {
 
   Stream.prototype._once_source_loaded = function(cb) {
     if (this._sourceInitializing) {
+      debug("_once_source_loaded is waiting for _source_init");
       return this.once("_source_init", (function(_this) {
         return function() {
           return typeof cb === "function" ? cb() : void 0;
