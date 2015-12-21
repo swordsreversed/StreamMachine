@@ -232,9 +232,10 @@ describe "Standalone Handoffs", ->
                 done()
 
         it "new process should accept a new listener connection", (done) ->
+            this.timeout 5000
             l2 = new StreamListener "127.0.0.1", main_port, STREAM1.key
 
-            l2.connect 1500, (err) =>
+            l2.connect 4500, (err) =>
                 throw err if err
 
                 l2.once "bytes", ->
