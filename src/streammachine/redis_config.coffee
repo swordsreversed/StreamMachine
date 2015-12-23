@@ -31,7 +31,7 @@ module.exports = class RedisConfig extends EventEmitter
              client.set @redis.prefixedKey("config"), JSON.stringify(config), (err,reply) =>
                 if err
                     debug "Redis: Failed to save updated config: #{err}"
-                    cb? err
+                    cb err
                 else
                     debug "Set config to ", config, reply
                     cb null

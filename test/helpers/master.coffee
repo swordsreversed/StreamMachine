@@ -15,7 +15,11 @@ STREAMS =
 module.exports =
     STREAMS:    STREAMS
 
-    startMaster: (stream,cb) ->
+    startMaster: (stream,extra_config,cb) ->
+        if _.isFunction(extra_config)
+            cb = extra_config
+            extra_config = null
+
         s = STREAMS[stream]
 
         if stream && !s
@@ -39,7 +43,7 @@ module.exports =
 
             sconfig = master_config.streams[ streamkey ] = _.extend {}, s, key:streamkey
 
-        new MasterMode master_config, (err,m) ->
+        new MasterMode _.extend(master_config,extra_config||{}), (err,m) ->
             throw err if err
 
             info =

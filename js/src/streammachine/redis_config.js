@@ -47,7 +47,7 @@ module.exports = RedisConfig = (function(_super) {
         return client.set(_this.redis.prefixedKey("config"), JSON.stringify(config), function(err, reply) {
           if (err) {
             debug("Redis: Failed to save updated config: " + err);
-            return typeof cb === "function" ? cb(err) : void 0;
+            return cb(err);
           } else {
             debug("Set config to ", config, reply);
             return cb(null);

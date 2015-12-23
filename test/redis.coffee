@@ -1,6 +1,8 @@
 RedisManager    = $src "redis"
 RedisConfig     = $src "redis_config"
 
+MasterHelper = require "./helpers/master"
+
 Redis = require "redis"
 
 debug = require("debug")("sm:tests:redis")
@@ -84,3 +86,33 @@ describe "Redis", ->
 
             c._config()
 
+    describe "Config through Master", ->
+        master = null
+        first_key = null
+
+        beforeEach (done) ->
+            MasterHelper.startMaster 'mp3', {redis:{server:"redis://127.0.0.1:#{REDIS_PORT}/1",key:"SMMasterTest"}}, (err,info) ->
+                throw err if err
+                master = info
+                done()
+
+        it "should save a stream config to Redis", (done) ->
+            first_key = master.stream_key
+            master.master.master.createStream master.config.streams[master.stream_key], (err,c) ->
+                throw err if err
+
+                setTimeout ->
+                    # we should find our config at SMMasterTest:config
+                    redis.get "SMMasterTest:config", (err,val) ->
+                        throw err if err
+
+                        expect(val).to.eql JSON.stringify(master.master.master.config())
+                        done()
+                , 20
+
+
+        it "should load a stream config from Redis", (done) ->
+            # our new master should already be configured with our stream key
+            master.master.master.once_configured ->
+                expect(master.master.master.streams).to.have.key first_key
+                done()
