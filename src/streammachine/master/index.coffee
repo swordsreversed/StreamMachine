@@ -55,7 +55,8 @@ module.exports = class Master extends require("events").EventEmitter
             # Persist changed configuration to Redis
             @log.debug "Registering config_update listener"
             @on "config_update", =>
-                @redis_config._update @config()
+                @redis_config._update @config(), (err) =>
+                    @log.info "Redis config update saved: #{err}"
 
         else
             # -- look for hard-coded configuration -- #

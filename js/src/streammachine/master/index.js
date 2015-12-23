@@ -65,7 +65,9 @@ module.exports = Master = (function(_super) {
       this.log.debug("Registering config_update listener");
       this.on("config_update", (function(_this) {
         return function() {
-          return _this.redis_config._update(_this.config());
+          return _this.redis_config._update(_this.config(), function(err) {
+            return _this.log.info("Redis config update saved: " + err);
+          });
         };
       })(this));
     } else {
