@@ -72,6 +72,7 @@ module.exports = Monitoring = (function(_super) {
               _this.master.alerts.update("slave_unresponsive", stat.id, true);
               break;
             }
+            _this.master.alerts.update("slave_unresponsive", stat.id, false);
             unsynced = false;
             for (key in mstatus) {
               mobj = mstatus[key];

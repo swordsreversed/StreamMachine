@@ -53,6 +53,8 @@ module.exports = class Monitoring extends require("events").EventEmitter
                         @master.alerts.update "slave_unresponsive", stat.id, true
                         break
 
+                    @master.alerts.update "slave_unresponsive", stat.id, false
+
                     # -- are the rewind buffers synced to master? -- #
 
                     # For this we need to run through each stream, and then
