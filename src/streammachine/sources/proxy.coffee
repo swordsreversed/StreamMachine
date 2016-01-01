@@ -1,11 +1,12 @@
 Icy     = require 'icy'
-
 util    = require 'util'
 url     = require 'url'
-
 domain  = require "domain"
+_       = require "underscore"
 
-module.exports = class ProxyRoom extends require("./base")
+debug   = require("debug")("sm:sources:proxy")
+
+module.exports = class ProxySource extends require("./base")
     TYPE: -> "Proxy (#{@url})"
 
     # opts should include:
@@ -18,7 +19,7 @@ module.exports = class ProxyRoom extends require("./base")
 
         @url = @opts.url
 
-        @log?.debug "ProxyRoom source created for #{@url}"
+        @log?.debug "ProxySource created for #{@url}"
 
         @isFallback     = @opts.fallback || false
 
@@ -42,18 +43,24 @@ module.exports = class ProxyRoom extends require("./base")
         @d = domain.create()
 
         @d.on "error", (err) =>
-            nice_err = "ProxyRoom encountered an error."
-
-            nice_err = switch err.syscall
-                when "getaddrinfo"
-                    "Unable to look up DNS for Icecast proxy."
-                else
-                    "Error making connection to Icecast proxy."
-
-            @emit "error", nice_err, err
+            @_niceError err
 
         @d.run =>
             @connect()
+
+    #----------
+
+    _niceError: (err) ->
+        debug "Caught error: #{err}", err.stack
+        nice_err = switch err.syscall
+            when "getaddrinfo"
+                "Unable to look up DNS for Icecast proxy"
+            when "connect"
+                "Unable to connect to Icecast proxy. Connection Refused"
+            else
+                "Error making connection to Icecast proxy"
+
+        @emit "error", "ProxySource encountered an error: #{nice_err}", err
 
     #----------
 
@@ -76,19 +83,32 @@ module.exports = class ProxyRoom extends require("./base")
         url_opts = url.parse @url
         url_opts.headers = "user-agent":"StreamMachine 0.1.0"
 
-        Icy.get url_opts, (ice) =>
+        debug "Connecting to #{@url}"
+
+        _reconnect = _.once =>
+            unless @_in_disconnect
+                debug "Engaging reconnect logic"
+                setTimeout ( => @connect() ), 1000
+
+                @log?.debug "Lost or failed to make connection to #{@url}. Retrying in one second."
+                @connected = false
+
+                # unpipe everything
+                @icecast?.removeAllListeners()
+                @icecast = null
+
+        ireq = Icy.get url_opts, (ice) =>
             @icecast = ice
 
-            @icecast.on "close", =>
-                console.log "proxy got close event"
-                unless @_in_disconnect
-                    setTimeout ( => @connect() ), 5000
 
-                    @log?.debug "Lost connection to #{@url}. Retrying in 5 seconds"
-                    @connected = false
 
-                    # unpipe everything
-                    @icecast.removeAllListeners()
+            @icecast.once "end", =>
+                debug "Got end event"
+                _reconnect()
+
+            @icecast.once "close", =>
+                debug "Got close event"
+                _reconnect()
 
             @icecast.on "metadata", (data) =>
                 unless @_in_disconnect
@@ -110,6 +130,10 @@ module.exports = class ProxyRoom extends require("./base")
             @connected_at = new Date()
             @emit "connect"
 
+        ireq.once "error", (err) =>
+            @_niceError err
+            _reconnect()
+
         # outgoing -> Stream
         @on "_chunk", (chunk) =>
             @last_ts = chunk.ts
@@ -130,4 +154,4 @@ module.exports = class ProxyRoom extends require("./base")
             @parser = null
             @icecast = null
 
-            @log?.debug "ProxyRoom source disconnected."
+            @log?.debug "ProxySource disconnected."

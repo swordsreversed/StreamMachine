@@ -4,7 +4,7 @@ URL     = require "url"
 
 Rewind              = require '../rewind_buffer'
 FileSource          = require "../sources/file"
-ProxySource         = require '../sources/proxy_room'
+ProxySource         = require '../sources/proxy'
 TranscodingSource   = require "../sources/transcoding"
 HLSSegmenter        = require "../rewind/hls_segmenter"
 SourceMount         = require "./source_mount"
@@ -154,7 +154,7 @@ module.exports = class Stream extends require('events').EventEmitter
                     null
 
             if newsource
-                newsource.on "connect", =>
+                newsource.once "connect", =>
                     @addSource newsource, (err) =>
                         if err
                             @log.error "Connection to fallback source failed."
