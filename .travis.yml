@@ -4,7 +4,11 @@ node_js:
 - '4.2'
 services:
 - elasticsearch
-env: SKIP_TRANSCODING=1 SM_TEST_JS=1 DEBUG=sm:modes:standalone,sm:util:stream_listener,sm:slave:stream
+env:
+  - SKIP_TRANSCODING=1
+  - SM_TEST_JS=1
+  - DEBUG=sm:modes:standalone,sm:util:stream_listener,sm:slave:stream
+  - CXX=g++-4.8
 sudo: false
 notifications:
   slack:
@@ -12,3 +16,9 @@ notifications:
 branches:
   only:
     - master
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - g++-4.8
