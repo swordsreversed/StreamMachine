@@ -5,10 +5,7 @@ node_js:
 services:
 - elasticsearch
 env:
-  - SKIP_TRANSCODING=1
-  - SM_TEST_JS=1
-  - DEBUG=sm:modes:standalone,sm:util:stream_listener,sm:slave:stream
-  - CXX=g++-4.8
+  - SKIP_TRANSCODING=1 SM_TEST_JS=1 DEBUG=sm:modes:standalone,sm:util:stream_listener,sm:slave:stream CXX=g++-4.8
 sudo: false
 notifications:
   slack:
