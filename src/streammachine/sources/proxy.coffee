@@ -100,8 +100,6 @@ module.exports = class ProxySource extends require("./base")
         ireq = Icy.get url_opts, (ice) =>
             @icecast = ice
 
-
-
             @icecast.once "end", =>
                 debug "Got end event"
                 _reconnect()

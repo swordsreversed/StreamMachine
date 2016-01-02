@@ -1,6 +1,6 @@
 StreamListener = $src "util/stream_listener"
 
-debug = require("debug")("sm:test:util:stream_listener")
+debug = require("debug")("sm:tests:util:stream_listener")
 
 http = require "http"
 

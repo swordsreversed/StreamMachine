@@ -11,7 +11,6 @@ STREAMS =
         seconds:            60*60*4
         format:             "mp3"
 
-
 module.exports =
     STREAMS:    STREAMS
 
@@ -23,6 +22,7 @@ module.exports =
             return false
 
         config =
+            chunk_duration: 0.25
             port:           0
             source_port:    0
             log:
