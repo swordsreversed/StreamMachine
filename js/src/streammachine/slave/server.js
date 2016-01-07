@@ -1,4 +1,4 @@
-var Server, compression, express, fs, http, path, util, uuid, _,
+var Server, compression, cors, express, fs, http, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -18,17 +18,26 @@ http = require("http");
 
 compression = require("compression");
 
+cors = require("cors");
+
 module.exports = Server = (function(_super) {
   __extends(Server, _super);
 
   function Server(opts) {
-    var idx_match, _ref, _ref1, _ref2, _ref3, _ref4;
+    var idx_match, origin, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
     this.opts = opts;
     this.core = this.opts.core;
     this.logger = this.opts.logger;
     this.config = this.opts.config;
     this.app = express();
     this._server = http.createServer(this.app);
+    if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {
+      origin = this.opts.config.cors.origin || true;
+      this.app.use(cors({
+        origin: origin,
+        methods: "GET,HEAD"
+      }));
+    }
     this.app.httpAllowHalfOpen = true;
     this.app.useChunkedEncodingByDefault = false;
     this.app.set("x-powered-by", "StreamMachine");
@@ -36,11 +45,11 @@ module.exports = Server = (function(_super) {
       this.logger.info("Enabling 'trust proxy' for Express.js");
       this.app.set("trust proxy", true);
     }
-    if (((_ref = this.config.session) != null ? _ref.secret : void 0) && ((_ref1 = this.config.session) != null ? _ref1.key : void 0)) {
+    if (((_ref1 = this.config.session) != null ? _ref1.secret : void 0) && ((_ref2 = this.config.session) != null ? _ref2.key : void 0)) {
       this.app.use(express.cookieParser());
       this.app.use(express.cookieSession({
-        key: (_ref2 = this.config.session) != null ? _ref2.key : void 0,
-        secret: (_ref3 = this.config.session) != null ? _ref3.secret : void 0
+        key: (_ref3 = this.config.session) != null ? _ref3.key : void 0,
+        secret: (_ref4 = this.config.session) != null ? _ref4.secret : void 0
       }));
       this.app.use((function(_this) {
         return function(req, res, next) {
@@ -92,12 +101,12 @@ module.exports = Server = (function(_super) {
         }
       };
     })(this));
-    if ((_ref4 = this.config.hls) != null ? _ref4.limit_full_index : void 0) {
+    if ((_ref5 = this.config.hls) != null ? _ref5.limit_full_index : void 0) {
       idx_match = RegExp("" + this.config.hls.limit_full_index);
       this.app.use((function(_this) {
         return function(req, res, next) {
-          var ua, _ref5;
-          ua = _.compact([req.param("ua"), (_ref5 = req.headers) != null ? _ref5['user-agent'] : void 0]).join(" | ");
+          var ua, _ref6;
+          ua = _.compact([req.param("ua"), (_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0]).join(" | ");
           if (idx_match.test(ua)) {
 
           } else {
@@ -123,10 +132,10 @@ module.exports = Server = (function(_super) {
     })(this));
     this.app.get("/:stream.pls", (function(_this) {
       return function(req, res) {
-        var host, _ref5;
+        var host, _ref6;
         res.set("content-type", "audio/x-scpls");
         res.set("connection", "close");
-        host = ((_ref5 = req.headers) != null ? _ref5.host : void 0) || req.stream.options.host;
+        host = ((_ref6 = req.headers) != null ? _ref6.host : void 0) || req.stream.options.host;
         return res.status(200).end("[playlist]\nNumberOfEntries=1\nFile1=http://" + host + "/" + req.stream.key + "/\n");
       };
     })(this));
@@ -167,9 +176,9 @@ module.exports = Server = (function(_super) {
     })(this));
     this.app.get("/:stream", (function(_this) {
       return function(req, res) {
-        var _ref5;
+        var _ref6;
         res.set("X-Powered-By", "StreamMachine");
-        if (_this._ua_skip && ((_ref5 = req.headers) != null ? _ref5['user-agent'] : void 0) && _this._ua_skip.test(req.headers["user-agent"])) {
+        if (_this._ua_skip && ((_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0) && _this._ua_skip.test(req.headers["user-agent"])) {
           _this.logger.debug("Request from banned User-Agent: " + req.headers['user-agent'], {
             ip: req.ip,
             url: req.url

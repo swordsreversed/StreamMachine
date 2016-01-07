@@ -33,6 +33,9 @@ module.exports = StreamMachine = (function() {
     log_interval: 30000,
     admin: {
       require_auth: false
+    },
+    cors: {
+      enabled: true
     }
   };
 
