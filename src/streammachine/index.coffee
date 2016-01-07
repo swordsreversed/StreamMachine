@@ -31,3 +31,6 @@ module.exports = class StreamMachine
 
         admin:
             require_auth: false
+
+        cors:
+            enabled: true

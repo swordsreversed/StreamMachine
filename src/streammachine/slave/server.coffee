@@ -6,6 +6,7 @@ path    = require 'path'
 uuid    = require 'node-uuid'
 http    = require "http"
 compression = require "compression"
+cors    = require "cors"
 
 module.exports = class Server extends require('events').EventEmitter
     constructor: (@opts) ->
@@ -18,6 +19,11 @@ module.exports = class Server extends require('events').EventEmitter
 
         @app = express()
         @_server = http.createServer @app
+
+        if @opts.config.cors?.enabled
+            origin = @opts.config.cors.origin || true
+
+            @app.use cors(origin:origin, methods:"GET,HEAD")
 
         @app.httpAllowHalfOpen = true
         @app.useChunkedEncodingByDefault = false
