@@ -74,7 +74,7 @@ module.exports = SourceIn = (function(_super) {
     return parser.once("headersComplete", (function(_this) {
       return function(headers) {
         clearTimeout(timer);
-        if (parser.info.protocol === "ICE" || parser.info.method === "SOURCE") {
+        if (/^(ICE|HTTP)$/.test(parser.info.protocol) && /^(SOURCE|PUT)$/.test(parser.info.method)) {
           _this.log.debug("ICY SOURCE attempt.", {
             url: parser.info.url
           });
@@ -205,6 +205,7 @@ module.exports = SourceIn = (function(_super) {
         line = this.chunk.toString("ascii", this.captureStart, this.captureEnd);
         this.captureStart = void 0;
         this.captureEnd = void 0;
+        debug("Parser request line: " + line);
         return line;
       }
     };

@@ -60,7 +60,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
             # cancel our timeout
             clearTimeout timer
 
-            if parser.info.protocol == "ICE" || parser.info.method == "SOURCE"
+            if /^(ICE|HTTP)$/.test(parser.info.protocol) && /^(SOURCE|PUT)$/.test(parser.info.method)
                 @log.debug "ICY SOURCE attempt.", url:parser.info.url
                 @_trySource sock, parser.info
 
@@ -181,6 +181,7 @@ module.exports = class SourceIn extends require("events").EventEmitter
                 @captureStart = undefined
                 @captureEnd = undefined
 
+                debug "Parser request line: #{line}"
                 return line
 
         requestExp: /^([A-Z]+) (.*) (ICE|HTTP)\/(1).(0|1)$/;
