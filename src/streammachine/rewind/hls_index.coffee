@@ -17,6 +17,11 @@ module.exports = class HLSIndex
 
     #----------
 
+    disconnect: ->
+        @stream = null
+
+    #----------
+
     loadSnapshot: (snapshot) ->
         if snapshot
             @_segments          = snapshot.segments
@@ -222,4 +227,3 @@ module.exports = class HLSIndex
 
             if @_idx == @index.length
                 @push null
-

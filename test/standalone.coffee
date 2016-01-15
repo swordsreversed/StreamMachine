@@ -1,4 +1,5 @@
 StandaloneHelper    = require "./helpers/standalone"
+StreamHelper        = require "./helpers/stream"
 
 StreamListener  = $src "util/stream_listener"
 IcecastSource   = $src "util/icecast_source"
@@ -7,6 +8,8 @@ mp3 = $file "mp3/mp3-44100-128-s.mp3"
 
 debug = require("debug")("sm:tests:standalone")
 request = require "request"
+
+weak = require "weak"
 
 describe "Standalone Mode", ->
     sa_info     = null
@@ -67,3 +70,41 @@ describe "Standalone Mode", ->
             expect(json[0].key).to.eql sa_info.stream_key
 
             done()
+
+    describe "Config Updates", ->
+        s2 = StreamHelper.getStream "mp3"
+
+        it "should properly plumb a new stream", (done) ->
+            standalone.master.createStream s2, (err,status) ->
+                throw err if err
+
+                expect(standalone.master.streams, "Master streams should include our new stream")
+                    .to.include.key s2.key
+
+                setTimeout ->
+                    expect(standalone.slave.streams, "Slave streams should include our new stream")
+                        .to.include.key s2.key
+
+                    expect(standalone.slave.streams[s2.key].source, "Slave stream source should be the master stream")
+                        .to.eql standalone.master.streams[s2.key]
+
+                    done()
+                , 50
+
+        it "should properly unplumb a removed stream", (done) ->
+            stream = weak(standalone.master.streams[s2.key])
+
+            standalone.slave.once "streams", ->
+                expect(standalone.master.streams).to.not.have.property s2.key
+                expect(standalone.slave.streams).to.not.have.property s2.key
+
+                if global.gc
+                    global.gc()
+                    expect(stream.key,"Hopefully GC'ed stream key").to.be.undefined
+                    done()
+                else
+                    console.log "Skipping GC deref test. Run with --expose-gc"
+                    done()
+
+            standalone.master.removeStream stream, (err) ->
+                throw err if err

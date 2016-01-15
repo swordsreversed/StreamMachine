@@ -20,6 +20,10 @@ module.exports = HLSIndex = (function() {
     this._short_index = null;
   }
 
+  HLSIndex.prototype.disconnect = function() {
+    return this.stream = null;
+  };
+
   HLSIndex.prototype.loadSnapshot = function(snapshot) {
     if (snapshot) {
       this._segments = snapshot.segments;

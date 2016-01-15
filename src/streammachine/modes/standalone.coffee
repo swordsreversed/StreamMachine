@@ -72,19 +72,19 @@ module.exports = class StandaloneMode extends require("./base")
         # -- Proxy data events from master -> slave -- #
 
         @master.on "streams", (streams) =>
+            debug "Standalone saw master streams event"
             @slave.once "streams", =>
+                debug "Standalone got followup slave streams event"
                 for k,v of streams
+                    debug "Checking stream #{k}"
                     @log.debug "looking to attach stream #{k}", streams:@streams[k]?, slave_streams:@slave.streams[k]?
-                    if @streams[k]
-                        # got it already
 
+                    if @slave.streams[k]?
+                        debug "Mapping master -> slave for #{k}"
+                        @log.debug "mapping master -> slave on #{k}"
+                        @slave.streams[k].useSource v if !@slave.streams.source
                     else
-                        if @slave.streams[k]?
-                            @log.debug "mapping master -> slave on #{k}"
-                            @slave.streams[k].useSource v
-                            @streams[k] = true
-                        else
-                            @log.error "Unable to map master -> slave for #{k}"
+                        @log.error "Unable to map master -> slave for #{k}"
 
             @slave.configureStreams @master.config().streams
 

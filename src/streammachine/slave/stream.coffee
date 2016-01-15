@@ -42,19 +42,15 @@ module.exports = class Stream extends require('../rewind_buffer')
             @StreamTitle    = chunk.StreamTitle if chunk.StreamTitle
             @StreamUrl      = chunk.StreamUrl if chunk.StreamUrl
 
-        @on "source", =>
-            #@source.on "data", @dataFunc
-            @source.on "meta", @metaFunc
-            @source.on "buffer", (c) => @_insertBuffer(c)
+        @bufferFunc = (c) =>
+            @_insertBuffer(c)
 
-            @source.once "disconnect", =>
-                # try creating a new one
-                @source = null
-                #@_buildSocketSource()
+        @once "source", =>
+            @source.on "meta", @metaFunc
+            @source.on "buffer", @bufferFunc
 
         # now run configure...
         process.nextTick => @configure(@opts)
-
 
         # -- Set up HLS Index -- #
 
@@ -197,11 +193,23 @@ module.exports = class Stream extends require('../rewind_buffer')
         # handle clearing out lmeta
         l.obj.disconnect(true) for k,l of @_lmeta
 
-        # if we have a source, disconnect it
-        if @source
-            @source.disconnect()
+        if @buf_timer
+            clearInterval @buf_timer
+            @buf_timer = null
+
+        @source?.removeListener "meta", @metaFunc
+        @source?.removeListener "buffer", @bufferFunc
+        @source = null
+
+        @metaFunc = @bufferFunc = ->
+
+        @hls?.disconnect()
+
+        super()
 
         @emit "disconnect"
+
+        @removeAllListeners()
 
     #----------
 

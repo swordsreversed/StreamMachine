@@ -79,6 +79,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     #----------
 
+    disconnect: ->
+        @_rdataFunc = ->
+        @_rbuffer.removeAllListeners()
+
+        true
+
+    #----------
+
     isLoading: ->
         @_risLoading
 

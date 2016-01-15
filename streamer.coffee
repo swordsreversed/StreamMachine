@@ -20,10 +20,9 @@ nconf.defaults StreamMachine.Defaults
 # These next two sections are for debugging and use tools that are not included
 # as dependencies.
 
-if nconf.get("enable-webkit-devtools")
-    console.log "ENABLING WEBKIT DEVTOOLS"
-    agent = require("webkit-devtools-agent")
-    agent.start()
+if nconf.get("enable-heapdump")
+    console.log "ENABLING HEAPDUMP (trigger via USR2)"
+    require("heapdump")
 
 if nconf.get("heapdump-interval")
     console.log "ENABLING PERIODIC HEAP DUMPS"

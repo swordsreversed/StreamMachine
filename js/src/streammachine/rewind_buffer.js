@@ -78,6 +78,12 @@ module.exports = RewindBuffer = (function(_super) {
     })(this));
   }
 
+  RewindBuffer.prototype.disconnect = function() {
+    this._rdataFunc = function() {};
+    this._rbuffer.removeAllListeners();
+    return true;
+  };
+
   RewindBuffer.prototype.isLoading = function() {
     return this._risLoading;
   };

@@ -266,7 +266,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         if stream = @_startStream opts.key, @source_mounts[mount_key], opts
             @emit "config_update"
-            @emit "streams"
+            @emit "streams", @streams
             cb? null, stream.status()
         else
             cb? "Stream failed to start."
@@ -305,6 +305,7 @@ module.exports = class Master extends require("events").EventEmitter
         stream.destroy()
 
         @emit "config_update"
+        @emit "streams", @streams
 
         cb? null, "OK"
 
@@ -579,6 +580,7 @@ module.exports = class Master extends require("events").EventEmitter
         # and attach a listener to destroy it if the stream is removed
         stream.once "destroy", =>
             @proxies[ stream.key ]?.destroy()
+            delete @proxies[ stream.key ]
 
     #----------
 
@@ -638,5 +640,9 @@ module.exports = class Master extends require("events").EventEmitter
         destroy: ->
             @stream.removeListener "data", @dataFunc
             @stream.removeListener "hls_snapshot", @hlsSnapFunc
+            @stream = null
+            @emit "destroy"
+
+            @removeAllListeners()
 
     #----------

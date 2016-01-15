@@ -84,9 +84,10 @@ module.exports = TranscodingSource = (function(_super) {
           _this._pingData.ping();
           return _this._buf.write(chunk.data);
         };
-        _this.o_stream.once("data", function(first_chunk) {
+        _this.oFirstDataFunc = function(first_chunk) {
           _this.emit("connected");
           _this.connected = true;
+          _this.oFirstDataFunc = null;
           _this.chunker = new TranscodingSource.FrameChunker(_this.emitDuration * 1000, first_chunk.ts);
           _this.parser.on("frame", function(frame, header) {
             return _this.chunker.write({
@@ -105,7 +106,8 @@ module.exports = TranscodingSource = (function(_super) {
           });
           _this.o_stream.on("data", _this.oDataFunc);
           return _this._buf.write(first_chunk.data);
-        });
+        };
+        _this.o_stream.once("data", _this.oFirstDataFunc);
         return _this.parser.once("header", function(header) {
           var _ref, _ref1;
           _this.framesPerSec = header.frames_per_sec;
@@ -147,6 +149,9 @@ module.exports = TranscodingSource = (function(_super) {
         return function() {
           var _ref;
           _this.o_stream.removeListener("data", _this.oDataFunc);
+          if (_this.oFirstDataFunc) {
+            _this.o_stream.removeListener("data", _this.oFirstDataFunc);
+          }
           _this.ffmpeg.kill();
           if ((_ref = _this._pingData) != null) {
             _ref.kill();
@@ -154,7 +159,8 @@ module.exports = TranscodingSource = (function(_super) {
           return _this.connected = false;
         };
       })(this));
-      return this.emit("disconnect");
+      this.emit("disconnect");
+      return this.removeAllListeners();
     }
   };
 

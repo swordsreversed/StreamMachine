@@ -32,6 +32,10 @@ module.exports = class SocketSource extends require("events").EventEmitter
 
         getVitals 2
 
+        @stream.once "disconnect", =>
+            getVitals = ->
+            @disconnect()
+
     #----------
 
     vitals: (cb) ->
@@ -99,4 +103,6 @@ module.exports = class SocketSource extends require("events").EventEmitter
     #----------
 
     disconnect: ->
-        @log.debug "Unimplemented SocketSource disconnect for #{@stream.key} called"
+        @log.debug "SocketSource disconnecting for #{@stream.key}"
+
+        @stream = null

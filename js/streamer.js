@@ -1,4 +1,4 @@
-var StreamMachine, agent, core, heapdump, nconf;
+var StreamMachine, core, heapdump, nconf;
 
 StreamMachine = require("./src/streammachine");
 
@@ -12,10 +12,9 @@ nconf.file({
 
 nconf.defaults(StreamMachine.Defaults);
 
-if (nconf.get("enable-webkit-devtools")) {
-  console.log("ENABLING WEBKIT DEVTOOLS");
-  agent = require("webkit-devtools-agent");
-  agent.start();
+if (nconf.get("enable-heapdump")) {
+  console.log("ENABLING HEAPDUMP (trigger via USR2)");
+  require("heapdump");
 }
 
 if (nconf.get("heapdump-interval")) {

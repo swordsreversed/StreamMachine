@@ -1,25 +1,14 @@
 StandaloneMode = $src "modes/standalone"
+StreamHelper = require "./stream"
 
 uuid    = require "node-uuid"
 _       = require "underscore"
 
-STREAMS =
-    mp3:
-        key:                "test"
-        source_password:    "abc123"
-        root_route:         true
-        seconds:            60*60*4
-        format:             "mp3"
-
 module.exports =
-    STREAMS:    STREAMS
-
     startStandalone: (stream,cb) ->
-        s = STREAMS[stream]
-
-        if stream && !s
-            cb new Error "Invalid stream spec"
-            return false
+        s = null
+        if stream
+            s = StreamHelper.getStream stream
 
         config =
             chunk_duration: 0.25
@@ -29,13 +18,7 @@ module.exports =
                 stdout:     false
             streams: {}
 
-        sconfig = null
-
-        if stream
-            # generate a random stream key
-            streamkey = uuid.v4()
-
-            sconfig = config.streams[ streamkey ] = _.extend {}, s, key:streamkey
+        config.streams[s.key] = s if s
 
         new StandaloneMode config, (err,sa) ->
             throw err if err
@@ -44,8 +27,8 @@ module.exports =
                 standalone:         sa
                 port:               sa.handle?.address().port
                 source_port:        sa.master.sourcein.server.address().port
-                stream_key:         sconfig?.key
-                source_password:    sconfig?.source_password
+                stream_key:         s?.key
+                source_password:    s?.source_password
                 slave_uri:          ""
                 config:             config
 

@@ -7,6 +7,8 @@ fs          = require "fs"
 path        = require "path"
 strftime    = require("prettydate").strftime
 
+debug = require("debug")("sm:logger")
+
 module.exports = class LogController
     CustomLevels:
         error:          80
@@ -22,6 +24,10 @@ module.exports = class LogController
     constructor: (config) ->
 
         transports = []
+
+        # -- debug -- #
+
+        transports.push new LogController.Debug level:"silly"
 
         # -- stdout -- #
 
@@ -97,6 +103,13 @@ module.exports = class LogController
 
         proxyToMaster: (sock) ->
             @parent.proxyToMaster(sock)
+
+    #----------
+
+    class @Debug extends winston.Transport
+        log: (level,msg,meta,callback) ->
+            debug "#{level}: #{msg}", meta
+            callback null, true
 
     #----------
 

@@ -37,7 +37,7 @@ module.exports = class Stream extends require('events').EventEmitter
         impression_delay:   5000
         log_interval:       30000
 
-    constructor: (@key,@log,mount,opts)->
+    constructor: (@key,@log,@mount,opts)->
         @opts = _.defaults opts||{}, @DefaultOptions
 
         # We have three options for what source we're going to use:
@@ -49,33 +49,16 @@ module.exports = class Stream extends require('events').EventEmitter
         #    transcoding source between it and us, so that we always get a
         #    certain format as our input.
 
+        @destroying = false
         @source = null
 
         if opts.ffmpeg_args
             # Source Mount w/ transcoding
-            initTSource = =>
-                @log.debug "Setting up transcoding source for #{ @key }"
-
-                # -- create a transcoding source -- #
-
-                tsource = new TranscodingSource
-                    stream:         mount
-                    ffmpeg_args:    opts.ffmpeg_args
-                    format:         opts.format
-                    logger:         @log
-
-                @source = tsource
-
-                # if our transcoder goes down, restart it
-                tsource.once "disconnect", =>
-                    @log.error "Transcoder disconnected for #{ @key }."
-                    process.nextTick => initTSource()
-
-            initTSource()
+            @_initTranscodingSource()
 
         else
             # Source Mount directly
-            @source = mount
+            @source = @mount
 
         # Cache the last stream vitals we've seen
         @_vitals = null
@@ -119,13 +102,16 @@ module.exports = class Stream extends require('events').EventEmitter
             if @opts.acceptSourceMeta
                 @setMetadata meta
 
-        @source.on "data", (data) =>
+        @dataFunc = (data) =>
             # inject our metadata into the data object
             @emit "data", _.extend {}, data, meta:@_meta
 
-        @source.on "vitals", (vitals) =>
+        @vitalsFunc = (vitals) =>
             @_vitals = vitals
             @emit "vitals", vitals
+
+        @source.on "data", @dataFunc
+        @source.on "vitals", @vitalsFunc
 
         # -- Hardcoded Source -- #
 
@@ -166,6 +152,26 @@ module.exports = class Stream extends require('events').EventEmitter
 
             else
                 @log.error "Unable to determine fallback source type for #{@opts.fallback}"
+
+    #----------
+
+    _initTranscodingSource: ->
+        @log.debug "Setting up transcoding source for #{ @key }"
+
+        # -- create a transcoding source -- #
+
+        tsource = new TranscodingSource
+            stream:         @mount
+            ffmpeg_args:    @opts.ffmpeg_args
+            format:         @opts.format
+            logger:         @log
+
+        @source = tsource
+
+        # if our transcoder goes down, restart it
+        tsource.once "disconnect", =>
+            @log.error "Transcoder disconnected for #{ @key }."
+            process.nextTick (=> @_initTranscodingSource()) if !@destroying
 
     #----------
 
@@ -263,7 +269,15 @@ module.exports = class Stream extends require('events').EventEmitter
 
     destroy: ->
         # shut down our sources and go away
-        @source.disconnect()
+        @destroying = true
+
+        @source.disconnect() if @source instanceof TranscodingSource
+
+        @source.removeListener "data", @dataFunc
+        @source.removeListener "vitals", @vitalsFunc
+
+        @dataFunc = @vitalsFunc = @sourceMetaFunc = ->
+
         @emit "destroy"
         true
 

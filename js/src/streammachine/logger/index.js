@@ -1,4 +1,4 @@
-var LogController, WinstonCommon, fs, path, strftime, winston, _,
+var LogController, WinstonCommon, debug, fs, path, strftime, winston, _,
   __slice = [].slice,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -14,6 +14,8 @@ fs = require("fs");
 path = require("path");
 
 strftime = require("prettydate").strftime;
+
+debug = require("debug")("sm:logger");
 
 module.exports = LogController = (function() {
   LogController.prototype.CustomLevels = {
@@ -31,6 +33,9 @@ module.exports = LogController = (function() {
   function LogController(config) {
     var transports, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
     transports = [];
+    transports.push(new LogController.Debug({
+      level: "silly"
+    }));
     if (config.stdout) {
       console.log("adding Console transport");
       transports.push(new LogController.Console({
@@ -121,6 +126,22 @@ module.exports = LogController = (function() {
     return Child;
 
   })();
+
+  LogController.Debug = (function(_super) {
+    __extends(Debug, _super);
+
+    function Debug() {
+      return Debug.__super__.constructor.apply(this, arguments);
+    }
+
+    Debug.prototype.log = function(level, msg, meta, callback) {
+      debug("" + level + ": " + msg, meta);
+      return callback(null, true);
+    };
+
+    return Debug;
+
+  })(winston.Transport);
 
   LogController.Console = (function(_super) {
     __extends(Console, _super);

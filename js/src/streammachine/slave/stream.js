@@ -47,15 +47,15 @@ module.exports = Stream = (function(_super) {
         }
       };
     })(this);
-    this.on("source", (function(_this) {
+    this.bufferFunc = (function(_this) {
+      return function(c) {
+        return _this._insertBuffer(c);
+      };
+    })(this);
+    this.once("source", (function(_this) {
       return function() {
         _this.source.on("meta", _this.metaFunc);
-        _this.source.on("buffer", function(c) {
-          return _this._insertBuffer(c);
-        });
-        return _this.source.once("disconnect", function() {
-          return _this.source = null;
-        });
+        return _this.source.on("buffer", _this.bufferFunc);
       };
     })(this));
     process.nextTick((function(_this) {
@@ -204,16 +204,30 @@ module.exports = Stream = (function(_super) {
   };
 
   Stream.prototype.disconnect = function() {
-    var k, l, _ref;
+    var k, l, _ref, _ref1, _ref2, _ref3;
     _ref = this._lmeta;
     for (k in _ref) {
       l = _ref[k];
       l.obj.disconnect(true);
     }
-    if (this.source) {
-      this.source.disconnect();
+    if (this.buf_timer) {
+      clearInterval(this.buf_timer);
+      this.buf_timer = null;
     }
-    return this.emit("disconnect");
+    if ((_ref1 = this.source) != null) {
+      _ref1.removeListener("meta", this.metaFunc);
+    }
+    if ((_ref2 = this.source) != null) {
+      _ref2.removeListener("buffer", this.bufferFunc);
+    }
+    this.source = null;
+    this.metaFunc = this.bufferFunc = function() {};
+    if ((_ref3 = this.hls) != null) {
+      _ref3.disconnect();
+    }
+    Stream.__super__.disconnect.call(this);
+    this.emit("disconnect");
+    return this.removeAllListeners();
   };
 
   Stream.prototype.listeners = function() {

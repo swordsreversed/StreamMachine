@@ -68,9 +68,11 @@ module.exports = class TranscodingSource extends require("./base")
                 @_pingData.ping()
                 @_buf.write chunk.data
 
-            @o_stream.once "data", (first_chunk) =>
+            @oFirstDataFunc = (first_chunk) =>
                 @emit "connected"
                 @connected = true
+
+                @oFirstDataFunc = null
 
                 @chunker = new TranscodingSource.FrameChunker @emitDuration * 1000, first_chunk.ts
 
@@ -86,6 +88,8 @@ module.exports = class TranscodingSource extends require("./base")
                 @o_stream.on "data", @oDataFunc
 
                 @_buf.write first_chunk.data
+
+            @o_stream.once "data", @oFirstDataFunc
 
             # -- watch for vitals -- #
 
@@ -122,8 +126,11 @@ module.exports = class TranscodingSource extends require("./base")
             @_disconnected = true
             @d.run =>
                 @o_stream.removeListener "data", @oDataFunc
+                @o_stream.removeListener "data", @oFirstDataFunc if @oFirstDataFunc
                 @ffmpeg.kill()
                 @_pingData?.kill()
                 @connected = false
 
             @emit "disconnect"
+
+            @removeAllListeners()

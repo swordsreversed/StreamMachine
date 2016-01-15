@@ -46,6 +46,12 @@ module.exports = SocketSource = (function(_super) {
       };
     })(this);
     getVitals(2);
+    this.stream.once("disconnect", (function(_this) {
+      return function() {
+        getVitals = function() {};
+        return _this.disconnect();
+      };
+    })(this));
   }
 
   SocketSource.prototype.vitals = function(cb) {
@@ -120,7 +126,8 @@ module.exports = SocketSource = (function(_super) {
   };
 
   SocketSource.prototype.disconnect = function() {
-    return this.log.debug("Unimplemented SocketSource disconnect for " + this.stream.key + " called");
+    this.log.debug("SocketSource disconnecting for " + this.stream.key);
+    return this.stream = null;
   };
 
   return SocketSource;

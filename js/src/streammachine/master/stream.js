@@ -52,34 +52,17 @@ module.exports = Stream = (function(_super) {
   };
 
   function Stream(key, log, mount, opts) {
-    var initTSource, newsource, uri, _ref;
+    var newsource, uri, _ref;
     this.key = key;
     this.log = log;
+    this.mount = mount;
     this.opts = _.defaults(opts || {}, this.DefaultOptions);
+    this.destroying = false;
     this.source = null;
     if (opts.ffmpeg_args) {
-      initTSource = (function(_this) {
-        return function() {
-          var tsource;
-          _this.log.debug("Setting up transcoding source for " + _this.key);
-          tsource = new TranscodingSource({
-            stream: mount,
-            ffmpeg_args: opts.ffmpeg_args,
-            format: opts.format,
-            logger: _this.log
-          });
-          _this.source = tsource;
-          return tsource.once("disconnect", function() {
-            _this.log.error("Transcoder disconnected for " + _this.key + ".");
-            return process.nextTick(function() {
-              return initTSource();
-            });
-          });
-        };
-      })(this);
-      initTSource();
+      this._initTranscodingSource();
     } else {
-      this.source = mount;
+      this.source = this.mount;
     }
     this._vitals = null;
     this.emitDuration = 0;
@@ -119,19 +102,21 @@ module.exports = Stream = (function(_super) {
         }
       };
     })(this);
-    this.source.on("data", (function(_this) {
+    this.dataFunc = (function(_this) {
       return function(data) {
         return _this.emit("data", _.extend({}, data, {
           meta: _this._meta
         }));
       };
-    })(this));
-    this.source.on("vitals", (function(_this) {
+    })(this);
+    this.vitalsFunc = (function(_this) {
       return function(vitals) {
         _this._vitals = vitals;
         return _this.emit("vitals", vitals);
       };
-    })(this));
+    })(this);
+    this.source.on("data", this.dataFunc);
+    this.source.on("vitals", this.vitalsFunc);
     if (this.opts.fallback != null) {
       uri = URL.parse(this.opts.fallback);
       newsource = (function() {
@@ -177,6 +162,28 @@ module.exports = Stream = (function(_super) {
       }
     }
   }
+
+  Stream.prototype._initTranscodingSource = function() {
+    var tsource;
+    this.log.debug("Setting up transcoding source for " + this.key);
+    tsource = new TranscodingSource({
+      stream: this.mount,
+      ffmpeg_args: this.opts.ffmpeg_args,
+      format: this.opts.format,
+      logger: this.log
+    });
+    this.source = tsource;
+    return tsource.once("disconnect", (function(_this) {
+      return function() {
+        _this.log.error("Transcoder disconnected for " + _this.key + ".");
+        if (!_this.destroying) {
+          return process.nextTick((function() {
+            return _this._initTranscodingSource();
+          }));
+        }
+      };
+    })(this));
+  };
 
   Stream.prototype.addSource = function(source, cb) {
     return this.source.addSource(source, cb);
@@ -275,7 +282,13 @@ module.exports = Stream = (function(_super) {
   };
 
   Stream.prototype.destroy = function() {
-    this.source.disconnect();
+    this.destroying = true;
+    if (this.source instanceof TranscodingSource) {
+      this.source.disconnect();
+    }
+    this.source.removeListener("data", this.dataFunc);
+    this.source.removeListener("vitals", this.vitalsFunc);
+    this.dataFunc = this.vitalsFunc = this.sourceMetaFunc = function() {};
     this.emit("destroy");
     return true;
   };
