@@ -6,6 +6,7 @@ SlaveIO         = $src "slave/slave_io"
 Logger          = $src "logger"
 
 MasterHelper    = require "./helpers/master"
+StreamHelper    = require "./helpers/stream"
 
 weak = require "weak"
 
@@ -105,19 +106,26 @@ describe "StreamMachine Master Mode", ->
             done()
 
         it "should destroy a stream when asked", (done) ->
-            stream = weak(mm.master.master.streams[STREAM1.key])
-            mm.master.master.removeStream stream, (err) =>
+            stream2 = StreamHelper.getStream "mp3"
+
+            mm.master.master.createStream stream2, (err,status) ->
                 throw err if err
 
-                expect(mm.master.master.streams).to.not.have.property STREAM1.key
+                expect(mm.master.master.streams).to.have.property stream2.key
 
-                if global.gc
-                    global.gc()
-                    expect(stream.key).to.be.undefined
-                    done()
-                else
-                    console.log "Skipping GC deref test. Run with --expose-gc"
-                    done()
+                stream = weak(mm.master.master.streams[stream2.key])
+                mm.master.master.removeStream stream, (err) =>
+                    throw err if err
+
+                    expect(mm.master.master.streams).to.not.have.property stream2.key
+
+                    if global.gc
+                        global.gc()
+                        expect(stream.key).to.be.undefined
+                        done()
+                    else
+                        console.log "Skipping GC deref test. Run with --expose-gc"
+                        done()
 
     # -- Slaves -- #
 
