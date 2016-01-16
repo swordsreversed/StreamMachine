@@ -88,3 +88,14 @@ describe "API: Source Mounts", ->
                 expect(json).to.contain.all.keys mount_config
 
                 done()
+
+    it "allows source mount to be removed via DELETE /sources/:source", (done) ->
+        request.del url:"#{m.api_uri}/sources/#{mount_config.key}", (err,res) ->
+            throw err if err
+
+            expect(res.statusCode).to.be.eql 200
+
+            # master should no longer know our source
+            expect(m.master.master.source_mounts).to.not.have.key mount_config.key
+
+            done()
