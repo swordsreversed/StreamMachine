@@ -259,7 +259,7 @@ module.exports = API = (function() {
       return function(req, res) {
         return _this.master.removeMount(req.mount, function(err, obj) {
           if (err) {
-            return api.invalid(req, res, err);
+            return api.invalid(req, res, err.message);
           } else {
             return api.ok(req, res, obj);
           }

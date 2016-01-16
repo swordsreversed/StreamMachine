@@ -208,7 +208,7 @@ module.exports = class API
         @app.delete "/sources/:mount", (req,res) =>
             @master.removeMount req.mount, (err,obj) =>
                 if err
-                    api.invalid req, res, err
+                    api.invalid req, res, err.message
                 else
                     api.ok req, res, obj
 
