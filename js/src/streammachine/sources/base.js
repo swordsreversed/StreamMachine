@@ -123,13 +123,14 @@ module.exports = Source = (function(_super) {
   };
 
   Source.prototype.disconnect = function(cb) {
-    var _ref;
+    var _ref, _ref1;
     if ((_ref = this.log) != null) {
       _ref.debug("Setting _isDisconnected");
     }
     this._isDisconnected = true;
     this.chunker.removeAllListeners();
-    return this.parser.removeAllListeners();
+    this.parser.removeAllListeners();
+    return (_ref1 = this._pingData) != null ? _ref1.kill() : void 0;
   };
 
   Source.FrameChunker = (function(_super1) {

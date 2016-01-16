@@ -108,6 +108,7 @@ module.exports = class Source extends require("events").EventEmitter
         @_isDisconnected = true
         @chunker.removeAllListeners()
         @parser.removeAllListeners()
+        @_pingData?.kill()
 
     #----------
 
