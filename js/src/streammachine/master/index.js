@@ -387,10 +387,14 @@ module.exports = Master = (function(_super) {
 
   Master.prototype.removeMount = function(mount, cb) {
     this.log.info("removeMount called for " + mount.key);
+    if (mount.listeners("data").length > 0) {
+      cb(new Error("Cannot remove source mount until all streams are removed"));
+      return false;
+    }
     delete this.source_mounts[mount.key];
     mount.destroy();
     this.emit("config_update");
-    return typeof cb === "function" ? cb(null, "OK") : void 0;
+    return cb(null, "OK");
   };
 
   Master.prototype.streamsInfo = function() {

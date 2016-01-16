@@ -356,12 +356,17 @@ module.exports = class Master extends require("events").EventEmitter
     removeMount: (mount,cb) ->
         @log.info "removeMount called for #{mount.key}"
 
+        # it's illegal to remove a mount that still has streams hooked up to it
+        if mount.listeners("data").length > 0
+            cb new Error("Cannot remove source mount until all streams are removed")
+            return false
+
         delete @source_mounts[ mount.key ]
         mount.destroy()
 
         @emit "config_update"
 
-        cb? null, "OK"
+        cb null, "OK"
 
     #----------
 

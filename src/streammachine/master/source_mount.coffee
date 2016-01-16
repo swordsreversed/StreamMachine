@@ -211,5 +211,8 @@ module.exports = class SourceMount extends require("events").EventEmitter
 
     #----------
 
-    disconnect: ->
+    destroy: ->
         s.disconnect() for s in @sources
+        @emit "destroy"
+        
+        @removeAllListeners()

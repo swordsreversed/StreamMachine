@@ -89,7 +89,8 @@ module.exports = IcecastSource = (function(_super) {
       this.opts.sock.destroy();
       this.opts.sock.removeAllListeners();
       this.connected = false;
-      return this.emit("disconnect");
+      this.emit("disconnect");
+      return this.removeAllListeners();
     }
   };
 

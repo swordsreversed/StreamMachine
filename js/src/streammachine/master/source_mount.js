@@ -224,15 +224,15 @@ module.exports = SourceMount = (function(_super) {
 
   SourceMount.prototype.dropSource = function(uuid, cb) {};
 
-  SourceMount.prototype.disconnect = function() {
-    var s, _i, _len, _ref, _results;
+  SourceMount.prototype.destroy = function() {
+    var s, _i, _len, _ref;
     _ref = this.sources;
-    _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       s = _ref[_i];
-      _results.push(s.disconnect());
+      s.disconnect();
     }
-    return _results;
+    this.emit("destroy");
+    return this.removeAllListeners();
   };
 
   return SourceMount;

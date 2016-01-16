@@ -72,3 +72,5 @@ module.exports = class IcecastSource extends require("./base")
             @opts.sock.removeAllListeners()
             @connected = false
             @emit "disconnect"
+
+            @removeAllListeners()

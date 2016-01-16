@@ -173,7 +173,10 @@ module.exports = ProxySource = (function(_super) {
       this.icecast.end();
       this.parser = null;
       this.icecast = null;
-      return (_ref = this.log) != null ? _ref.debug("ProxySource disconnected.") : void 0;
+      if ((_ref = this.log) != null) {
+        _ref.debug("ProxySource disconnected.");
+      }
+      return this.removeAllListeners();
     }
   };
 

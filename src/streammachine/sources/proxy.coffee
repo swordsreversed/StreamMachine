@@ -153,3 +153,5 @@ module.exports = class ProxySource extends require("./base")
             @icecast = null
 
             @log?.debug "ProxySource disconnected."
+
+            @removeAllListeners()
