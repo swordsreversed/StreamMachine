@@ -272,6 +272,7 @@ module.exports = class Stream extends require('events').EventEmitter
         @destroying = true
 
         @source.disconnect() if @source instanceof TranscodingSource
+        @rewind.disconnect()
 
         @source.removeListener "data", @dataFunc
         @source.removeListener "vitals", @vitalsFunc

@@ -286,6 +286,7 @@ module.exports = Stream = (function(_super) {
     if (this.source instanceof TranscodingSource) {
       this.source.disconnect();
     }
+    this.rewind.disconnect();
     this.source.removeListener("data", this.dataFunc);
     this.source.removeListener("vitals", this.vitalsFunc);
     this.dataFunc = this.vitalsFunc = this.sourceMetaFunc = function() {};
