@@ -60,7 +60,7 @@ module.exports = class ProxySource extends require("./base")
             else
                 "Error making connection to Icecast proxy"
 
-        @emit "error", "ProxySource encountered an error: #{nice_err}", err
+        @log?.error "ProxySource encountered an error: #{nice_err}", err
 
     #----------
 
@@ -143,7 +143,7 @@ module.exports = class ProxySource extends require("./base")
         @_in_disconnect = true
 
         if @connected
-            @icecast.removeAllListeners()
+            @icecast?.removeAllListeners()
             @parser.removeAllListeners()
             @removeAllListeners()
 

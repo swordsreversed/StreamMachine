@@ -75,9 +75,8 @@ module.exports = class StandaloneMode extends require("./base")
             debug "Standalone saw master streams event"
             @slave.once "streams", =>
                 debug "Standalone got followup slave streams event"
-                for k,v of streams
+                for k,v of @master.streams
                     debug "Checking stream #{k}"
-                    @log.debug "looking to attach stream #{k}", streams:@streams[k]?, slave_streams:@slave.streams[k]?
 
                     if @slave.streams[k]?
                         debug "Mapping master -> slave for #{k}"
@@ -171,6 +170,7 @@ module.exports = class StandaloneMode extends require("./base")
                         @slave.ejectListeners (obj,h,lcb) =>
                             debug "Sending a listener...", obj
                             @_rpc.request "stream_listener", obj, h, (err) =>
+                                debug "Listener transfer error: #{err}" if err
                                 lcb()
                         , (err) =>
                             @log.error "Error sending listeners during handoff: #{err}" if err

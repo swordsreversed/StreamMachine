@@ -109,6 +109,9 @@ module.exports = class Stream extends require('../rewind_buffer')
     #----------
 
     useSource: (source) ->
+        # short-circuit if this is already our source
+        return true if @source == source
+        
         @log.debug "Slave stream got source connection"
         @source = source
         @emit "source", @source

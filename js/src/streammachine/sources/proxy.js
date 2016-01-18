@@ -56,7 +56,7 @@ module.exports = ProxySource = (function(_super) {
   }
 
   ProxySource.prototype._niceError = function(err) {
-    var nice_err;
+    var nice_err, _ref;
     debug("Caught error: " + err, err.stack);
     nice_err = (function() {
       switch (err.syscall) {
@@ -68,7 +68,7 @@ module.exports = ProxySource = (function(_super) {
           return "Error making connection to Icecast proxy";
       }
     })();
-    return this.emit("error", "ProxySource encountered an error: " + nice_err, err);
+    return (_ref = this.log) != null ? _ref.error("ProxySource encountered an error: " + nice_err, err) : void 0;
   };
 
   ProxySource.prototype.status = function() {
@@ -164,17 +164,19 @@ module.exports = ProxySource = (function(_super) {
   };
 
   ProxySource.prototype.disconnect = function() {
-    var _ref;
+    var _ref, _ref1;
     this._in_disconnect = true;
     if (this.connected) {
-      this.icecast.removeAllListeners();
+      if ((_ref = this.icecast) != null) {
+        _ref.removeAllListeners();
+      }
       this.parser.removeAllListeners();
       this.removeAllListeners();
       this.icecast.end();
       this.parser = null;
       this.icecast = null;
-      if ((_ref = this.log) != null) {
-        _ref.debug("ProxySource disconnected.");
+      if ((_ref1 = this.log) != null) {
+        _ref1.debug("ProxySource disconnected.");
       }
       return this.removeAllListeners();
     }

@@ -122,6 +122,9 @@ module.exports = Stream = (function(_super) {
   };
 
   Stream.prototype.useSource = function(source) {
+    if (this.source === source) {
+      return true;
+    }
     this.log.debug("Slave stream got source connection");
     this.source = source;
     return this.emit("source", this.source);
