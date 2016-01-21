@@ -118,6 +118,8 @@ module.exports = class Source extends require("events").EventEmitter
             @_queue_duration    = 0
             @_remainders        = 0
 
+            @_target = @duration
+
             @_last_ts           = null
 
             super objectMode:true
@@ -135,7 +137,10 @@ module.exports = class Source extends require("events").EventEmitter
             @_chunk_queue.push obj
             @_queue_duration += obj.header.duration
 
-            if @_queue_duration > @duration
+            if @_queue_duration > @_target
+                # reset our target for the next chunk
+                @_target = @_target + (@duration - @_queue_duration)
+
                 # what's the total data length?
                 len = 0
                 len += o.frame.length for o in @_chunk_queue
