@@ -132,7 +132,8 @@ describe "Rewind Buffer", ->
 
                 t_len = 0
                 t_len += b.data.length for b in mock.buffer
-                expect(t_len).to.be.within 64000, 65000
+                # 64Kb/sec audio, so 8 sec should be ~64KB. Unit for length is bytes
+                expect(t_len).to.be.within 63000, 65000
 
                 done()
 
@@ -194,5 +195,3 @@ describe "Rewind Buffer", ->
                 pos += chunk
 
             pt.end()
-
-
