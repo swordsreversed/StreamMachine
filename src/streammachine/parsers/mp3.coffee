@@ -122,7 +122,7 @@ module.exports = class MP3 extends require("stream").Writable
                 @_finishingId3v2 = true;
                 @_id3v2_2 = v;
 
-                return new strtok.BufferType @id3v2.length - 10
+                return new strtok.BufferType @id3v2.length
 
             if @_finishingId3v2
                 # step 3 in the ID3v2 parse...
@@ -131,7 +131,7 @@ module.exports = class MP3 extends require("stream").Writable
 
                 @_finishingId3v2 = false
 
-                return MPEG_HEADER;
+                return FIRST_BYTE;
 
             # -- frame header -- #
 

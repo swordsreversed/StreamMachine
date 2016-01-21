@@ -126,13 +126,13 @@ module.exports = MP3 = (function(_super) {
           _this._parsingId3v2 = false;
           _this._finishingId3v2 = true;
           _this._id3v2_2 = v;
-          return new strtok.BufferType(_this.id3v2.length - 10);
+          return new strtok.BufferType(_this.id3v2.length);
         }
         if (_this._finishingId3v2) {
           b = Buffer.concat([_this._id3v2_1, _this._id3v2_2, v]);
           _emitAndMaybeEnd('id3v2', b);
           _this._finishingId3v2 = false;
-          return MPEG_HEADER;
+          return FIRST_BYTE;
         }
         if (_this.frameSize === -1 && _this.frameHeader) {
           tag = v.toString('ascii', 0, 3);
