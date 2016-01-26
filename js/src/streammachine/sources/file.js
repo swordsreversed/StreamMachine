@@ -68,24 +68,43 @@ module.exports = FileSource = (function(_super) {
     return true;
   };
 
-  FileSource.prototype.emitSeconds = function(secs, cb) {
+  FileSource.prototype.emitSeconds = function(secs, wait, cb) {
     var count, emits, _f;
+    if (_.isFunction(wait)) {
+      cb = wait;
+      wait = null;
+    }
     emits = Math.ceil(secs / this.emitDuration);
     count = 0;
-    _f = (function(_this) {
-      return function() {
-        _this._emitOnce();
-        count += 1;
-        if (count < emits) {
-          return process.nextTick(function() {
-            return _f();
-          });
-        } else {
-          return cb();
-        }
-      };
-    })(this);
-    return _f();
+    if (wait) {
+      _f = (function(_this) {
+        return function() {
+          _this._emitOnce();
+          count += 1;
+          if (count < emits) {
+            return setTimeout(_f, wait);
+          } else {
+            return cb();
+          }
+        };
+      })(this);
+      return _f();
+    } else {
+      _f = (function(_this) {
+        return function() {
+          _this._emitOnce();
+          count += 1;
+          if (count < emits) {
+            return process.nextTick(function() {
+              return _f();
+            });
+          } else {
+            return cb();
+          }
+        };
+      })(this);
+      return _f();
+    }
   };
 
   FileSource.prototype._emitOnce = function(ts) {

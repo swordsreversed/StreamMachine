@@ -64,20 +64,36 @@ module.exports = class FileSource extends require("./base")
     #----------
 
     # emit a certain length of time. useful for filling a buffer
-    emitSeconds: (secs,cb) ->
+    emitSeconds: (secs,wait,cb) ->
+        if _.isFunction(wait)
+            cb = wait
+            wait = null
+
         emits = Math.ceil(secs / @emitDuration)
         count = 0
 
-        _f = =>
-            @_emitOnce()
-            count += 1
+        if wait
+            _f = =>
+                @_emitOnce()
+                count += 1
 
-            if count < emits
-                process.nextTick => _f()
-            else
-                cb()
+                if count < emits
+                    setTimeout _f, wait
+                else
+                    cb()
 
-        _f()
+            _f()
+        else
+            _f = =>
+                @_emitOnce()
+                count += 1
+
+                if count < emits
+                    process.nextTick => _f()
+                else
+                    cb()
+
+            _f()
 
     #----------
 
