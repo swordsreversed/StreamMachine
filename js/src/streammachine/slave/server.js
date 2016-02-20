@@ -116,6 +116,18 @@ module.exports = Server = (function(_super) {
         };
       })(this));
     }
+    if (this.config.debug_incoming_requests) {
+      this.app.use((function(_this) {
+        return function(req, res, next) {
+          var _ref6;
+          _this.logger.debug("Request: " + req.url, {
+            ip: req.ip,
+            ua: (_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0
+          });
+          return next();
+        };
+      })(this));
+    }
     this.app.get("/index.html", (function(_this) {
       return function(req, res) {
         res.set("content-type", "text/html");

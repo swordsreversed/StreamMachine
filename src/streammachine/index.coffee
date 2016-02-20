@@ -24,6 +24,7 @@ module.exports = class StreamMachine
         chunk_duration: 2
 
         behind_proxy:   false
+        debug_incoming_requests: false
 
         cluster: 2
 

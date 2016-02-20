@@ -105,6 +105,13 @@ module.exports = class Server extends require('events').EventEmitter
 
                 next()
 
+        # -- Debug Logger -- #
+
+        if @config.debug_incoming_requests
+            @app.use (req,res,next) =>
+                @logger.debug "Request: #{req.url}", ip:req.ip, ua:req.headers?['user-agent']
+                next()
+
         # -- Utility Routes -- #
 
         @app.get "/index.html", (req,res) =>
