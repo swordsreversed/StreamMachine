@@ -24,7 +24,7 @@ module.exports = Server = (function(_super) {
   __extends(Server, _super);
 
   function Server(opts) {
-    var idx_match, origin, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+    var banned, idx_match, origin, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
     this.opts = opts;
     this.core = this.opts.core;
     this.logger = this.opts.logger;
@@ -61,7 +61,6 @@ module.exports = Server = (function(_super) {
         };
       })(this));
     }
-    this._ua_skip = this.config.ua_skip ? RegExp("" + (this.config.ua_skip.join("|"))) : null;
     this.app.param("stream", (function(_this) {
       return function(req, res, next, key) {
         var s;
@@ -128,6 +127,22 @@ module.exports = Server = (function(_super) {
         };
       })(this));
     }
+    if (this.config.ua_skip) {
+      banned = RegExp("" + (this.config.ua_skip.join("|")));
+      this.app.use((function(_this) {
+        return function(req, res, next) {
+          var _ref6;
+          if (!(((_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0) && banned.test(req.headers["user-agent"]))) {
+            return next();
+          }
+          _this.logger.debug("Request from banned User-Agent: " + req.headers['user-agent'], {
+            ip: req.ip,
+            url: req.url
+          });
+          return res.status(403).end("Invalid User Agent.");
+        };
+      })(this));
+    }
     this.app.get("/index.html", (function(_this) {
       return function(req, res) {
         res.set("content-type", "text/html");
@@ -188,16 +203,7 @@ module.exports = Server = (function(_super) {
     })(this));
     this.app.get("/:stream", (function(_this) {
       return function(req, res) {
-        var _ref6;
         res.set("X-Powered-By", "StreamMachine");
-        if (_this._ua_skip && ((_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0) && _this._ua_skip.test(req.headers["user-agent"])) {
-          _this.logger.debug("Request from banned User-Agent: " + req.headers['user-agent'], {
-            ip: req.ip,
-            url: req.url
-          });
-          res.status(200).end("Invalid User Agent.");
-          return false;
-        }
         if (req.param("pump")) {
           return new _this.core.Outputs.pumper(req.stream, {
             req: req,

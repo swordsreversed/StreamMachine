@@ -52,10 +52,6 @@ module.exports = class Server extends require('events').EventEmitter
 
                 next()
 
-        # -- Shoutcast emulation -- #
-
-        @_ua_skip = if @config.ua_skip then ///#{@config.ua_skip.join("|")}/// else null
-
         # -- Stream Finder -- #
 
         @app.param "stream", (req,res,next,key) =>
@@ -111,6 +107,21 @@ module.exports = class Server extends require('events').EventEmitter
             @app.use (req,res,next) =>
                 @logger.debug "Request: #{req.url}", ip:req.ip, ua:req.headers?['user-agent']
                 next()
+
+        # -- check user agent for banned clients -- #
+
+        if @config.ua_skip
+            banned = ///#{@config.ua_skip.join("|")}///
+
+            @app.use (req,res,next) =>
+                return next() unless req.headers?['user-agent'] && banned.test(req.headers["user-agent"])
+
+                # request from banned agent...
+                @logger.debug "Request from banned User-Agent: #{req.headers['user-agent']}",
+                    ip:     req.ip
+                    url:    req.url
+
+                res.status(403).end("Invalid User Agent.")
 
         # -- Utility Routes -- #
 
@@ -169,20 +180,6 @@ module.exports = class Server extends require('events').EventEmitter
         # listen to the stream
         @app.get "/:stream", (req,res) =>
             res.set "X-Powered-By", "StreamMachine"
-
-            # -- check user agent -- #
-
-            if @_ua_skip && req.headers?['user-agent'] && @_ua_skip.test(req.headers["user-agent"])
-                # Shoutcast servers had a special handling for user agents that
-                # contained the string "Mozilla". It gave them an HTTP status
-                # page instead of the audio content.  One exception: if the
-                # requested path contained a ";", it gave the audio.
-                @logger.debug "Request from banned User-Agent: #{req.headers['user-agent']}",
-                    ip:     req.ip
-                    url:    req.url
-
-                res.status(200).end("Invalid User Agent.")
-                return false
 
             # -- Stream match! -- #
 
