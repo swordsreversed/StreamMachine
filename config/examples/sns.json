@@ -1,0 +1,25 @@
+{
+	"port":         8001,
+	"source_port":  8002,
+  "api_port":     8003,
+  "streams": {
+    "7edgtest": {
+      "key":              "7edgtest",
+      "root_route":       true,
+      "format":           "mp3",
+      "seconds":          3600,
+      "metaTitle":        "Testing",
+      "host":             "localhost",
+      "source_password":  "testing",
+      "monitored":        true
+    }
+  },
+	"log": {
+		"stdout":     true
+  },
+    "alerts": {
+        "SNS": {
+            "number":   "+61434352949"
+        }
+    }
+}

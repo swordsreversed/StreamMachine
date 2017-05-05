@@ -89,6 +89,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
                     @_disconnectSource @source
                     @source = null
                     @emit "disconnect", active:true, count:0, source:null
+                    # @master.alerts.update "slave_unresponsive", stat.id, true
             else
                 # no... just remove it from the list
                 @log.event "Inactive source disconnected."

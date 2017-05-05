@@ -2,7 +2,8 @@ nconf       = require "nconf"
 _           = require "underscore"
 nodemailer  = require "nodemailer"
 pagerduty   = require "pagerduty"
-
+AWS         = require "aws-sdk"
+AWS.config.update({region:'ap-southeast-2'});
 
 ALERT_TYPES =
     sourceless:
@@ -17,6 +18,10 @@ ALERT_TYPES =
         description:    "A slave server has stopped responding to our status queries."
         wait_for:       30
 
+    slave_unresponsive:
+        description:    "A slave server has stopped responding to our status queries."
+        wait_for:       30
+        
     slave_unsynced:
         description:    "A slave server is out of sync with master."
         wait_for:       30
@@ -31,6 +36,7 @@ module.exports = class Alerts extends require("events").EventEmitter
 
         @email      = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")
         @pagerduty  = new Alerts.PagerDuty @, nconf.get("alerts:pagerduty") if nconf.get("alerts:pagerduty")
+        @sns  = new Alerts.Sns @, nconf.get("alerts:SNS") if nconf.get("alerts:SNS")
 
         @_states = {}
 
@@ -265,3 +271,58 @@ module.exports = class Alerts extends require("events").EventEmitter
 
             else
                 @alerts.logger.debug logText, code:msg.code, key:msg.key
+
+
+     #----------
+
+    class @Sns
+        constructor: (@alerts,@opts) ->
+            # -- set up the transport -- #
+
+            @sns = new (AWS.SNS)
+            # @sns.config.loadFromPath('./config.json');
+
+            # -- register our listener -- #
+
+            @alerts.on "alert",         (msg) => @_sendAlert(msg)
+            @alerts.on "alert_cleared", (msg) => @_sendAllClear(msg)
+
+        #----------
+
+        _sendAlert: (msg) ->
+            @alerts.logger.debug "Sending alert to Aws SNS."
+
+            console.log(msg)
+            params = 
+              Message: msg.description + ' ' + msg.key
+              MessageStructure: 'string'
+              PhoneNumber: '+61434352949'
+
+            @sns.publish params, (err, data) ->
+                if err
+                    # @alerts.logger.error "Error sending alert sms: #{err}", error:err
+                    console.log("Error sending alert sms", err)
+                    return false
+                
+                # @alerts.logger.debug "Sms sent to #{params.PhoneNumber}.", code:msg.code, key:msg.key
+
+        #----------
+
+        _sendAllClear: (msg) ->
+            
+            @alerts.logger.debug "Sending allClear to Sns."
+
+            params = 
+              Message: 'All clear'
+              MessageStructure: 'string'
+              PhoneNumber: '+61434352949'
+            
+            @sns.publish params, (err, data) ->
+                if err
+                    console.log("sending all clear alert sms", err)
+                    return false
+                
+                console.log("sending all clear alert sms")
+                
+
+    #----------

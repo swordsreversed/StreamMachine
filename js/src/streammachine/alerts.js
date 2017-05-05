@@ -1,4 +1,4 @@
-var ALERT_TYPES, Alerts, nconf, nodemailer, pagerduty, _,
+var ALERT_TYPES, AWS, Alerts, nconf, nodemailer, pagerduty, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -10,6 +10,12 @@ nodemailer = require("nodemailer");
 
 pagerduty = require("pagerduty");
 
+AWS = require("aws-sdk");
+
+AWS.config.update({
+  region: 'ap-southeast-2'
+});
+
 ALERT_TYPES = {
   sourceless: {
     description: "A monitored stream has lost its only source connection.",
@@ -17,6 +23,10 @@ ALERT_TYPES = {
   },
   slave_disconnected: {
     description: "A slave server has lost its connection to the master server.",
+    wait_for: 30
+  },
+  slave_unresponsive: {
+    description: "A slave server has stopped responding to our status queries.",
     wait_for: 30
   },
   slave_unresponsive: {
@@ -40,6 +50,9 @@ module.exports = Alerts = (function(_super) {
     }
     if (nconf.get("alerts:pagerduty")) {
       this.pagerduty = new Alerts.PagerDuty(this, nconf.get("alerts:pagerduty"));
+    }
+    if (nconf.get("alerts:SNS")) {
+      this.sns = new Alerts.Sns(this, nconf.get("alerts:SNS"));
     }
     this._states = {};
   }
@@ -286,6 +299,61 @@ module.exports = Alerts = (function(_super) {
     };
 
     return PagerDuty;
+
+  })();
+
+  Alerts.Sns = (function() {
+    function Sns(alerts, opts) {
+      this.alerts = alerts;
+      this.opts = opts;
+      this.sns = new AWS.SNS;
+      this.alerts.on("alert", (function(_this) {
+        return function(msg) {
+          return _this._sendAlert(msg);
+        };
+      })(this));
+      this.alerts.on("alert_cleared", (function(_this) {
+        return function(msg) {
+          return _this._sendAllClear(msg);
+        };
+      })(this));
+    }
+
+    Sns.prototype._sendAlert = function(msg) {
+      var params;
+      this.alerts.logger.debug("Sending alert to Aws SNS.");
+      console.log(msg);
+      params = {
+        Message: msg.description + ' ' + msg.key,
+        MessageStructure: 'string',
+        PhoneNumber: '+61434352949'
+      };
+      return this.sns.publish(params, function(err, data) {
+        if (err) {
+          console.log("Error sending alert sms", err);
+          return false;
+        }
+      });
+    };
+
+    Sns.prototype._sendAllClear = function(msg) {
+      var params;
+      this.alerts.logger.debug("Sending allClear to Sns.");
+      params = {
+        Message: 'All clear',
+        MessageStructure: 'string',
+        PhoneNumber: '+61434352949'
+      };
+      return this.sns.publish(params, function(err, data) {
+        if (err) {
+          console.log("sending all clear alert sms", err);
+          return false;
+        }
+        return console.log("sending all clear alert sms");
+      });
+    };
+
+    return Sns;
 
   })();
 
