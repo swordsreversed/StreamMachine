@@ -1,4 +1,4 @@
-var Server, compression, cors, express, fs, http, path, util, uuid, _,
+var Server, compression, cors, express, fs, https, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -14,7 +14,13 @@ path = require('path');
 
 uuid = require('node-uuid');
 
-http = require("http");
+https = require('https');
+
+const options = {
+  key: fs.readFileSync('keys/self-signed.key'),
+  cert: fs.readFileSync('keys/self-signed.crt')
+};
+
 
 compression = require("compression");
 
@@ -30,7 +36,7 @@ module.exports = Server = (function(_super) {
     this.logger = this.opts.logger;
     this.config = this.opts.config;
     this.app = express();
-    this._server = http.createServer(this.app);
+    this._server = https.createServer(options, this.app);
     if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {
       origin = this.opts.config.cors.origin || true;
       this.app.use(cors({
@@ -229,6 +235,8 @@ module.exports = Server = (function(_super) {
   Server.prototype.listen = function(port, cb) {
     this.logger.info("SlaveWorker called listen");
     this.hserver = this.app.listen(port, (function(_this) {
+      _this.logger.debug('server on https', port);
+      
       return function() {
         return typeof cb === "function" ? cb(_this.hserver) : void 0;
       };

@@ -1,0 +1,19 @@
+{
+	"port":         8001,
+	"source_port":  8002,
+  "api_port":     8003,
+	"log": {
+		"stdout":     true,
+    "json": {
+			"file": 	  "/home/admin/stream/StreamMachine/logs/streammachine.log",
+			"level":	  "debug"
+		}
+  },
+  "admin": {
+    "require_auth": true,
+    "secure": false
+  },
+  "redis": {
+		"server": "redis://localhost:6379"
+	}
+}

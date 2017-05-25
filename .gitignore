@@ -1,3 +1,5 @@
 node_modules/*
 config/dev/
 z/
+keys/self-signed.*
+logs/streammachine.log

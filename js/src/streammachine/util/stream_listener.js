@@ -1,10 +1,10 @@
-var Icy, StreamListener, debug, http, _,
+var Icy, StreamListener, debug, https, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 Icy = require("icy");
 
-http = require("http");
+https = require("https");
 
 debug = require("debug")("sm:util:stream_listener");
 
@@ -19,7 +19,7 @@ module.exports = StreamListener = (function(_super) {
     this.stream = stream;
     this.shoutcast = shoutcast != null ? shoutcast : false;
     this.bytesReceived = 0;
-    this.url = "http://" + this.host + ":" + this.port + "/" + this.stream;
+    this.url = "https://" + this.host + ":" + this.port + "/" + this.stream;
     this.req = null;
     this.res = null;
     debug("Created new Stream Listener for " + this.url);
@@ -82,7 +82,7 @@ module.exports = StreamListener = (function(_super) {
         });
       };
     })(this);
-    connect_func = this.shoutcast ? Icy.get : http.get;
+    connect_func = this.shoutcast ? Icy.get : https.get;
     cLoop = (function(_this) {
       return function() {
         debug("Attempting connect to " + _this.url);

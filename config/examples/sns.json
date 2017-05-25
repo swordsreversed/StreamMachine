@@ -17,9 +17,9 @@
 	"log": {
 		"stdout":     true
   },
-    "alerts": {
-        "SNS": {
-            "number":   "+61434352949"
-        }
+  "alerts": {
+    "SNS": {
+        "number":   "+61428230017"
     }
+  }
 }

@@ -5,6 +5,9 @@
 	"log": {
 		"stdout":     true
   },
+  "redis": {
+		"server": "redis://localhost:6379"
+	},
   "streams": {
     "test": {
       "key":              "test",

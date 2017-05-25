@@ -326,7 +326,7 @@ module.exports = Alerts = (function(_super) {
       params = {
         Message: msg.description + ' ' + msg.key,
         MessageStructure: 'string',
-        PhoneNumber: '+61434352949'
+        PhoneNumber: this.opts.number
       };
       return this.sns.publish(params, function(err, data) {
         if (err) {
@@ -340,9 +340,9 @@ module.exports = Alerts = (function(_super) {
       var params;
       this.alerts.logger.debug("Sending allClear to Sns.");
       params = {
-        Message: 'All clear',
+        Message: 'Source reconnected: ' + msg.key,
         MessageStructure: 'string',
-        PhoneNumber: '+61434352949'
+        PhoneNumber: this.opts.number
       };
       return this.sns.publish(params, function(err, data) {
         if (err) {

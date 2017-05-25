@@ -273,7 +273,7 @@ module.exports = class Alerts extends require("events").EventEmitter
                 @alerts.logger.debug logText, code:msg.code, key:msg.key
 
 
-     #----------
+    #----------
 
     class @Sns
         constructor: (@alerts,@opts) ->

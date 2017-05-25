@@ -1,8 +1,12 @@
-var Logger, Master, Slave, StandaloneMode, debug, express, nconf, _,
+var Logger, Master, Slave, StandaloneMode, debug, https, fs, express, nconf, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 _ = require("underscore");
+
+fs = require('fs');
+
+https = require("https");
 
 express = require("express");
 
@@ -15,6 +19,11 @@ Master = require("../master");
 Slave = require("../slave");
 
 debug = require("debug")("sm:modes:standalone");
+
+const httpsKeys = {
+  key: fs.readFileSync('keys/self-signed.key'),
+  cert: fs.readFileSync('keys/self-signed.crt')
+};
 
 module.exports = StandaloneMode = (function(_super) {
   __extends(StandaloneMode, _super);
@@ -145,10 +154,15 @@ module.exports = StandaloneMode = (function(_super) {
   StandaloneMode.prototype._normalStart = function(cb) {
     this.log.info("Attaching listeners.");
     this.master.sourcein.listen();
-    this.handle = this.server.listen(this.opts.port);
+    // this.handle = this.server.listen(this.opts.port);
+    // create https server for stream
+    this.handle = (nconf.get("admin:secure") === true) ? https.createServer(httpsKeys, this.server).listen(this.opts.port) : this.server.listen(this.opts.port);
+    this.log.info("Secure server: ", nconf.get("admin:secure"));
     if (this.api_server) {
       this.log.info("Starting API server on port " + this.opts.api_port);
-      this.api_handle = this.api_server.listen(this.opts.api_port);
+      // this.api_handle = this.api_server.listen(this.opts.api_port);
+      this.api_handle = (nconf.get("admin:secure") === true) ? https.createServer(httpsKeys, this.api_server).listen(this.opts.api_port) : this.api_server.listen(this.opts.api_port);
+      this.log.info("Secure api: ", nconf.get("admin:secure"));    
     }
     return typeof cb === "function" ? cb(null, this) : void 0;
   };
